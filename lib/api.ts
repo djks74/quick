@@ -251,7 +251,12 @@ export async function updateStoreSettings(data: any) {
           themeColor: data.themeColor,
           whatsappToken: data.whatsappToken,
           whatsappPhoneId: data.whatsappPhoneId,
-          paymentGatewaySecret: data.paymentGatewaySecret
+          enableWhatsApp: data.enableWhatsApp,
+          enableMidtrans: data.enableMidtrans,
+          enableXendit: data.enableXendit,
+          enableManualTransfer: data.enableManualTransfer,
+          paymentGatewaySecret: data.paymentGatewaySecret,
+          paymentGatewayClientKey: data.paymentGatewayClientKey
         }
       });
     } else {
@@ -262,7 +267,12 @@ export async function updateStoreSettings(data: any) {
           themeColor: data.themeColor,
           whatsappToken: data.whatsappToken,
           whatsappPhoneId: data.whatsappPhoneId,
-          paymentGatewaySecret: data.paymentGatewaySecret
+          enableWhatsApp: data.enableWhatsApp,
+          enableMidtrans: data.enableMidtrans,
+          enableXendit: data.enableXendit,
+          enableManualTransfer: data.enableManualTransfer,
+          paymentGatewaySecret: data.paymentGatewaySecret,
+          paymentGatewayClientKey: data.paymentGatewayClientKey
         }
       });
     }

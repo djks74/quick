@@ -1,17 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Trash2, ShoppingBag, ArrowRight, Minus, Plus } from "lucide-react";
+import { Trash2, ShoppingBag, ArrowRight, Minus, Plus, MessageCircle, CreditCard } from "lucide-react";
 import Link from "next/link";
-import { products } from "@/data/products";
+import { products as initialProducts } from "@/data/products";
+import { getStoreSettings } from "@/lib/api";
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState([
-    { ...products[0], quantity: 1 },
-    { ...products[1], quantity: 1 },
+    { ...initialProducts[0], quantity: 1 },
+    { ...initialProducts[1], quantity: 1 },
   ]);
+  const [settings, setSettings] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    getStoreSettings().then(setSettings);
+  }, []);
 
   const updateQuantity = (id: number, delta: number) => {
     setCartItems(prev => prev.map(item => {
@@ -30,6 +37,45 @@ export default function CartPage() {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const shipping = subtotal > 500 ? 0 : 50;
   const total = subtotal + shipping;
+
+  const handleWhatsAppCheckout = () => {
+    const phone = settings?.whatsapp || "628123456789";
+    let message = `Halo, saya ingin memesan:\n\n`;
+    cartItems.forEach(item => {
+      message += `- ${item.name} x${item.quantity} (${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)})\n`;
+    });
+    message += `\nTotal: ${new Intl.NumberFormat('id-ID').format(total)}`;
+    
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  const handlePaymentGatewayCheckout = async () => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cartItems,
+          total: total,
+          customerInfo: { phone: 'WEB_USER' } // Ideally collect phone first
+        })
+      });
+      
+      const data = await res.json();
+      if (data.success && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        alert('Checkout failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Checkout failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <main className="min-h-screen flex flex-col bg-[#F0F3F7]">
@@ -104,10 +150,34 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <button className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-primary/30 hover:bg-orange-600 transition-all flex items-center justify-center group mt-8">
-                  Proceed to Checkout
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </button>
+                <div className="space-y-3 mt-8">
+                  {/* WhatsApp Checkout */}
+                  <button 
+                    onClick={handleWhatsAppCheckout}
+                    className="w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-[#25D366]/30 hover:bg-[#128C7E] transition-all flex items-center justify-center group"
+                  >
+                    <MessageCircle className="w-5 h-5 mr-2" />
+                    Checkout via WhatsApp
+                  </button>
+
+                  {/* Payment Gateway Checkout */}
+                  {settings?.paymentProvider !== 'manual' && (
+                    <button 
+                      onClick={handlePaymentGatewayCheckout}
+                      disabled={isProcessing}
+                      className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-primary/30 hover:bg-orange-600 transition-all flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isProcessing ? (
+                        "Processing..."
+                      ) : (
+                        <>
+                          <CreditCard className="w-5 h-5 mr-2" />
+                          Pay Now ({settings?.paymentProvider === 'midtrans' ? 'Midtrans' : settings?.paymentProvider === 'xendit' ? 'Xendit' : 'Gateway'})
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
                 
                 <div className="text-center pt-4">
                   <Link href="/shop" className="text-xs text-gray-500 hover:text-white transition-colors font-bold uppercase tracking-widest">

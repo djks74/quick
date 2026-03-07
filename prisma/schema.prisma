@@ -42,7 +42,10 @@ model Order {
   customerPhone String
   tableNumber   String?
   totalAmount   Float
+  uniqueCode    Int?        @default(0) // For manual transfer verification
   status        String      @default("PENDING") // PENDING, PAID, CANCELLED
+  paymentMethod String?     // manual, midtrans, xendit, whatsapp
+  paymentUrl    String?     // URL to pay
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]
@@ -59,13 +62,19 @@ model OrderItem {
 }
 
 model StoreSettings {
-  id                   Int     @id @default(autoincrement())
-  storeName            String
-  whatsapp             String
-  themeColor           String
-  whatsappToken        String?
-  whatsappPhoneId      String?
-  paymentGatewaySecret String?
+  id                      Int     @id @default(autoincrement())
+  storeName               String
+  whatsapp                String
+  themeColor              String
+  whatsappToken           String?
+  whatsappPhoneId         String?
+  enableWhatsApp          Boolean @default(true)
+  enableMidtrans          Boolean @default(false)
+  enableXendit            Boolean @default(false)
+  enableManualTransfer    Boolean @default(false)
+  paymentProvider         String? @default("manual") // Deprecated but kept for migration safety
+  paymentGatewaySecret    String? // Server Key
+  paymentGatewayClientKey String? // Client Key
 }
 
 model Page {

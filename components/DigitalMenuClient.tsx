@@ -2,9 +2,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Minus, Plus, Trash2 } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
+import { getStoreSettings } from "@/lib/api";
 
 interface Product {
   id: number;
@@ -20,6 +21,12 @@ interface CartItem extends Product {
 export default function DigitalMenuClient({ products }: { products: Product[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<number | null>(null);
+  const [bankInfo, setBankInfo] = useState<any>(null);
+  const [finalAmount, setFinalAmount] = useState<number>(0);
   const searchParams = useSearchParams();
   const tableNumber = searchParams.get('table');
 
@@ -27,6 +34,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
   
   useEffect(() => {
     setMounted(true);
+    getStoreSettings().then(setSettings);
   }, []);
 
   const addToCart = (product: Product) => {
@@ -58,7 +66,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  const handleCheckout = () => {
+  const handleWhatsAppCheckout = () => {
     if (cart.length === 0) return;
 
     // Construct WhatsApp message
@@ -76,10 +84,48 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
 
     // Encode for URL
     const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodedMessage}`;
+    const whatsappUrl = `https://wa.me/${settings?.whatsapp || siteConfig.whatsappNumber}?text=${encodedMessage}`;
     
     // Open WhatsApp
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handlePaymentGatewayCheckout = async (provider: string) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart,
+          total: totalPrice,
+          customerInfo: { phone: 'WEB_USER', tableNumber: tableNumber },
+          paymentMethod: provider === 'manual' ? 'manual' : 'gateway'
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        if (data.isManual) {
+          setLastOrderId(data.orderId);
+          setBankInfo(data.bankInfo);
+          setFinalAmount(data.amount);
+          setShowBankDetails(true);
+          setIsCartOpen(false); // Close cart
+          setCart([]); // Clear cart
+        } else if (data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        }
+      } else {
+        alert('Checkout failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Checkout failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -237,19 +283,96 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
             </div>
 
             {/* Cart Footer */}
-            <div className="p-4 border-t bg-gray-50 sm:rounded-b-2xl">
+            <div className="p-4 border-t bg-gray-50 sm:rounded-b-2xl space-y-3">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-gray-600 font-medium">Total Amount</span>
                 <span className="text-xl font-bold text-gray-900">{formatPrice(totalPrice)}</span>
               </div>
-              <button 
-                onClick={handleCheckout}
-                className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200"
-                style={{ backgroundColor: '#25D366' }} // WhatsApp Green
-              >
-                <span>Checkout via WhatsApp</span>
-              </button>
+              
+              {/* WhatsApp Button */}
+              {(settings?.enableWhatsApp !== false) && (
+                <button 
+                  onClick={handleWhatsAppCheckout}
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200"
+                  style={{ backgroundColor: '#25D366' }}
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span>Checkout via WhatsApp</span>
+                </button>
+              )}
+
+              {/* Midtrans Button */}
+              {settings?.enableMidtrans && (
+                <button 
+                  onClick={() => handlePaymentGatewayCheckout('midtrans')}
+                  disabled={isProcessing}
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-blue-600 hover:bg-blue-700"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Pay Now (Midtrans)</span>
+                </button>
+              )}
+
+              {/* Xendit Button */}
+              {settings?.enableXendit && (
+                <button 
+                  onClick={() => handlePaymentGatewayCheckout('xendit')}
+                  disabled={isProcessing}
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-purple-600 hover:bg-purple-700"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Pay Now (Xendit)</span>
+                </button>
+              )}
+
+              {/* Manual Transfer Button */}
+              {settings?.enableManualTransfer && (
+                <button 
+                  onClick={() => handlePaymentGatewayCheckout('manual')}
+                  disabled={isProcessing}
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-gray-600 hover:bg-gray-700"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Manual Bank Transfer</span>
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bank Details Modal */}
+      {showBankDetails && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 mb-2">
+              <ShoppingCart className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Order #{lastOrderId} Placed!</h2>
+            <p className="text-gray-500 text-sm">Please transfer the total amount to:</p>
+            
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <p className="font-bold text-gray-900 text-lg">{bankInfo?.accountNumber || '1234567890'}</p>
+              <p className="text-sm text-gray-500 uppercase tracking-wider font-bold">
+                {bankInfo?.bankName || 'BCA'} - {bankInfo?.accountName || 'PT Laku Keras'}
+              </p>
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                 <p className="text-xs text-gray-400">Total Amount (Exact)</p>
+                 <p className="text-lg font-bold text-primary" style={{ color: siteConfig.themeColor }}>
+                   {formatPrice(finalAmount || totalPrice)}
+                 </p>
+                 <p className="text-[10px] text-red-500 italic mt-1">
+                   *Please transfer the EXACT amount including unique code
+                 </p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => { setShowBankDetails(false); window.location.reload(); }}
+              className="w-full py-3 rounded-xl bg-gray-900 text-white font-bold shadow-lg"
+            >
+              Close & New Order
+            </button>
           </div>
         </div>
       )}

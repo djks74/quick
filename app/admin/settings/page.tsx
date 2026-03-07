@@ -30,7 +30,12 @@ export default function AdminSettings() {
     themeColor: "",
     whatsappToken: "",
     whatsappPhoneId: "",
-    paymentGatewaySecret: ""
+    enableWhatsApp: true,
+    enableMidtrans: false,
+    enableXendit: false,
+    enableManualTransfer: false,
+    paymentGatewaySecret: "",
+    paymentGatewayClientKey: ""
   });
 
   useEffect(() => {
@@ -43,7 +48,12 @@ export default function AdminSettings() {
           themeColor: data.themeColor || "",
           whatsappToken: data.whatsappToken || "",
           whatsappPhoneId: data.whatsappPhoneId || "",
-          paymentGatewaySecret: data.paymentGatewaySecret || ""
+          enableWhatsApp: data.enableWhatsApp ?? true,
+          enableMidtrans: data.enableMidtrans ?? false,
+          enableXendit: data.enableXendit ?? false,
+          enableManualTransfer: data.enableManualTransfer ?? false,
+          paymentGatewaySecret: data.paymentGatewaySecret || "",
+          paymentGatewayClientKey: data.paymentGatewayClientKey || ""
         });
         if (data.storeName) setSiteName(data.storeName);
       }
@@ -270,79 +280,105 @@ export default function AdminSettings() {
 
         {activeTab === "Payments" && (
           <div className="space-y-6">
-            {/* Xendit */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
-              <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Xendit Payment Gateway</h3>
-                <p className="text-xs text-gray-500 mt-1">Accept payments via Xendit API.</p>
-              </div>
-              <div className="md:col-span-2 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input 
-                    type="checkbox" 
-                    id="xendit-enable"
-                    checked={paymentSettings.xenditEnabled}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, xenditEnabled: e.target.checked })}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                  <label htmlFor="xendit-enable" className="text-sm font-medium">Enable Xendit</label>
-                </div>
-                {paymentSettings.xenditEnabled && (
-                  <div className="animate-in fade-in slide-in-from-top-2">
-                    <label className="block text-sm font-medium mb-1">Secret API Key</label>
-                    <input 
-                      type="password" 
-                      className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                      value={paymentSettings.xenditApiKey}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, xenditApiKey: e.target.value })}
-                      placeholder="xnd_..."
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Midtrans */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Midtrans Payment Gateway</h3>
-                <p className="text-xs text-gray-500 mt-1">Accept payments via Midtrans Snap API.</p>
+                <h3 className="text-sm font-bold text-[#1d2327]">Payment Methods</h3>
+                <p className="text-xs text-gray-500 mt-1">Enable multiple payment options for your customers.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
-                <div className="flex items-center space-x-2">
+                
+                {/* WhatsApp Checkbox */}
+                <div className="flex items-center space-x-2 border p-4 rounded-lg bg-white">
                   <input 
                     type="checkbox" 
-                    id="midtrans-enable"
-                    checked={paymentSettings.midtransEnabled}
-                    onChange={(e) => setPaymentSettings({ ...paymentSettings, midtransEnabled: e.target.checked })}
+                    id="enableWhatsApp"
+                    checked={settings.enableWhatsApp}
+                    onChange={(e) => setSettings({ ...settings, enableWhatsApp: e.target.checked })}
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-                  <label htmlFor="midtrans-enable" className="text-sm font-medium">Enable Midtrans</label>
+                  <label htmlFor="enableWhatsApp" className="text-sm font-medium cursor-pointer">Enable Checkout via WhatsApp</label>
                 </div>
-                {paymentSettings.midtransEnabled && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Server Key</label>
-                      <input 
-                        type="password" 
-                        className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                        value={paymentSettings.midtransServerKey}
-                        onChange={(e) => setPaymentSettings({ ...paymentSettings, midtransServerKey: e.target.value })}
-                        placeholder="SB-Mid-server-..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Client Key</label>
-                      <input 
-                        type="text" 
-                        className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                        value={paymentSettings.midtransClientKey}
-                        onChange={(e) => setPaymentSettings({ ...paymentSettings, midtransClientKey: e.target.value })}
-                        placeholder="SB-Mid-client-..."
-                      />
-                    </div>
+
+                {/* Manual Transfer Checkbox */}
+                <div className="flex items-center space-x-2 border p-4 rounded-lg bg-white">
+                  <input 
+                    type="checkbox" 
+                    id="enableManualTransfer"
+                    checked={settings.enableManualTransfer}
+                    onChange={(e) => setSettings({ ...settings, enableManualTransfer: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label htmlFor="enableManualTransfer" className="text-sm font-medium cursor-pointer">Enable Manual Transfer (Bank)</label>
+                </div>
+
+                {/* Midtrans Checkbox */}
+                <div className="border p-4 rounded-lg bg-white space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      id="enableMidtrans"
+                      checked={settings.enableMidtrans}
+                      onChange={(e) => setSettings({ ...settings, enableMidtrans: e.target.checked })}
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <label htmlFor="enableMidtrans" className="text-sm font-medium cursor-pointer">Enable Midtrans Payment</label>
                   </div>
-                )}
+
+                  {settings.enableMidtrans && (
+                    <div className="pl-6 space-y-3 animate-in fade-in slide-in-from-top-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Server Key</label>
+                        <input 
+                          type="password" 
+                          className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none text-sm" 
+                          value={settings.paymentGatewaySecret}
+                          onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                          placeholder="SB-Mid-server-..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Client Key</label>
+                        <input 
+                          type="text" 
+                          className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none text-sm" 
+                          value={settings.paymentGatewayClientKey}
+                          onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
+                          placeholder="SB-Mid-client-..."
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Xendit Checkbox */}
+                <div className="border p-4 rounded-lg bg-white space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      id="enableXendit"
+                      checked={settings.enableXendit}
+                      onChange={(e) => setSettings({ ...settings, enableXendit: e.target.checked })}
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <label htmlFor="enableXendit" className="text-sm font-medium cursor-pointer">Enable Xendit Payment</label>
+                  </div>
+
+                  {settings.enableXendit && (
+                    <div className="pl-6 animate-in fade-in slide-in-from-top-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Secret API Key</label>
+                        <input 
+                          type="password" 
+                          className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none text-sm" 
+                          value={settings.paymentGatewaySecret}
+                          onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                          placeholder="xnd_..."
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           </div>
