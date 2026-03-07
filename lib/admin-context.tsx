@@ -15,7 +15,7 @@ const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
 export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [layoutStyle, setLayoutStyleState] = useState<AdminLayoutStyle>("wordpress");
-  const [siteName, setSiteNameState] = useState("LCP Auto Cars");
+  const [siteName, setSiteNameState] = useState("Laku Store");
 
   // Load from localStorage on mount
   useEffect(() => {

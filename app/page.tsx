@@ -1,20 +1,25 @@
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import RevSlider from "@/components/home/RevSlider";
-import ProductGrid from "@/components/ProductGrid";
-import { products } from "@/data/products";
+import { prisma } from "@/lib/prisma";
+import DigitalMenuClient from "@/components/DigitalMenuClient";
 
-export default function Home() {
-  return (
-    <main className="min-h-screen flex flex-col bg-background-shade">
-      <Header />
-      <div className="flex-grow">
-        <RevSlider />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <ProductGrid products={products} title="Latest Tuning Parts" />
-        </div>
-      </div>
-      <Footer />
-    </main>
-  );
+export const dynamic = 'force-dynamic';
+
+// Server Component for Digital Menu
+export default async function DigitalMenu() {
+  const productsData = await prisma.product.findMany({
+    where: { stock: { gt: 0 } },
+    orderBy: { name: 'asc' }
+  });
+
+  // Serialize data to avoid passing complex objects (like Date) to Client Component
+  const products = productsData.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    price: p.price,
+    unit: p.unit,
+    image: p.image,
+    description: p.description,
+    category: p.category
+  }));
+
+  return <DigitalMenuClient products={products} />;
 }

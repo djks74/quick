@@ -48,38 +48,13 @@ const sidebarItems: SidebarItem[] = [
     icon: ShoppingCart,
     children: [
       { name: "All Orders", href: "/admin/orders" },
-      { name: "Add New", href: "/admin/orders?action=new" },
-      { name: "Coupons", href: "/admin/orders?view=coupons" },
     ]
   },
   { 
-    name: "Pages", 
-    icon: FileText,
-    children: [
-      { name: "All Pages", href: "/admin/pages" },
-      { name: "Add New", href: "/admin/pages?action=new" },
-    ]
+    name: "Settings", 
+    href: "/admin/settings", 
+    icon: Settings 
   },
-  { name: "Media", href: "/admin/media", icon: ImageIcon },
-  { 
-    name: "Appearance", 
-    icon: Paintbrush,
-    children: [
-      { name: "Slider", href: "/admin/appearance/slider" },
-      { name: "Menus", href: "/admin/appearance/menus" },
-      { name: "Widgets", href: "/admin/appearance/widgets" },
-    ]
-  },
-  { 
-    name: "Users", 
-    icon: User,
-    children: [
-      { name: "All Users", href: "/admin/users" },
-      { name: "Add New", href: "/admin/users?action=new" },
-      { name: "Profile", href: "/admin/profile" },
-    ]
-  },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 export default function AdminLayout({

@@ -1,8 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { sampleOrders, Order } from "@/data/orders";
+import { useState, useEffect } from "react";
+import { getOrders } from "@/lib/api";
 import { 
   Search, 
   Filter, 
@@ -24,7 +24,7 @@ import {
   RefreshCw,
   Ban
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 const statusIcons: Record<string, any> = {
   'completed': CheckCircle2,
@@ -49,8 +49,16 @@ const statusColors: Record<string, string> = {
 export default function AdminOrders() {
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [orders, setOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    async function loadOrders() {
+      const data = await getOrders();
+      setOrders(data);
+    }
+    loadOrders();
+  }, []);
 
   if (action === "new") {
     return (
@@ -175,7 +183,7 @@ export default function AdminOrders() {
                       </span>
                     </td>
                     <td className="px-4 py-4 font-medium">
-                      {order.currency === 'USD' ? '$' : 'Rp'}{order.total.toLocaleString()}
+                      {formatCurrency(order.total, "IDR")}
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">

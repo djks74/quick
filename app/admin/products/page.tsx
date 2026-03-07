@@ -1,28 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Plus, 
   Search, 
   Edit2, 
   Trash2, 
-  MoreVertical,
-  ExternalLink
+  Image as ImageIcon
 } from "lucide-react";
-import { products as initialProducts } from "@/data/products";
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "./ProductForm";
 import CategoryForm from "./CategoryForm";
-import { categories as initialCategories } from "@/data/products";
+import { getProducts, getCategories } from "@/lib/api";
 
 export default function AdminProducts() {
-  const [products, setProducts] = useState(initialProducts);
-  const [categories, setCategories] = useState(initialCategories);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    async function loadData() {
+      const [p, c] = await Promise.all([getProducts(), getCategories()]);
+      setProducts(p);
+      setCategories(c);
+    }
+    loadData();
+  }, []);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -89,7 +96,7 @@ export default function AdminProducts() {
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Product</th>
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</th>
-              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Price (USD)</th>
+              <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Price</th>
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
             </tr>
           </thead>
@@ -117,7 +124,7 @@ export default function AdminProducts() {
                   </span>
                 </td>
                 <td className="px-6 py-4 font-black text-gray-900 text-sm">
-                  {formatCurrency(product.price, "USD")}
+                  {formatCurrency(product.price, "IDR")}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end space-x-2">
@@ -172,5 +179,3 @@ export default function AdminProducts() {
     </div>
   );
 }
-
-import { Image as ImageIcon } from "lucide-react";
