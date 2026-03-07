@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id               Int         @id @default(autoincrement())
+  name             String
+  price            Float
+  image            String?
+  gallery          String[]    @default([])
+  category         String?
+  subCategory      String?
+  description      String?
+  shortDescription String?
+  type             String      @default("simple")
+  rating           Float       @default(0)
+  variations       Json?
+  unit             String      @default("pcs") // kg/pcs as per prompt
+  stock            Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  orderItems       OrderItem[]
+}
+
+model Category {
+  id            Int       @id @default(autoincrement())
+  name          String
+  slug          String    @unique
+  image         String?
+  subCategories Json?     @default("[]")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  customerPhone String
+  tableNumber   String?
+  totalAmount   Float
+  status        String      @default("PENDING") // PENDING, PAID, CANCELLED
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model StoreSettings {
+  id                   Int     @id @default(autoincrement())
+  storeName            String
+  whatsapp             String
+  themeColor           String
+  whatsappToken        String?
+  whatsappPhoneId      String?
+  paymentGatewaySecret String?
+}
+
+model Page {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  status    String   @default("draft") // draft, publish
+  author    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  name      String?
+  role      String   @default("Subscriber")
+  posts     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WhatsAppSession {
+  id          Int      @id @default(autoincrement())
+  phoneNumber String   @unique
+  step        String   @default("START") // START, MENU, ORDERING, PAYMENT_AMOUNT
+  tableNumber String?
+  cart        Json?    @default("[]")
+  updatedAt   DateTime @updatedAt
+}

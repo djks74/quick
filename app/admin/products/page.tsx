@@ -11,7 +11,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "./ProductForm";
 import CategoryForm from "./CategoryForm";
-import { getProducts, getCategories } from "@/lib/api";
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory } from "@/lib/api";
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<any[]>([]);
@@ -36,9 +36,12 @@ export default function AdminProducts() {
     p.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
-      setProducts(products.filter(p => p.id !== id));
+      const success = await deleteProduct(id);
+      if (success) {
+        setProducts(products.filter(p => p.id !== id));
+      }
     }
   };
 
@@ -154,12 +157,22 @@ export default function AdminProducts() {
           product={editingProduct} 
           categories={categories}
           onClose={() => setIsFormOpen(false)}
-          onSave={(updatedProduct: any) => {
+          onSave={async (updatedProduct: any) => {
+            let savedProduct;
             if (editingProduct) {
-              setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+              savedProduct = await updateProduct(editingProduct.id, updatedProduct);
+              if (savedProduct) {
+                setProducts(products.map(p => p.id === savedProduct.id ? savedProduct : p));
+              }
             } else {
-              setProducts([...products, { ...updatedProduct, id: Date.now() }]);
+              savedProduct = await createProduct(updatedProduct);
+              if (savedProduct) {
+                setProducts([...products, savedProduct]);
+              }
             }
+            // Reload to ensure we have the latest data
+            const freshProducts = await getProducts();
+            setProducts(freshProducts);
             setIsFormOpen(false);
           }}
         />
@@ -170,8 +183,13 @@ export default function AdminProducts() {
         <CategoryForm 
           category={editingCategory}
           onClose={() => setIsCategoryFormOpen(false)}
-          onSave={(newCategory: any) => {
-            setCategories([...categories, newCategory]);
+          onSave={async (newCategory: any) => {
+            const saved = await createCategory(newCategory);
+            if (saved) {
+              // Reload categories
+              const freshCategories = await getCategories();
+              setCategories(freshCategories);
+            }
             setIsCategoryFormOpen(false);
           }}
         />

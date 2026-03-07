@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop, HeaderSettings, PaymentSettings } from "@/context/ShopContext";
+import { getStoreSettings, updateStoreSettings } from "@/lib/api";
 import { 
   Settings, 
   Globe, 
@@ -22,10 +23,50 @@ export default function AdminSettings() {
   const { headerSettings, setHeaderSettings, paymentSettings, setPaymentSettings } = useShop();
   const [activeTab, setActiveTab] = useState("General");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [settings, setSettings] = useState({
+    storeName: "",
+    whatsapp: "",
+    themeColor: "",
+    whatsappToken: "",
+    whatsappPhoneId: "",
+    paymentGatewaySecret: ""
+  });
 
-  const handleSave = () => {
+  useEffect(() => {
+    async function loadSettings() {
+      const data = await getStoreSettings();
+      if (data) {
+        setSettings({
+          storeName: data.storeName || "",
+          whatsapp: data.whatsapp || "",
+          themeColor: data.themeColor || "",
+          whatsappToken: data.whatsappToken || "",
+          whatsappPhoneId: data.whatsappPhoneId || "",
+          paymentGatewaySecret: data.paymentGatewaySecret || ""
+        });
+        if (data.storeName) setSiteName(data.storeName);
+      }
+    }
+    loadSettings();
+  }, [setSiteName]);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => setIsSaving(false), 800);
+    setSaveMessage(null);
+    try {
+      await updateStoreSettings(settings);
+      setSiteName(settings.storeName);
+      setSaveMessage("Settings saved successfully.");
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      setSaveMessage("Failed to save settings. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const layoutOptions: { id: AdminLayoutStyle; name: string; desc: string; preview: string }[] = [
@@ -74,75 +115,87 @@ export default function AdminSettings() {
             {/* Site Identity */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Site Identity</h3>
-                <p className="text-xs text-gray-500 mt-1">Global settings for your website branding.</p>
+                <h3 className="text-sm font-bold text-[#1d2327]">Store Identity</h3>
+                <p className="text-xs text-gray-500 mt-1">Global settings for your store.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Site Title</label>
+                  <label className="block text-sm font-medium mb-1">Store Name</label>
                   <input 
                     type="text" 
                     className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                    value={siteName}
-                    onChange={(e) => setSiteName(e.target.value)}
+                    value={settings.storeName}
+                    onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tagline</label>
+                  <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
                   <input 
                     type="text" 
                     className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                    placeholder="Just another Next.js site"
+                    value={settings.whatsapp}
+                    onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })}
+                    placeholder="628..."
                   />
-                  <p className="text-xs text-gray-500 mt-1">In a few words, explain what this site is about.</p>
+                  <p className="text-xs text-gray-500 mt-1">Format: Country code without + (e.g., 628123456789)</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Theme Color</label>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="color" 
+                      className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                      value={settings.themeColor}
+                      onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
+                    />
+                    <input 
+                      type="text" 
+                      className="w-full md:w-1/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none uppercase" 
+                      value={settings.themeColor}
+                      onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Admin Layout Selection */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
-              <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Admin Layout Style</h3>
-                <p className="text-xs text-gray-500 mt-1">Choose the interface style for your administration area.</p>
-              </div>
-              <div className="md:col-span-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {layoutOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setLayoutStyle(option.id)}
-                      className={cn(
-                        "p-4 border text-left transition-all group relative",
-                        layoutStyle === option.id 
-                          ? "border-[#2271b1] bg-[#f0f6fa] ring-1 ring-[#2271b1]" 
-                          : "border-[#ccd0d4] hover:border-[#b1b4b6] bg-white"
-                      )}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className={cn("w-12 h-8 rounded border border-[#ccd0d4] shadow-sm", option.preview)} />
-                        {layoutStyle === option.id && <div className="bg-[#2271b1] text-white p-0.5 rounded-full"><Check className="w-3 h-3" /></div>}
-                      </div>
-                      <h4 className="text-sm font-bold text-[#1d2327]">{option.name}</h4>
-                      <p className="text-xs text-gray-500 mt-1">{option.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Email Settings */}
+            {/* Integrations */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Administration Email</h3>
-                <p className="text-xs text-gray-500 mt-1">The address used for admin purposes.</p>
+                <h3 className="text-sm font-bold text-[#1d2327]">Integrations</h3>
+                <p className="text-xs text-gray-500 mt-1">Connect third-party services.</p>
               </div>
-              <div className="md:col-span-2">
-                <input 
-                  type="email" 
-                  className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
-                  defaultValue="admin@lcpautocars.com"
-                />
-                <p className="text-xs text-gray-500 mt-1 italic">This address is used for admin purposes. If you change this, we will send you an email at your new address to confirm it.</p>
+              <div className="md:col-span-2 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">WhatsApp Token (Meta)</label>
+                  <input 
+                    type="password" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    value={settings.whatsappToken}
+                    onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
+                    placeholder="Meta API Token"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">WhatsApp Phone Number ID</label>
+                  <input 
+                    type="text" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    value={settings.whatsappPhoneId}
+                    onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
+                    placeholder="e.g. 10456..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Payment Gateway Secret</label>
+                  <input 
+                    type="password" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    value={settings.paymentGatewaySecret}
+                    onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                    placeholder="Xendit/Midtrans Secret Key"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -304,7 +357,12 @@ export default function AdminSettings() {
           >
             {isSaving ? "Saving..." : "Save Changes"}
           </button>
-          {isSaving && <span className="text-sm text-green-600 flex items-center"><Check className="w-4 h-4 mr-1" /> Settings saved.</span>}
+          {saveMessage && (
+            <span className={cn("text-sm flex items-center", saveMessage.includes("Failed") ? "text-red-600" : "text-green-600")}>
+              {saveMessage.includes("Failed") ? null : <Check className="w-4 h-4 mr-1" />} 
+              {saveMessage}
+            </span>
+          )}
         </div>
       </div>
     </div>

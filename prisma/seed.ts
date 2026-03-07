@@ -16,8 +16,10 @@ async function main() {
   await prisma.storeSettings.create({
     data: {
       storeName: "Ayam Bakar Pak Haji",
-      whatsapp: "628123456789",
-      themeColor: "#FF5733"
+      whatsapp: "6287768201551", // Updated to the number in the image
+      themeColor: "#FF5733",
+      whatsappPhoneId: "1035325529660403", // From image
+      // whatsappToken: "YOUR_ACCESS_TOKEN" // User needs to provide this or set via Admin
     }
   })
 
@@ -91,6 +93,16 @@ async function main() {
     }
   })
 
+  // Create Sample Order for Testing Payment Page
+  const sampleOrder = await prisma.order.create({
+    data: {
+      customerPhone: "628123456789",
+      totalAmount: 50000,
+      status: "PENDING"
+    }
+  })
+
+  console.log(`Created sample order with ID: ${sampleOrder.id}`)
   console.log('Seeding finished.')
 }
 

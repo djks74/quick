@@ -55,6 +55,11 @@ const sidebarItems: SidebarItem[] = [
     href: "/admin/settings", 
     icon: Settings 
   },
+  { 
+    name: "Tables", 
+    href: "/admin/tables", 
+    icon: Layers 
+  },
 ];
 
 export default function AdminLayout({

@@ -23,6 +23,7 @@ const productSchema = z.object({
   subCategory: z.string().optional(),
   type: z.enum(["simple", "variable"]),
   rating: z.number().min(0).max(5).default(0),
+  stock: z.number().min(0).default(0),
   variations: z.array(variationSchema).optional(),
 });
 
@@ -57,6 +58,7 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
       subCategory: "",
       type: "simple",
       rating: 0,
+      stock: 0,
       variations: [],
     },
   });
@@ -195,16 +197,28 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
             </div>
 
             {productType === "simple" && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Price (IDR)</label>
-                <input 
-                  type="number"
-                  step="100"
-                  {...register("price", { valueAsNumber: true })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="0"
-                />
-                {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Price (IDR)</label>
+                  <input 
+                    type="number"
+                    step="100"
+                    {...register("price", { valueAsNumber: true })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    placeholder="0"
+                  />
+                  {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Stock</label>
+                  <input 
+                    type="number"
+                    {...register("stock", { valueAsNumber: true })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    placeholder="0"
+                  />
+                  {errors.stock && <p className="text-red-500 text-xs mt-1">{errors.stock.message}</p>}
+                </div>
               </div>
             )}
           </div>
