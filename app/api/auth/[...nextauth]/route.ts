@@ -12,7 +12,9 @@ export const authOptions: any = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        console.log("Authorize called with:", { email: credentials?.email });
         if (!credentials?.email || !credentials?.password) {
+          console.log("Missing credentials");
           return null;
         }
 
@@ -21,13 +23,18 @@ export const authOptions: any = {
           include: { stores: true }
         });
 
+        console.log("User found:", user ? "Yes" : "No");
+
         if (!user) {
+          console.log("User not found");
           return null;
         }
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
+        console.log("Password valid:", isValid);
 
         if (!isValid) {
+          console.log("Invalid password");
           return null;
         }
 
