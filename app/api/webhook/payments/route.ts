@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     if (status === 'PAID') {
       await sendWhatsAppMessage(
         order.customerPhone,
-        `✅ Payment Received! \n\nOrder #${order.id} has been paid successfully.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\nThank you for your order! We are preparing it now.`
+        `✅ Payment Received! \n\nOrder #${order.id} has been paid successfully.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\nThank you for your order! We are preparing it now.`,
+        order.storeId
       );
     }
 

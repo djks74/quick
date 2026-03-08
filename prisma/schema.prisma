@@ -7,8 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("MERCHANT") // MERCHANT, SUPER_ADMIN
+  stores    Store[]  @relation("StoreOwner")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Store {
+  id                      Int       @id @default(autoincrement())
+  slug                    String    @unique
+  name                    String
+  ownerId                 Int
+  owner                   User      @relation("StoreOwner", fields: [ownerId], references: [id])
+  
+  // Settings
+  whatsapp                String?
+  themeColor              String    @default("#000000")
+  whatsappToken           String?
+  whatsappPhoneId         String?   @unique
+  
+  // Payment Config
+  enableWhatsApp          Boolean   @default(true)
+  enableMidtrans          Boolean   @default(false)
+  enableXendit            Boolean   @default(false)
+  enableManualTransfer    Boolean   @default(false)
+  paymentGatewaySecret    String?
+  paymentGatewayClientKey String?
+  bankAccount             Json?     // Stores manual transfer details
+  
+  // Monetization
+  subscriptionPlan        String    @default("FREE") // FREE, PRO
+  transactionFeePercent   Float     @default(0.0)
+  
+  // Relations
+  products                Product[]
+  categories              Category[]
+  orders                  Order[]
+  
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+}
+
 model Product {
   id               Int         @id @default(autoincrement())
+  storeId          Int
+  store            Store       @relation(fields: [storeId], references: [id])
   name             String
   price            Float
   image            String?
@@ -20,7 +68,7 @@ model Product {
   type             String      @default("simple")
   rating           Float       @default(0)
   variations       Json?
-  unit             String      @default("pcs") // kg/pcs as per prompt
+  unit             String      @default("pcs")
   stock            Int         @default(0)
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -29,23 +77,30 @@ model Product {
 
 model Category {
   id            Int       @id @default(autoincrement())
+  storeId       Int
+  store         Store     @relation(fields: [storeId], references: [id])
   name          String
-  slug          String    @unique
+  slug          String
   image         String?
   subCategories Json?     @default("[]")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@unique([storeId, slug]) // Slug unique per store
 }
 
 model Order {
   id            Int         @id @default(autoincrement())
+  storeId       Int
+  store         Store       @relation(fields: [storeId], references: [id])
   customerPhone String
   tableNumber   String?
   totalAmount   Float
-  uniqueCode    Int?        @default(0) // For manual transfer verification
-  status        String      @default("PENDING") // PENDING, PAID, CANCELLED
-  paymentMethod String?     // manual, midtrans, xendit, whatsapp
-  paymentUrl    String?     // URL to pay
+  uniqueCode    Int?        @default(0)
+  status        String      @default("PENDING")
+  paymentMethod String?
+  paymentUrl    String?
+  transactionFee Float      @default(0.0) // Fee collected by platform
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]
@@ -61,48 +116,14 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
 }
 
-model StoreSettings {
-  id                      Int     @id @default(autoincrement())
-  storeName               String
-  whatsapp                String
-  themeColor              String
-  whatsappToken           String?
-  whatsappPhoneId         String?
-  enableWhatsApp          Boolean @default(true)
-  enableMidtrans          Boolean @default(false)
-  enableXendit            Boolean @default(false)
-  enableManualTransfer    Boolean @default(false)
-  paymentProvider         String? @default("manual") // Deprecated but kept for migration safety
-  paymentGatewaySecret    String? // Server Key
-  paymentGatewayClientKey String? // Client Key
-}
-
-model Page {
-  id        Int      @id @default(autoincrement())
-  title     String
-  content   String?
-  status    String   @default("draft") // draft, publish
-  author    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  email     String   @unique
-  name      String?
-  role      String   @default("Subscriber")
-  posts     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model WhatsAppSession {
   id          Int      @id @default(autoincrement())
-  phoneNumber String   @unique
-  step        String   @default("START") // START, MENU, ORDERING, PAYMENT_AMOUNT
+  phoneNumber String
+  storeId     Int?     // Linked to a store if known (via phoneId)
+  step        String   @default("START")
   tableNumber String?
   cart        Json?    @default("[]")
   updatedAt   DateTime @updatedAt
+
+  @@unique([phoneNumber, storeId]) // Session per user per store
 }

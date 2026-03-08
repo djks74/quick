@@ -15,10 +15,12 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.2",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "eslint": "^9.39.3",
     "eslint-config-next": "^15.5.12",

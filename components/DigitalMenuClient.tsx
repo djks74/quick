@@ -1,27 +1,27 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
-import { getStoreSettings } from "@/lib/api";
 
 interface Product {
   id: number;
   name: string;
   price: number;
   unit: string;
+  image?: string;
+  description?: string;
 }
 
 interface CartItem extends Product {
   quantity: number;
 }
 
-export default function DigitalMenuClient({ products }: { products: Product[] }) {
+export default function DigitalMenuClient({ products, store }: { products: Product[], store: any }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(store);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<number | null>(null);
@@ -34,8 +34,10 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
   
   useEffect(() => {
     setMounted(true);
-    getStoreSettings().then(setSettings);
-  }, []);
+    if (store) {
+        setSettings(store);
+    }
+  }, [store]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -70,7 +72,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
     if (cart.length === 0) return;
 
     // Construct WhatsApp message
-    let message = `Hello ${siteConfig.name}, I would like to order`;
+    let message = `Hello ${store?.name || siteConfig.name}, I would like to order`;
     if (tableNumber) {
       message += ` for *Table ${tableNumber}*`;
     }
@@ -97,6 +99,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          storeId: store.id, // Pass storeId
           items: cart,
           total: totalPrice,
           customerInfo: { phone: 'WEB_USER', tableNumber: tableNumber },
@@ -140,17 +143,19 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
     );
   }
 
+  const themeColor = settings?.themeColor || siteConfig.themeColor;
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24" style={{ '--theme-color': siteConfig.themeColor } as any}>
+    <div className="min-h-screen bg-gray-50 pb-24" style={{ '--theme-color': themeColor } as any}>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white shadow-sm px-4 py-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold text-gray-900" style={{ color: siteConfig.themeColor }}>
-            {siteConfig.name}
+          <h1 className="text-xl font-bold text-gray-900" style={{ color: themeColor }}>
+            {settings?.name || siteConfig.name}
           </h1>
-          <p className="text-sm text-gray-500">WhatsApp Order: {siteConfig.whatsappNumber}</p>
+          <p className="text-sm text-gray-500">WhatsApp Order: {settings?.whatsapp || siteConfig.whatsappNumber}</p>
         </div>
-        <a href="/admin" className="text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600">
+        <a href={`/${settings?.slug || 'demo'}/admin`} className="text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600">
             Owner Login
         </a>
       </header>
@@ -171,7 +176,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
                 <div>
                   <h3 className="font-bold text-gray-900">{product.name}</h3>
                   <p className="text-sm text-gray-500">{product.unit}</p>
-                  <p className="text-primary font-bold mt-1" style={{ color: siteConfig.themeColor }}>
+                  <p className="text-primary font-bold mt-1" style={{ color: themeColor }}>
                     {formatPrice(product.price)}
                   </p>
                 </div>
@@ -196,7 +201,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
                   <button 
                     onClick={() => addToCart(product)}
                     className="px-4 py-2 rounded-lg text-white font-medium text-sm transition-opacity hover:opacity-90 shadow-md shadow-primary/20"
-                    style={{ backgroundColor: siteConfig.themeColor }}
+                    style={{ backgroundColor: themeColor }}
                   >
                     Add
                   </button>
@@ -207,7 +212,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
 
           {products.length === 0 && (
             <div className="text-center py-10 text-gray-400">
-              <p className="mb-2">Welcome to {siteConfig.name}!</p>
+              <p className="mb-2">Welcome to {settings?.name}!</p>
               <p className="text-xs">No products available yet.</p>
             </div>
           )}
@@ -220,7 +225,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
           <button 
             onClick={() => setIsCartOpen(true)}
             className="w-full py-3 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center transform active:scale-95 transition-all duration-200"
-            style={{ backgroundColor: siteConfig.themeColor }}
+            style={{ backgroundColor: themeColor }}
           >
             <div className="flex items-center space-x-2">
               <div className="bg-white/20 px-2 py-0.5 rounded text-sm">
@@ -259,7 +264,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
                   <div className="flex-1">
                     <h4 className="font-bold text-gray-900">{item.name}</h4>
                     <p className="text-xs text-gray-500">{formatPrice(item.price)} x {item.quantity}</p>
-                    <p className="text-sm font-bold text-primary mt-1" style={{ color: siteConfig.themeColor }}>
+                    <p className="text-sm font-bold text-primary mt-1" style={{ color: themeColor }}>
                       {formatPrice(item.price * item.quantity)}
                     </p>
                   </div>
@@ -358,7 +363,7 @@ export default function DigitalMenuClient({ products }: { products: Product[] })
               </p>
               <div className="mt-2 pt-2 border-t border-gray-200">
                  <p className="text-xs text-gray-400">Total Amount (Exact)</p>
-                 <p className="text-lg font-bold text-primary" style={{ color: siteConfig.themeColor }}>
+                 <p className="text-lg font-bold text-primary" style={{ color: themeColor }}>
                    {formatPrice(finalAmount || totalPrice)}
                  </p>
                  <p className="text-[10px] text-red-500 italic mt-1">

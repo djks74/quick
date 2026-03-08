@@ -1,117 +1,90 @@
-
-import { PrismaClient } from '@prisma/client'
-const prisma = new PrismaClient()
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const prisma = new PrismaClient();
 
 async function main() {
-  // Clear existing data
-  await prisma.orderItem.deleteMany()
-  await prisma.order.deleteMany()
-  await prisma.product.deleteMany()
-  await prisma.storeSettings.deleteMany()
-  await prisma.user.deleteMany()
+  const hashedPasswordAdmin = await bcrypt.hash('admin', 10);
+  const hashedPasswordDemo = await bcrypt.hash('demo', 10);
 
-  console.log('Cleaned up existing data...')
-
-  // Seed Store Settings
-  await prisma.storeSettings.create({
-    data: {
-      storeName: "Ayam Bakar Pak Haji",
-      whatsapp: "6287768201551", // Updated to the number in the image
-      themeColor: "#FF5733",
-      whatsappPhoneId: "1035325529660403", // From image
-      // whatsappToken: "YOUR_ACCESS_TOKEN" // User needs to provide this or set via Admin
+  // 1. Create Super Admin
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@lcp.com' },
+    update: { password: hashedPasswordAdmin },
+    create: {
+      email: 'admin@lcp.com',
+      password: hashedPasswordAdmin,
+      name: 'Super Admin',
+      role: 'SUPER_ADMIN'
     }
-  })
+  });
 
-  // Seed Products (Warung/Restaurant Theme)
-  const products = [
-    {
-      name: "Ayam Bakar Madu",
-      price: 25000,
-      image: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800",
-      category: "makanan",
-      description: "Ayam bakar dengan olesan madu spesial, manis gurih meresap sampai tulang.",
-      unit: "porsi",
-      stock: 50,
-      type: "simple"
-    },
-    {
-      name: "Nasi Goreng Spesial",
-      price: 22000,
-      image: "https://images.unsplash.com/photo-1603133872878-684f208fb74b?w=800",
-      category: "makanan",
-      description: "Nasi goreng dengan telur, ayam suwir, dan ati ampela.",
-      unit: "porsi",
-      stock: 50,
-      type: "simple"
-    },
-    {
-      name: "Es Teh Manis",
-      price: 5000,
-      image: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800",
-      category: "minuman",
-      description: "Teh manis dingin segar.",
-      unit: "gelas",
-      stock: 100,
-      type: "simple"
-    },
-    {
-      name: "Es Jeruk",
-      price: 8000,
-      image: "https://images.unsplash.com/photo-1616118132534-381148898bb4?w=800",
-      category: "minuman",
-      description: "Jeruk peras asli dengan es batu.",
-      unit: "gelas",
-      stock: 100,
-      type: "simple"
-    },
-    {
-      name: "Kerupuk Putih",
-      price: 2000,
-      image: "https://upload.wikimedia.org/wikipedia/commons/2/25/Krupuk_in_jar.JPG",
-      category: "tambahan",
-      description: "Kerupuk kaleng renyah.",
-      unit: "pcs",
-      stock: 200,
-      type: "simple"
+  // 2. Create Merchant
+  const merchant = await prisma.user.upsert({
+    where: { email: 'demo@lcp.com' },
+    update: { password: hashedPasswordDemo },
+    create: {
+      email: 'demo@lcp.com',
+      password: hashedPasswordDemo,
+      name: 'Demo Merchant',
+      role: 'MERCHANT'
     }
-  ]
+  });
 
-  for (const product of products) {
-    await prisma.product.create({
-      data: product
-    })
+  // 3. Create Store
+  const store = await prisma.store.upsert({
+    where: { slug: 'demo' },
+    update: { ownerId: merchant.id },
+    create: {
+      name: 'LCP Demo Store',
+      slug: 'demo',
+      ownerId: merchant.id,
+      whatsapp: '628123456789',
+      enableWhatsApp: true,
+      enableMidtrans: true,
+      enableManualTransfer: true,
+      subscriptionPlan: 'PRO'
+    }
+  });
+
+  // 4. Create Categories
+  try {
+    const catFood = await prisma.category.upsert({
+      where: { storeId_slug: { storeId: store.id, slug: 'food' } },
+      update: {},
+      create: {
+        name: 'Food',
+        slug: 'food',
+        storeId: store.id
+      }
+    });
+  } catch (e) {
+    // Ignore unique constraint if schema differs slightly in dev
+    console.log('Category seed skipped or failed (might already exist)');
   }
 
-  // Create Admin User
-  await prisma.user.create({
-    data: {
-      username: "admin",
-      email: "admin@laku.com",
-      name: "Pak Haji",
-      role: "Administrator"
-    }
-  })
+  // 5. Create Products
+  const count = await prisma.product.count({ where: { storeId: store.id } });
+  if (count === 0) {
+    await prisma.product.create({
+      data: {
+        name: 'Nasi Goreng',
+        price: 25000,
+        storeId: store.id,
+        category: 'Food',
+        description: 'Delicious fried rice',
+        stock: 100
+      }
+    });
+  }
 
-  // Create Sample Order for Testing Payment Page
-  const sampleOrder = await prisma.order.create({
-    data: {
-      customerPhone: "628123456789",
-      totalAmount: 50000,
-      status: "PENDING"
-    }
-  })
-
-  console.log(`Created sample order with ID: ${sampleOrder.id}`)
-  console.log('Seeding finished.')
+  console.log('Seeding finished.');
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
   })
-  .catch(async (e) => {
-    console.error(e)
-    await prisma.$disconnect()
-    process.exit(1)
-  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

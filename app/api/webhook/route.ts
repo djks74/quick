@@ -1,67 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createPaymentLink } from '@/lib/payment';
-
-// Helper to send WhatsApp message
-async function sendWhatsAppMessage(to: string, message: string) {
-  const settings = await prisma.storeSettings.findFirst();
-  const token = settings?.whatsappToken || process.env.WHATSAPP_TOKEN;
-  
-  if (!token) {
-    console.log(`[WHATSAPP_MOCK] (No Token Configured) Sending to ${to}: ${message}`);
-    return;
-  }
-
-  const phoneNumberId = settings?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID; 
-
-  console.log('SEND_WHATSAPP_DEBUG:', { to, message, phoneNumberId, token: token ? 'EXISTS' : 'MISSING' });
-
-  if (!phoneNumberId) {
-    console.log(`[WHATSAPP_MOCK] (No Phone ID) Sending to ${to}: ${message}`);
-    return;
-  }
-
-  try {
-    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to,
-        type: "text",
-        text: { body: message }
-      })
-    });
-    
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('[WHATSAPP_API_ERROR]', err);
-    }
-  } catch (error) {
-    console.error('[WHATSAPP_SEND_ERROR]', error);
-  }
-}
+import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
 // Session Helpers
-async function getSession(phoneNumber: string) {
+async function getSession(phoneNumber: string, storeId: number) {
   let session = await prisma.whatsAppSession.findUnique({
-    where: { phoneNumber }
+    where: { 
+      phoneNumber_storeId: { 
+        phoneNumber, 
+        storeId 
+      } 
+    }
   });
   
   if (!session) {
     session = await prisma.whatsAppSession.create({
-      data: { phoneNumber }
+      data: { phoneNumber, storeId }
     });
   }
   return session;
 }
 
-async function updateSession(phoneNumber: string, data: any) {
+async function updateSession(phoneNumber: string, storeId: number, data: any) {
   return await prisma.whatsAppSession.update({
-    where: { phoneNumber },
+    where: { 
+      phoneNumber_storeId: { 
+        phoneNumber, 
+        storeId 
+      } 
+    },
     data
   });
 }
@@ -93,9 +61,55 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0];
     const value = changes?.value;
     const message = value?.messages?.[0];
+    const phoneNumberId = value?.metadata?.phone_number_id;
 
-    if (message) {
-      console.log('INCOMING_MESSAGE:', message);
+    if (message && phoneNumberId) {
+      let targetStore = null;
+
+      // 1. Try finding store by Phone ID (Enterprise or Single Setup)
+      // Note: If multiple stores share the same ID in DB, findUnique will fail if unique constraint exists.
+      // Assuming non-enterprise stores DO NOT have whatsappPhoneId set in DB, or it's nullable/unique?
+      // Schema says: whatsappPhoneId String? @unique
+      // So only one store can have a specific ID.
+      // Non-enterprise stores should have null whatsappPhoneId in DB if they use shared.
+      
+      const store = await prisma.store.findUnique({
+        where: { whatsappPhoneId: phoneNumberId }
+      });
+
+      if (store) {
+        targetStore = store;
+      } else if (phoneNumberId === process.env.WHATSAPP_PHONE_ID) {
+         // 2. If matches Platform ID, try to infer context from recent session
+         console.log('Received message on Shared Platform Number');
+         const from = message.from;
+         
+         const recentSession = await prisma.whatsAppSession.findFirst({
+            where: { phoneNumber: from },
+            orderBy: { updatedAt: 'desc' }
+         });
+         
+         if (recentSession) {
+            targetStore = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
+         }
+         
+         // Fallback to Demo Store if still no context
+         if (!targetStore) {
+            targetStore = await prisma.store.findFirst({ where: { slug: 'demo' } });
+         }
+      }
+
+      // Dev Fallback
+      if (!targetStore && process.env.NODE_ENV === 'development') {
+         targetStore = await prisma.store.findFirst();
+      }
+
+      if (!targetStore) {
+        console.log(`No store found for Phone ID: ${phoneNumberId}`);
+        return NextResponse.json({ success: true });
+      }
+
+      console.log('INCOMING_MESSAGE:', message, 'STORE:', targetStore.name);
       const from = message.from; 
       const textBody = message.text?.body?.trim();
       const lowerText = textBody?.toLowerCase();
@@ -103,7 +117,7 @@ export async function POST(req: NextRequest) {
       if (!textBody) return NextResponse.json({ success: true });
 
       // Get or create session
-      const session = await getSession(from);
+      const session = await getSession(from, targetStore.id);
       
       // 1. GLOBAL COMMANDS (Reset state)
       
@@ -111,49 +125,50 @@ export async function POST(req: NextRequest) {
       const tableMatch = textBody.match(/(?:table|meja)\s*(\d+)/i);
       if (tableMatch) {
         const tableNumber = tableMatch[1];
-        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}?table=${tableNumber}`;
+        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}?table=${tableNumber}`;
         
-        await updateSession(from, { 
+        await updateSession(from, targetStore.id, { 
           step: 'MENU_SELECTION', 
           tableNumber,
           cart: [] // Clear cart
         });
 
         await sendWhatsAppMessage(from, 
-          `Welcome to Table ${tableNumber}! 👋\n\n` +
+          `Welcome to ${targetStore.name} (Table ${tableNumber})! 👋\n\n` +
           `How would you like to order?\n` +
           `1. Order via Digital Menu (Web)\n` +
           `2. Order via WhatsApp (Text)\n` +
           `3. Quick Pay (Input Amount)\n\n` +
-          `Reply with 1, 2, or 3.`
+          `Reply with 1, 2, or 3.`,
+          targetStore.id
         );
         return NextResponse.json({ success: true });
       }
 
       // Handle "Pay" / "Payment" -> Jump to Payment
       if (lowerText === 'pay' || lowerText === 'payment' || lowerText === 'bayar') {
-        await updateSession(from, { step: 'PAYMENT_AMOUNT' });
-        await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`);
+        await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
+        await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
         return NextResponse.json({ success: true });
       }
 
       // Handle "Menu" -> Jump to Ordering
       if (lowerText === 'menu') {
-        await updateSession(from, { step: 'ORDERING' });
+        await updateSession(from, targetStore.id, { step: 'ORDERING' });
         // Fetch products
         const products = await prisma.product.findMany({ 
+          where: { storeId: targetStore.id },
           take: 10,
-          // where: { stock: { gt: 0 } }, // Removed stock check for testing
           orderBy: { name: 'asc' }
         });
 
-        let menuText = "🍽️ *Menu List* 🍽️\n\n";
+        let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
         products.forEach((p, index) => {
           menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
         });
         menuText += `\nReply with "Number Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
 
-        await sendWhatsAppMessage(from, menuText);
+        await sendWhatsAppMessage(from, menuText, targetStore.id);
         return NextResponse.json({ success: true });
       }
 
@@ -163,29 +178,29 @@ export async function POST(req: NextRequest) {
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           // Web Menu
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}?table=${session.tableNumber}`;
-          await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`);
-          await updateSession(from, { step: 'START' }); // Reset
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}?table=${session.tableNumber}`;
+          await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`, targetStore.id);
+          await updateSession(from, targetStore.id, { step: 'START' }); // Reset
         } else if (textBody === '2') {
           // WhatsApp Menu
-          await updateSession(from, { step: 'ORDERING' });
+          await updateSession(from, targetStore.id, { step: 'ORDERING' });
           const products = await prisma.product.findMany({ 
+            where: { storeId: targetStore.id },
             take: 10,
-            // where: { stock: { gt: 0 } },
             orderBy: { name: 'asc' }
           });
-          let menuText = "🍽️ *Menu List* 🍽️\n\n";
+          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
           products.forEach((p, index) => {
             menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
           });
           menuText += `\nReply with "Number Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
-          await sendWhatsAppMessage(from, menuText);
+          await sendWhatsAppMessage(from, menuText, targetStore.id);
         } else if (textBody === '3') {
           // Quick Pay
-          await updateSession(from, { step: 'PAYMENT_AMOUNT' });
-          await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`);
+          await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
+          await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
         } else {
-          await sendWhatsAppMessage(from, `Invalid option. Reply 1, 2, or 3.`);
+          await sendWhatsAppMessage(from, `Invalid option. Reply 1, 2, or 3.`, targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -203,26 +218,26 @@ export async function POST(req: NextRequest) {
           try {
             const order = await prisma.order.create({
               data: {
+                storeId: targetStore.id,
                 customerPhone: from,
                 totalAmount: amount,
                 status: 'PENDING'
-                // items: []  <-- Removed this
               }
             });
             console.log('DEBUG: Order Created', order.id);
 
-            const paymentLink = await createPaymentLink(order.id, amount, from);
+            const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
             console.log('DEBUG: Payment Link', paymentLink);
             
-            await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPay here: ${paymentLink}`);
+            await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPay here: ${paymentLink}`, targetStore.id);
             
-            await updateSession(from, { step: 'START' }); // Reset
+            await updateSession(from, targetStore.id, { step: 'START' }); // Reset
           } catch (e) {
             console.error('DEBUG: Error creating order/payment', e);
-            await sendWhatsAppMessage(from, `Error creating order. Please try again.`);
+            await sendWhatsAppMessage(from, `Error creating order. Please try again.`, targetStore.id);
           }
         } else {
-          await sendWhatsAppMessage(from, `Invalid amount. Please enter a number (e.g. 50000).`);
+          await sendWhatsAppMessage(from, `Invalid amount. Please enter a number (e.g. 50000).`, targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -233,7 +248,7 @@ export async function POST(req: NextRequest) {
           // Checkout logic
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
-            await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`);
+            await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
             return NextResponse.json({ success: true });
           }
 
@@ -242,6 +257,7 @@ export async function POST(req: NextRequest) {
           // Create Order with items
           const order = await prisma.order.create({
             data: {
+              storeId: targetStore.id,
               customerPhone: from,
               totalAmount: total,
               status: 'PENDING',
@@ -256,7 +272,7 @@ export async function POST(req: NextRequest) {
             }
           });
 
-          const paymentLink = await createPaymentLink(order.id, total, from);
+          const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id);
           
           let summary = "🧾 *Order Summary*\n";
           cart.forEach(item => {
@@ -265,8 +281,8 @@ export async function POST(req: NextRequest) {
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}*`;
           summary += `\n\nPay here: ${paymentLink}`;
 
-          await sendWhatsAppMessage(from, summary);
-          await updateSession(from, { step: 'START', cart: [] });
+          await sendWhatsAppMessage(from, summary, targetStore.id);
+          await updateSession(from, targetStore.id, { step: 'START', cart: [] });
           return NextResponse.json({ success: true });
         }
 
@@ -277,8 +293,8 @@ export async function POST(req: NextRequest) {
           const qty = parseInt(itemMatch[2]);
 
           const products = await prisma.product.findMany({ 
+            where: { storeId: targetStore.id },
             take: 10,
-            // where: { stock: { gt: 0 } },
             orderBy: { name: 'asc' }
           });
 
@@ -294,16 +310,16 @@ export async function POST(req: NextRequest) {
               qty: qty
             });
 
-            await updateSession(from, { cart: currentCart });
+            await updateSession(from, targetStore.id, { cart: currentCart });
             
-            await sendWhatsAppMessage(from, `Added ${qty}x ${product.name} to cart.\nReply with more items (e.g. '2 1') or 'Done' to checkout.`);
+            await sendWhatsAppMessage(from, `Added ${qty}x ${product.name} to cart.\nReply with more items (e.g. '2 1') or 'Done' to checkout.`, targetStore.id);
           } else {
-            await sendWhatsAppMessage(from, `Invalid item number. Please check the menu.`);
+            await sendWhatsAppMessage(from, `Invalid item number. Please check the menu.`, targetStore.id);
           }
         } else {
           // Maybe user typed text, try to fuzzy match or just ignore
           // Check if it's "Table X" or "Pay" to break out? (Handled at top)
-          await sendWhatsAppMessage(from, `I didn't understand. Reply '1 2' to order Item #1 Quantity 2, or 'Done' to finish.`);
+          await sendWhatsAppMessage(from, `I didn't understand. Reply '1 2' to order Item #1 Quantity 2, or 'Done' to finish.`, targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -317,14 +333,15 @@ export async function POST(req: NextRequest) {
            const amount = parseInt(totalMatch[1].replace(/\./g, ''));
            const order = await prisma.order.create({
             data: {
+              storeId: targetStore.id,
               customerPhone: from,
               totalAmount: amount,
               status: 'PENDING',
               items: [] 
             }
           });
-          const paymentLink = await createPaymentLink(order.id, amount, from);
-          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPlease complete payment here:\n${paymentLink}`);
+          const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
+          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPlease complete payment here:\n${paymentLink}`, targetStore.id);
         }
       }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { getOrders } from "@/lib/api";
+import { getOrders, getStoreBySlug } from "@/lib/api";
 import { 
   Search, 
   Filter, 
@@ -48,17 +48,22 @@ const statusColors: Record<string, string> = {
 
 export default function AdminOrders() {
   const searchParams = useSearchParams();
+  const { slug } = useParams();
   const action = searchParams.get("action");
   const [orders, setOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     async function loadOrders() {
-      const data = await getOrders();
+      if (!slug) return;
+      const store = await getStoreBySlug(slug as string);
+      if (!store) return;
+      
+      const data = await getOrders(store.id);
       setOrders(data);
     }
     loadOrders();
-  }, []);
+  }, [slug]);
 
   if (action === "new") {
     return (
@@ -164,7 +169,7 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-col">
-                        <Link href={`/admin/orders/${order.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
+                        <Link href={`/${slug}/admin/orders/${order.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
                           #{order.id} {order.customerName}
                         </Link>
                         <span className="text-xs text-gray-500 mt-1">{order.customerEmail}</span>

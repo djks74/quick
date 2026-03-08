@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import { useState } from "react";
 import { samplePages, Page } from "@/data/pages";
 import { 
@@ -22,6 +22,7 @@ import Link from "next/link";
 
 export default function AdminPages() {
   const searchParams = useSearchParams();
+  const { slug } = useParams();
   const action = searchParams.get("action");
   const editId = searchParams.get("edit");
   const [pages, setPages] = useState<Page[]>(samplePages);
@@ -82,7 +83,7 @@ export default function AdminPages() {
                 <div className="pt-3 flex items-center justify-between">
                   <button className="text-red-600 hover:underline">Move to Trash</button>
                   <button 
-                    onClick={() => window.location.href = "/admin/pages"}
+                    onClick={() => window.location.href = `/${slug}/admin/pages`}
                     className="px-4 py-1.5 bg-[#2271b1] text-white font-medium hover:bg-[#135e96] transition-colors rounded"
                   >
                     {action === "edit" ? "Update" : "Publish"}
@@ -164,11 +165,11 @@ export default function AdminPages() {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col">
-                      <Link href={`/admin/pages?action=edit&edit=${page.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
+                      <Link href={`/${slug}/admin/pages?action=edit&edit=${page.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
                         {page.title} {page.status === 'draft' && <span className="text-gray-400 font-normal">— Draft</span>}
                       </Link>
                       <div className="flex items-center space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs">
-                        <Link href={`/admin/pages?action=edit&edit=${page.id}`} className="text-[#2271b1] hover:text-[#135e96]">Edit</Link>
+                        <Link href={`/${slug}/admin/pages?action=edit&edit=${page.id}`} className="text-[#2271b1] hover:text-[#135e96]">Edit</Link>
                         <span className="text-gray-300">|</span>
                         <button className="text-[#2271b1] hover:text-[#135e96]">Quick Edit</button>
                         <span className="text-gray-300">|</span>
@@ -189,7 +190,7 @@ export default function AdminPages() {
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link href={`/admin/pages?action=edit&edit=${page.id}`} className="p-1 hover:bg-gray-200 rounded text-gray-600" title="Edit Page">
+                      <Link href={`/${slug}/admin/pages?action=edit&edit=${page.id}`} className="p-1 hover:bg-gray-200 rounded text-gray-600" title="Edit Page">
                         <Edit2 className="w-4 h-4" />
                       </Link>
                       <button className="p-1 hover:bg-gray-200 rounded text-red-600" title="Delete Page">

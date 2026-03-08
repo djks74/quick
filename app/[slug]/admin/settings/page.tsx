@@ -1,0 +1,363 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
+import { useShop } from "@/context/ShopContext";
+import { getStoreSettings, updateStoreSettings, getStoreBySlug } from "@/lib/api";
+import { Check, Lock } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export default function AdminSettings() {
+  const { slug } = useParams();
+  const { setSiteName } = useAdmin();
+  const { headerSettings, setHeaderSettings } = useShop();
+  const [activeTab, setActiveTab] = useState("General");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [storeId, setStoreId] = useState<number | null>(null);
+  const [subscriptionPlan, setSubscriptionPlan] = useState("FREE");
+  
+  const [settings, setSettings] = useState({
+    storeName: "",
+    whatsapp: "",
+    themeColor: "",
+    whatsappToken: "",
+    whatsappPhoneId: "",
+    enableWhatsApp: true,
+    enableMidtrans: false,
+    enableXendit: false,
+    enableManualTransfer: false,
+    paymentGatewaySecret: "",
+    paymentGatewayClientKey: ""
+  });
+
+  const [bankAccount, setBankAccount] = useState({
+    bankName: "BCA",
+    accountNumber: "",
+    accountName: ""
+  });
+
+  // Fetch Store ID
+  useEffect(() => {
+    async function loadStore() {
+      if (!slug) return;
+      const store = await getStoreBySlug(slug as string);
+      if (store) setStoreId(store.id);
+    }
+    loadStore();
+  }, [slug]);
+
+  // Load Settings
+  useEffect(() => {
+    async function loadSettings() {
+      if (!storeId) return;
+      const data = await getStoreSettings(storeId);
+      if (data) {
+        setSettings({
+          storeName: data.name || "",
+          whatsapp: data.whatsapp || "",
+          themeColor: data.themeColor || "",
+          whatsappToken: data.whatsappToken || "",
+          whatsappPhoneId: data.whatsappPhoneId || "",
+          enableWhatsApp: data.enableWhatsApp ?? true,
+          enableMidtrans: data.enableMidtrans ?? false,
+          enableXendit: data.enableXendit ?? false,
+          enableManualTransfer: data.enableManualTransfer ?? false,
+          paymentGatewaySecret: data.paymentGatewaySecret || "",
+          paymentGatewayClientKey: data.paymentGatewayClientKey || ""
+        });
+        
+        if (data.bankAccount) {
+            const bank = data.bankAccount as any;
+            setBankAccount({
+                bankName: bank.bankName || "BCA",
+                accountNumber: bank.accountNumber || "",
+                accountName: bank.accountName || ""
+            });
+        }
+
+        if (data.name) setSiteName(data.name);
+        setSubscriptionPlan(data.subscriptionPlan || "FREE");
+      }
+    }
+    loadSettings();
+  }, [storeId, setSiteName]);
+
+  const handleSave = async () => {
+    if (!storeId) return;
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await updateStoreSettings(storeId, {
+        ...settings,
+        bankAccount: bankAccount
+      });
+      setSiteName(settings.storeName);
+      setSaveMessage("Settings saved successfully.");
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      setSaveMessage("Failed to save settings. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isEnterprise = subscriptionPlan === 'ENTERPRISE';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex border-b border-[#ccd0d4] mb-6 overflow-x-auto">
+        {["General", "Payments", "Appearance"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[2px] whitespace-nowrap",
+              activeTab === tab 
+                ? "border-[#2271b1] text-[#2271b1] bg-white" 
+                : "border-transparent text-gray-500 hover:text-[#2271b1]"
+            )}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-4xl space-y-8">
+        {activeTab === "General" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327]">Store Identity</h3>
+                <p className="text-xs text-gray-500 mt-1">Global settings for your store.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Store Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    value={settings.storeName}
+                    onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
+                  <input 
+                    type="text" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    value={settings.whatsapp}
+                    onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })}
+                    placeholder="628..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327]">Integrations</h3>
+                <p className="text-xs text-gray-500 mt-1">Connect third-party services.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                {!isEnterprise && (
+                    <div className="bg-blue-50 text-blue-700 p-3 rounded-md text-sm mb-4 flex items-center">
+                        <Lock className="w-4 h-4 mr-2" />
+                        Using Platform WhatsApp Config. Upgrade to Enterprise to use your own.
+                    </div>
+                )}
+                <div className={cn(!isEnterprise && "opacity-50 pointer-events-none")}>
+                    <div>
+                    <label className="block text-sm font-medium mb-1">WhatsApp Token (Meta)</label>
+                    <input 
+                        type="password" 
+                        className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                        value={settings.whatsappToken}
+                        onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
+                    />
+                    </div>
+                    <div className="mt-4">
+                    <label className="block text-sm font-medium mb-1">WhatsApp Phone Number ID</label>
+                    <input 
+                        type="text" 
+                        className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                        value={settings.whatsappPhoneId}
+                        onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
+                    />
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "Payments" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327]">Payment Methods</h3>
+                <p className="text-xs text-gray-500 mt-1">Enable multiple payment options.</p>
+              </div>
+              <div className="md:col-span-2 space-y-6">
+                
+                {/* Manual Transfer */}
+                <div className="border p-4 rounded-lg bg-white space-y-4">
+                    <div className="flex items-center justify-between">
+                         <div className="flex items-center space-x-2">
+                            <input 
+                                type="checkbox" 
+                                checked={settings.enableManualTransfer}
+                                onChange={(e) => setSettings({ ...settings, enableManualTransfer: e.target.checked })}
+                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                            />
+                            <label className="text-sm font-medium">Enable Manual Transfer</label>
+                        </div>
+                    </div>
+                    
+                    {settings.enableManualTransfer && (
+                        <div className="pl-6 pt-2 border-t mt-2">
+                             {!isEnterprise && (
+                                <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                                    Funds will be transferred to Platform Account (BCA 888888888). Upgrade to Enterprise to use your own bank account.
+                                </div>
+                             )}
+                             <div className={cn("space-y-3", !isEnterprise && "opacity-50 pointer-events-none")}>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Bank Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        value={bankAccount.bankName}
+                                        onChange={(e) => setBankAccount({ ...bankAccount, bankName: e.target.value })}
+                                        placeholder="BCA"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Account Number</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        value={bankAccount.accountNumber}
+                                        onChange={(e) => setBankAccount({ ...bankAccount, accountNumber: e.target.value })}
+                                        placeholder="1234567890"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Account Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        value={bankAccount.accountName}
+                                        onChange={(e) => setBankAccount({ ...bankAccount, accountName: e.target.value })}
+                                        placeholder="Store Name"
+                                    />
+                                </div>
+                             </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Midtrans */}
+                <div className="border p-4 rounded-lg bg-white space-y-4">
+                   <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.enableMidtrans}
+                      onChange={(e) => setSettings({ ...settings, enableMidtrans: e.target.checked })}
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <label className="text-sm font-medium">Enable Midtrans</label>
+                   </div>
+                   {settings.enableMidtrans && (
+                     <div className="pl-6 space-y-3">
+                       {!isEnterprise && (
+                            <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                                Using Platform Midtrans Account. Upgrade to Enterprise to use your own keys.
+                            </div>
+                       )}
+                       <div className={cn("space-y-3", !isEnterprise && "opacity-50 pointer-events-none")}>
+                            <input 
+                                type="password" 
+                                className="w-full border px-3 py-1.5 text-sm" 
+                                placeholder="Server Key"
+                                value={settings.paymentGatewaySecret}
+                                onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                            />
+                            <input 
+                                type="text" 
+                                className="w-full border px-3 py-1.5 text-sm" 
+                                placeholder="Client Key"
+                                value={settings.paymentGatewayClientKey}
+                                onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
+                            />
+                       </div>
+                     </div>
+                   )}
+                </div>
+
+                {/* WhatsApp Checkout */}
+                <div className="flex items-center space-x-2 border p-4 rounded-lg bg-white">
+                  <input 
+                    type="checkbox" 
+                    checked={settings.enableWhatsApp}
+                    onChange={(e) => setSettings({ ...settings, enableWhatsApp: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium">Enable Checkout via WhatsApp</label>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "Appearance" && (
+           <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                 <div>
+                   <h3 className="text-sm font-bold text-[#1d2327]">Theme</h3>
+                 </div>
+                 <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Theme Color</label>
+                      <div className="flex items-center space-x-2">
+                        <input 
+                          type="color" 
+                          className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                          value={settings.themeColor}
+                          onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
+                        />
+                        <input 
+                          type="text" 
+                          className="w-full md:w-1/3 border border-[#ccd0d4] px-3 py-1.5 uppercase" 
+                          value={settings.themeColor}
+                          onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        <div className="pt-6 border-t flex items-center space-x-4">
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-6 py-2 bg-[#2271b1] text-white font-medium hover:bg-[#135e96] transition-colors rounded shadow-sm flex items-center"
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+          {saveMessage && (
+            <span className={cn("text-sm flex items-center", saveMessage.includes("Failed") ? "text-red-600" : "text-green-600")}>
+              <Check className="w-4 h-4 mr-1" />
+              {saveMessage}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

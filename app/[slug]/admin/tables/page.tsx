@@ -5,9 +5,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { Printer, Plus, Trash2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
+import { useParams } from "next/navigation";
+
 export default function AdminTables() {
+  const { slug } = useParams();
   const [tables, setTables] = useState<number[]>([1, 2, 3, 4, 5]);
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/${slug}` : `http://localhost:3000/${slug}`;
 
   const addTable = () => {
     const nextTable = tables.length > 0 ? Math.max(...tables) + 1 : 1;
@@ -101,7 +104,7 @@ export default function AdminTables() {
             
             <div className="flex space-x-2 w-full">
               <Link 
-                href={`/?table=${num}`}
+                href={`/${slug}?table=${num}`}
                 target="_blank"
                 className="flex-1 py-2 text-xs font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
               >

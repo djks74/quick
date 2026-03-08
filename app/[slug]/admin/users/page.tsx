@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import { useState } from "react";
 import { 
   Search, 
@@ -34,6 +34,7 @@ const sampleUsers: AdminUser[] = [
 
 export default function AdminUsers() {
   const searchParams = useSearchParams();
+  const { slug } = useParams();
   const action = searchParams.get("action");
   const [users, setUsers] = useState<AdminUser[]>(sampleUsers);
   const [searchQuery, setSearchQuery] = useState("");
@@ -148,12 +149,12 @@ export default function AdminUsers() {
                       <div className="w-8 h-8 bg-gray-200 rounded mr-2 flex items-center justify-center text-gray-500 font-bold">
                         {user.username.charAt(0).toUpperCase()}
                       </div>
-                      <Link href={`/admin/users/${user.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
+                      <Link href={`/${slug}/admin/users/${user.id}`} className="text-[#2271b1] font-bold hover:text-[#135e96]">
                         {user.username}
                       </Link>
                     </div>
                     <div className="flex items-center space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs ml-10">
-                      <Link href={`/admin/users/${user.id}`} className="text-[#2271b1] hover:text-[#135e96]">Edit</Link>
+                      <Link href={`/${slug}/admin/users/${user.id}`} className="text-[#2271b1] hover:text-[#135e96]">Edit</Link>
                       <span className="text-gray-300">|</span>
                       <button className="text-red-600 hover:text-red-800">Delete</button>
                       <span className="text-gray-300">|</span>

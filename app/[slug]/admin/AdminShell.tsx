@@ -14,16 +14,11 @@ import {
   Layers,
   Plus,
   Home,
-  User,
-  MessageSquare,
-  Image as ImageIcon,
-  FileText,
-  MousePointer2,
-  Paintbrush
+  MousePointer2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-import { AdminProvider, useAdmin } from "@/lib/admin-context";
+import { useAdmin } from "@/lib/admin-context";
+import { signOut } from "next-auth/react";
 
 interface SidebarItem {
   name: string;
@@ -32,50 +27,50 @@ interface SidebarItem {
   children?: { name: string; href: string }[];
 }
 
-const sidebarItems: SidebarItem[] = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { 
-    name: "Products", 
-    icon: Package,
-    children: [
-      { name: "All Products", href: "/admin/products" },
-      { name: "Add New", href: "/admin/products?action=new" },
-      { name: "Categories", href: "/admin/products?view=categories" },
-    ]
-  },
-  { 
-    name: "Orders", 
-    icon: ShoppingCart,
-    children: [
-      { name: "All Orders", href: "/admin/orders" },
-    ]
-  },
-  { 
-    name: "Settings", 
-    href: "/admin/settings", 
-    icon: Settings 
-  },
-  { 
-    name: "Tables", 
-    href: "/admin/tables", 
-    icon: Layers 
-  },
-];
-
-export default function AdminLayout({
+export default function AdminShell({
   children,
+  store,
+  isSuperAdmin
 }: {
   children: React.ReactNode;
+  store: any;
+  isSuperAdmin?: boolean;
 }) {
-  return <AdminContent>{children}</AdminContent>;
-}
-
-function AdminContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { layoutStyle, siteName } = useAdmin();
   const [openMenus, setOpenMenus] = useState<string[]>(["Products", "Orders", "Pages", "Appearance"]);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  
+  const slug = store.slug;
+  const baseUrl = `/${slug}/admin`;
+
+  const sidebarItems: SidebarItem[] = [
+    { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
+    { 
+      name: "Products", 
+      icon: Package,
+      children: [
+        { name: "All Products", href: `${baseUrl}/products` },
+        { name: "Categories", href: `${baseUrl}/products?view=categories` },
+      ]
+    },
+    { 
+      name: "Orders", 
+      href: `${baseUrl}/orders`,
+      icon: ShoppingCart,
+    },
+    { 
+      name: "Settings", 
+      href: `${baseUrl}/settings`, 
+      icon: Settings 
+    },
+    { 
+      name: "Tables", 
+      href: `${baseUrl}/tables`, 
+      icon: Layers 
+    },
+  ];
 
   const toggleMenu = (name: string) => {
     setOpenMenus(prev => 
@@ -102,14 +97,14 @@ function AdminContent({ children }: { children: React.ReactNode }) {
       )}>
         <div className="flex items-center h-full">
           {/* Site Name Link */}
-          <Link href="/" className={cn(
+          <Link href={`/${slug}`} target="_blank" className={cn(
             "flex items-center space-x-2 px-3 h-full transition-colors group",
             isModern ? "hover:bg-gray-50 text-primary" : 
             isMinimal ? "hover:bg-gray-50 text-gray-900" : 
             "hover:bg-[#2c3338] hover:text-[#72aee6]"
           )}>
             <Home className="w-4 h-4" />
-            <span className="font-medium">{siteName}</span>
+            <span className="font-medium">{store.name}</span>
           </Link>
 
           {/* + New Dropdown */}
@@ -136,16 +131,29 @@ function AdminContent({ children }: { children: React.ReactNode }) {
                   isModern || isMinimal ? "bg-white border-gray-200" : "bg-[#2c3338] border-[#3c434a]"
                 )}
               >
-                <Link href="/admin/products?action=new" className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>Product</Link>
-                <Link href="/admin/orders?action=new" className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>Order</Link>
-                <Link href="/admin/pages?action=new" className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>Page</Link>
-                <Link href="/admin/users?action=new" className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>User</Link>
+                <Link href={`${baseUrl}/products?action=new`} className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>Product</Link>
+                <Link href={`${baseUrl}/orders?action=new`} className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 text-gray-700" : "hover:text-[#72aee6]")}>Order</Link>
               </div>
             )}
           </div>
         </div>
 
         <div className="flex items-center h-full space-x-2">
+          {/* Super Admin Back Link */}
+          {isSuperAdmin && (
+            <Link 
+              href="/super-admin" 
+              className={cn(
+                "px-3 py-1 rounded-md text-xs font-bold mr-2 transition-colors",
+                isModern || isMinimal 
+                  ? "bg-red-100 text-red-700 hover:bg-red-200" 
+                  : "bg-red-600 text-white hover:bg-red-700"
+              )}
+            >
+              Back to Console
+            </Link>
+          )}
+
           {/* User Profile */}
           <div className="relative h-full">
             <button 
@@ -170,9 +178,11 @@ function AdminContent({ children }: { children: React.ReactNode }) {
               >
                 <div className="w-16 h-16 rounded bg-gray-500 mx-auto mb-2 flex items-center justify-center text-2xl text-white">A</div>
                 <p className={cn("font-bold mb-1", isModern || isMinimal ? "text-gray-900" : "text-white")}>admin</p>
-                <Link href="/admin/profile" className={cn("text-xs block mb-3", isModern || isMinimal ? "text-primary hover:underline" : "hover:text-[#72aee6]")}>Edit Profile</Link>
                 <div className={cn("border-t pt-2", isModern || isMinimal ? "border-gray-100" : "border-[#3c434a]")}>
-                  <button className={cn("text-xs flex items-center justify-center w-full space-x-1", isModern || isMinimal ? "text-gray-600 hover:text-primary" : "hover:text-[#72aee6]")}>
+                  <button 
+                    onClick={() => signOut({ callbackUrl: '/login' })}
+                    className={cn("text-xs flex items-center justify-center w-full space-x-1", isModern || isMinimal ? "text-gray-600 hover:text-primary" : "hover:text-[#72aee6]")}
+                  >
                     <LogOut className="w-3 h-3" />
                     <span>Log Out</span>
                   </button>
@@ -275,20 +285,6 @@ function AdminContent({ children }: { children: React.ReactNode }) {
                 isModern || isMinimal ? "text-gray-900" : "text-[#1d2327]"
               )}>
                 {pathname.split("/").pop()?.replace("-", " ") || "Dashboard"}
-                {/* Dynamic "Add New" button */}
-                {(pathname === "/admin/products" || pathname === "/admin/pages" || pathname === "/admin/orders" || pathname === "/admin/users") && (
-                  <Link 
-                    href={`${pathname}?action=new`} 
-                    className={cn(
-                      "ml-4 px-2 py-1 text-xs font-medium rounded transition-colors",
-                      isModern || isMinimal 
-                        ? "bg-primary text-white hover:bg-orange-600" 
-                        : "border border-[#2271b1] text-[#2271b1] hover:bg-[#f0f6fa]"
-                    )}
-                  >
-                    Add New
-                  </Link>
-                )}
               </h1>
             </header>
 

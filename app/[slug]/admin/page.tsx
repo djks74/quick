@@ -15,9 +15,11 @@ import {
 import { cn, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getDashboardStats, getOrders } from "@/lib/api";
+import { getDashboardStats, getOrders, getStoreBySlug } from "@/lib/api";
+import { useParams } from "next/navigation";
 
 export default function AdminDashboard() {
+  const { slug } = useParams();
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -28,15 +30,21 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function loadDashboardData() {
+      if (!slug) return;
+      
+      const store = await getStoreBySlug(slug as string);
+      if (!store) return;
+      
+      const storeId = store.id;
       const [statsData, ordersData] = await Promise.all([
-        getDashboardStats(),
-        getOrders()
+        getDashboardStats(storeId),
+        getOrders(storeId)
       ]);
       setStats(statsData);
       setRecentOrders(ordersData && Array.isArray(ordersData) ? ordersData.slice(0, 5) : []); // Show top 5 recent orders
     }
     loadDashboardData();
-  }, []);
+  }, [slug]);
 
   return (
     <div className="space-y-8">
@@ -88,7 +96,7 @@ export default function AdminDashboard() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
             <h3 className="font-bold text-gray-900">Recent Orders</h3>
-            <Link href="/admin/orders" className="text-xs font-bold text-primary hover:text-orange-700 uppercase tracking-wider">View All</Link>
+            <Link href={`/${slug}/admin/orders`} className="text-xs font-bold text-primary hover:text-orange-700 uppercase tracking-wider">View All</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -141,7 +149,7 @@ export default function AdminDashboard() {
             <p className="text-sm text-gray-600 leading-relaxed">
               Connect your payment gateways in Settings to start accepting real payments. Enable Xendit or Midtrans for seamless transactions.
             </p>
-            <Link href="/admin/settings" className="inline-block mt-4 text-xs font-black uppercase tracking-widest text-primary hover:text-orange-700">
+            <Link href={`/${slug}/admin/settings`} className="inline-block mt-4 text-xs font-black uppercase tracking-widest text-primary hover:text-orange-700">
               Go to Settings →
             </Link>
           </div>

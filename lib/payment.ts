@@ -7,11 +7,36 @@ function generateUniqueCode() {
   return Math.floor(Math.random() * 999) + 1;
 }
 
-export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string) {
-  const settings = await prisma.storeSettings.findFirst();
+export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number) {
+  const settings = await prisma.store.findUnique({ where: { id: storeId } });
   
+  if (!settings) {
+    throw new Error("Store not found");
+  }
+
+  const isEnterprise = settings.subscriptionPlan === 'ENTERPRISE';
+
   // 1. Manual Transfer
   if (method === 'manual') {
+    // Platform Defaults
+    let bankDetails = {
+      bankName: 'BCA', 
+      accountNumber: process.env.PLATFORM_BANK_NUMBER || '888888888', 
+      accountName: process.env.PLATFORM_BANK_NAME || 'LCP Platform'
+    };
+
+    // Override if Enterprise
+    if (isEnterprise && settings.bankAccount) {
+      const storeBank = settings.bankAccount as any;
+      if (storeBank.bankName && storeBank.accountNumber) {
+        bankDetails = {
+           bankName: storeBank.bankName,
+           accountNumber: storeBank.accountNumber,
+           accountName: storeBank.accountName || settings.name
+        };
+      }
+    }
+
     const uniqueCode = generateUniqueCode();
     const finalAmount = amount + uniqueCode;
     
@@ -31,24 +56,33 @@ export async function processPayment(orderId: number, amount: number, customerPh
       type: 'manual',
       amount: finalAmount,
       uniqueCode: uniqueCode,
-      bankName: 'BCA', // Placeholder, should be in settings
-      accountNumber: '1234567890',
-      accountName: settings?.storeName || 'PT Laku Keras'
+      bankName: bankDetails.bankName,
+      accountNumber: bankDetails.accountNumber,
+      accountName: bankDetails.accountName
     };
   }
 
   // 2. Midtrans
-  if (method === 'midtrans' && settings?.enableMidtrans) {
-    if (!settings.paymentGatewaySecret || !settings.paymentGatewayClientKey) {
-      throw new Error("Midtrans keys not configured");
+  if (method === 'midtrans' && settings.enableMidtrans) {
+    let serverKey = process.env.PAYMENT_GATEWAY_SECRET;
+    let clientKey = process.env.PAYMENT_GATEWAY_CLIENT_KEY;
+
+    // Override if Enterprise AND Keys are set
+    if (isEnterprise && settings.paymentGatewaySecret && settings.paymentGatewayClientKey) {
+       serverKey = settings.paymentGatewaySecret;
+       clientKey = settings.paymentGatewayClientKey;
     }
 
-    const isProduction = !settings.paymentGatewaySecret.startsWith("SB-");
+    if (!serverKey || !clientKey) {
+      throw new Error("Midtrans keys not configured (Platform or Store)");
+    }
+
+    const isProduction = !serverKey.startsWith("SB-");
 
     const snap = new midtransClient.Snap({
       isProduction: isProduction,
-      serverKey: settings.paymentGatewaySecret,
-      clientKey: settings.paymentGatewayClientKey
+      serverKey: serverKey,
+      clientKey: clientKey
     });
 
     const parameter = {
@@ -80,13 +114,23 @@ export async function processPayment(orderId: number, amount: number, customerPh
   }
 
   // 3. Xendit
-  if (method === 'xendit' && settings?.enableXendit) {
-    if (!settings.paymentGatewaySecret) {
+  if (method === 'xendit' && settings.enableXendit) {
+    let secretKey = process.env.XENDIT_SECRET_KEY; // Assuming separate env var for Xendit platform key
+
+    // Reuse paymentGatewaySecret if explicitly for Xendit (needs clarity, assuming shared field for now or separate logic)
+    // For Enterprise, we use paymentGatewaySecret as the API Key for whatever gateway they chose?
+    // Let's assume paymentGatewaySecret holds Xendit Secret Key if Xendit is enabled.
+    
+    if (isEnterprise && settings.paymentGatewaySecret) {
+       secretKey = settings.paymentGatewaySecret;
+    }
+
+    if (!secretKey) {
       throw new Error("Xendit API Key not configured");
     }
 
     const xendit = new Xendit({
-      secretKey: settings.paymentGatewaySecret,
+      secretKey: secretKey,
     });
 
     const { Invoice } = xendit;
@@ -122,12 +166,12 @@ export async function processPayment(orderId: number, amount: number, customerPh
 }
 
 // Deprecated function kept for backward compatibility (WhatsApp flow)
-export async function createPaymentLink(orderId: number, amount: number, customerPhone: string) {
+export async function createPaymentLink(orderId: number, amount: number, customerPhone: string, storeId: number) {
   // Default to Midtrans if enabled, else manual mock
-  const settings = await prisma.storeSettings.findFirst();
+  const settings = await prisma.store.findUnique({ where: { id: storeId } });
   if (settings?.enableMidtrans) {
     try {
-      const res = await processPayment(orderId, amount, customerPhone, 'midtrans');
+      const res = await processPayment(orderId, amount, customerPhone, 'midtrans', storeId);
       return res.paymentUrl;
     } catch (e) {
       console.error(e);

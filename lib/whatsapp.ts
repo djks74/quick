@@ -1,15 +1,25 @@
 import { prisma } from "@/lib/prisma";
 
-export async function sendWhatsAppMessage(to: string, message: string) {
-  const settings = await prisma.storeSettings.findFirst();
-  const token = settings?.whatsappToken || process.env.WHATSAPP_TOKEN;
+export async function sendWhatsAppMessage(to: string, message: string, storeId: number) {
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  
+  // Default to Super Admin (Platform) Config
+  let token = process.env.WHATSAPP_TOKEN;
+  let phoneNumberId = process.env.WHATSAPP_PHONE_ID;
+
+  // Enterprise Override: Use Store's own config if they are Enterprise and have set it up
+  if (store?.subscriptionPlan === 'ENTERPRISE' && store.whatsappToken && store.whatsappPhoneId) {
+    token = store.whatsappToken;
+    phoneNumberId = store.whatsappPhoneId;
+    console.log(`[WHATSAPP] Using Enterprise Config for Store ${storeId}`);
+  } else {
+    console.log(`[WHATSAPP] Using Platform Config for Store ${storeId}`);
+  }
   
   if (!token) {
     console.log(`[WHATSAPP_MOCK] (No Token Configured) Sending to ${to}: ${message}`);
     return;
   }
-
-  const phoneNumberId = settings?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID; 
 
   console.log('SEND_WHATSAPP_DEBUG:', { to, message, phoneNumberId, token: token ? 'EXISTS' : 'MISSING' });
 
