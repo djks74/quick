@@ -289,23 +289,28 @@ export default function AdminProducts() {
           categories={categories}
           onClose={() => setIsFormOpen(false)}
           onSave={async (updatedProduct: any) => {
-            if (!storeId) return;
-            let savedProduct;
-            if (editingProduct) {
-              savedProduct = await updateProduct(editingProduct.id, updatedProduct);
-              if (savedProduct) {
-                setProducts(products.map(p => p.id === savedProduct.id ? savedProduct : p));
-              }
-            } else {
-              savedProduct = await createProduct(storeId, updatedProduct);
-              if (savedProduct) {
-                setProducts([...products, savedProduct]);
-              }
+            if (!storeId) {
+                alert("Store ID missing. Please reload.");
+                return;
             }
-            // Reload to ensure we have the latest data
-            const freshProducts = await getProducts(storeId);
-            setProducts(freshProducts);
-            setIsFormOpen(false);
+            let savedProduct;
+            try {
+                if (editingProduct) {
+                    savedProduct = await updateProduct(editingProduct.id, updatedProduct);
+                    if (!savedProduct) throw new Error("Update failed");
+                } else {
+                    savedProduct = await createProduct(storeId, updatedProduct);
+                    if (!savedProduct) throw new Error("Create failed");
+                }
+                
+                // Reload to ensure we have the latest data
+                const freshProducts = await getProducts(storeId);
+                setProducts(freshProducts);
+                setIsFormOpen(false);
+            } catch (err) {
+                console.error(err);
+                alert("Failed to save product. Please check that all fields are valid.");
+            }
           }}
         />
       )}

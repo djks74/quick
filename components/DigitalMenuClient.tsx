@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle, Phone, Globe } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
 
@@ -32,12 +32,59 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
 
   const [mounted, setMounted] = useState(false);
   
+  // Check-In State
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [checkInStep, setCheckInStep] = useState<'input' | 'choice' | 'success'>('input');
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  
   useEffect(() => {
     setMounted(true);
     if (store) {
         setSettings(store);
     }
-  }, [store]);
+    
+    // Check-In Logic
+    if (tableNumber) {
+        const stored = localStorage.getItem('customerPhone');
+        if (!stored) {
+            setShowCheckIn(true);
+        } else {
+            setCustomerPhone(stored);
+        }
+    }
+  }, [store, tableNumber]);
+
+  const handleCheckIn = () => {
+    if (!customerPhone) return;
+    setCheckInStep('choice');
+  };
+
+  const handleChoice = async (choice: 'whatsapp' | 'web') => {
+      localStorage.setItem('customerPhone', customerPhone);
+      
+      // Call API to trigger server message
+      try {
+          await fetch('/api/check-in', {
+              method: 'POST',
+              body: JSON.stringify({
+                  phone: customerPhone,
+                  storeId: store.id,
+                  tableNumber,
+                  type: choice
+              })
+          });
+      } catch (e) {
+          console.error("Check-in trigger failed:", e);
+      }
+
+      if (choice === 'whatsapp') {
+          // Show Success, Don't Redirect
+          setCheckInStep('success');
+      } else {
+          setShowCheckIn(false);
+      }
+  };
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -102,7 +149,7 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
           storeId: store.id, // Pass storeId
           items: cart,
           total: totalPrice,
-          customerInfo: { phone: 'WEB_USER', tableNumber: tableNumber },
+          customerInfo: { phone: customerPhone || 'WEB_USER', tableNumber: tableNumber },
           paymentMethod: provider === 'manual' ? 'manual' : 'gateway'
         })
       });
@@ -236,6 +283,79 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
             <span className="text-lg">View Order</span>
             <span className="text-sm font-medium">{formatPrice(totalPrice)}</span>
           </button>
+        </div>
+      )}
+
+      {/* Check-In Modal */}
+      {showCheckIn && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-6">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-blue-600">
+                    <MessageCircle className="w-8 h-8" />
+                </div>
+                
+                {checkInStep === 'input' ? (
+                    <>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">Welcome to {settings?.name}!</h2>
+                            <p className="text-gray-500 text-sm mt-1">Please enter your WhatsApp number to start.</p>
+                        </div>
+                        <input 
+                            type="tel" 
+                            placeholder="e.g. 628123456789" 
+                            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg text-center focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value)}
+                        />
+                        <button 
+                            onClick={handleCheckIn}
+                            disabled={!customerPhone}
+                            className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold shadow-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                            Start
+                        </button>
+                    </>
+                ) : checkInStep === 'choice' ? (
+                    <>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">How would you like to order?</h2>
+                            <p className="text-gray-500 text-sm mt-1">We've sent a welcome message to your WhatsApp.</p>
+                        </div>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => handleChoice('whatsapp')}
+                                className="w-full py-4 rounded-xl bg-[#25D366] text-white font-bold shadow-lg hover:bg-[#1dbf57] transition-colors flex items-center justify-center gap-2"
+                            >
+                                <MessageCircle className="w-5 h-5" />
+                                Order via WhatsApp
+                            </button>
+                            <button 
+                                onClick={() => handleChoice('web')}
+                                className="w-full py-4 rounded-xl bg-white border-2 border-gray-200 text-gray-900 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Globe className="w-5 h-5" />
+                                Order via Website
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">Message Sent!</h2>
+                            <p className="text-gray-500 text-sm mt-1">Please check your WhatsApp to continue ordering.</p>
+                        </div>
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 animate-in zoom-in duration-300">
+                            <MessageCircle className="w-8 h-8" />
+                        </div>
+                        <button 
+                            onClick={() => setShowCheckIn(false)}
+                            className="w-full py-3 rounded-xl bg-gray-900 text-white font-bold shadow-lg hover:bg-black transition-colors"
+                        >
+                            Close
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
       )}
 

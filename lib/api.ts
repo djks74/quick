@@ -55,6 +55,53 @@ export async function updateStoreSettings(storeId: number, data: any) {
   }
 }
 
+export async function updateStoreDomain(storeId: number, domain: string) {
+  try {
+    return await prisma.store.update({
+      where: { id: storeId },
+      data: { customDomain: domain }
+    });
+  } catch (error) {
+    console.error('Error updating store domain:', error);
+    return null;
+  }
+}
+
+// --- Tables ---
+
+export async function getTables(storeId: number) {
+  try {
+    return await prisma.table.findMany({ where: { storeId }, orderBy: { createdAt: 'asc' } });
+  } catch (error) {
+    console.error('Error fetching tables:', error);
+    return [];
+  }
+}
+
+export async function createTable(storeId: number, name: string, identifier: string) {
+  try {
+    console.log("SERVER: Creating table for store", storeId, name, identifier);
+    const table = await prisma.table.create({
+      data: { storeId, name, identifier }
+    });
+    console.log("SERVER: Table created", table);
+    return table;
+  } catch (error) {
+    console.error('SERVER: Error creating table:', error);
+    return null;
+  }
+}
+
+export async function deleteTable(id: number) {
+  try {
+    await prisma.table.delete({ where: { id } });
+    return true;
+  } catch (error) {
+    console.error('Error deleting table:', error);
+    return false;
+  }
+}
+
 // --- Products ---
 
 export async function getProducts(storeId: number, categorySlug?: string): Promise<Product[]> {
@@ -90,11 +137,12 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
 
 export async function createProduct(storeId: number, data: any) {
   try {
+    console.log("SERVER: Creating product", storeId, JSON.stringify(data));
     const product = await prisma.product.create({
       data: {
         storeId,
         name: data.name,
-        price: data.price,
+        price: parseFloat(data.price), // Ensure float
         image: data.image,
         gallery: data.gallery,
         category: data.category,
@@ -102,25 +150,27 @@ export async function createProduct(storeId: number, data: any) {
         description: data.description,
         shortDescription: data.shortDescription,
         type: data.type,
-        rating: data.rating,
+        rating: parseFloat(data.rating?.toString() || '0'),
         variations: data.variations ? data.variations : undefined,
-        stock: data.stock !== undefined ? data.stock : 0
+        stock: parseInt(data.stock?.toString() || '0')
       }
     });
+    console.log("SERVER: Product created", product.id);
     return product;
   } catch (error) {
-    console.error('Error creating product:', error);
+    console.error('SERVER: Error creating product:', error);
     return null;
   }
 }
 
 export async function updateProduct(id: number, data: any) {
   try {
+    console.log("SERVER: Updating product", id, JSON.stringify(data));
     const product = await prisma.product.update({
       where: { id },
       data: {
         name: data.name,
-        price: data.price,
+        price: parseFloat(data.price),
         image: data.image,
         gallery: data.gallery,
         category: data.category,
@@ -128,14 +178,15 @@ export async function updateProduct(id: number, data: any) {
         description: data.description,
         shortDescription: data.shortDescription,
         type: data.type,
-        rating: data.rating,
+        rating: parseFloat(data.rating?.toString() || '0'),
         variations: data.variations ? data.variations : undefined,
-        stock: data.stock !== undefined ? data.stock : undefined
+        stock: parseInt(data.stock?.toString() || '0') // stock might be undefined in update if not passed? No, form passes it.
       }
     });
+    console.log("SERVER: Product updated", product.id);
     return product;
   } catch (error) {
-    console.error('Error updating product:', error);
+    console.error('SERVER: Error updating product:', error);
     return null;
   }
 }

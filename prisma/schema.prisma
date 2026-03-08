@@ -10,6 +10,7 @@ datasource db {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
+  phoneNumber String? @unique
   password  String
   name      String?
   role      String   @default("MERCHANT") // MERCHANT, SUPER_ADMIN
@@ -30,6 +31,7 @@ model Store {
   themeColor              String    @default("#000000")
   whatsappToken           String?
   whatsappPhoneId         String?   @unique
+  customDomain            String?   // Custom domain for QR codes
   
   // Payment Config
   enableWhatsApp          Boolean   @default(true)
@@ -48,6 +50,7 @@ model Store {
   products                Product[]
   categories              Category[]
   orders                  Order[]
+  tables                  Table[]
   
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -126,4 +129,16 @@ model WhatsAppSession {
   updatedAt   DateTime @updatedAt
 
   @@unique([phoneNumber, storeId]) // Session per user per store
+}
+
+model Table {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  store     Store    @relation(fields: [storeId], references: [id])
+  name      String
+  identifier String  // The value in ?table=XYZ
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, identifier])
 }

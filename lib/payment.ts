@@ -8,6 +8,7 @@ function generateUniqueCode() {
 }
 
 export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number) {
+  console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}`);
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
   
   if (!settings) {
@@ -62,8 +63,9 @@ export async function processPayment(orderId: number, amount: number, customerPh
     };
   }
 
-  // 2. Midtrans
-  if (method === 'midtrans' && settings.enableMidtrans) {
+  if (method === 'midtrans') {
+    if (!settings.enableMidtrans) throw new Error("Midtrans payment is disabled for this store.");
+    
     let serverKey = process.env.PAYMENT_GATEWAY_SECRET;
     let clientKey = process.env.PAYMENT_GATEWAY_CLIENT_KEY;
 
@@ -74,6 +76,7 @@ export async function processPayment(orderId: number, amount: number, customerPh
     }
 
     if (!serverKey || !clientKey) {
+      console.error("Midtrans keys missing. Store:", storeId, "Is Enterprise:", isEnterprise);
       throw new Error("Midtrans keys not configured (Platform or Store)");
     }
 
@@ -95,26 +98,32 @@ export async function processPayment(orderId: number, amount: number, customerPh
       }
     };
 
-    const transaction = await snap.createTransaction(parameter);
-    
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { 
-        paymentMethod: 'midtrans',
-        paymentUrl: transaction.redirect_url
-      }
-    });
+    try {
+      const transaction = await snap.createTransaction(parameter);
+      
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { 
+          paymentMethod: 'midtrans',
+          paymentUrl: transaction.redirect_url
+        }
+      });
 
-    return {
-      success: true,
-      type: 'midtrans',
-      paymentUrl: transaction.redirect_url,
-      token: transaction.token
-    };
+      return {
+        success: true,
+        type: 'midtrans',
+        paymentUrl: transaction.redirect_url,
+        token: transaction.token
+      };
+    } catch (err: any) {
+      console.error("Midtrans Transaction Error:", err?.message || err);
+      throw new Error("Failed to create Midtrans transaction: " + (err?.message || "Unknown error"));
+    }
   }
 
-  // 3. Xendit
-  if (method === 'xendit' && settings.enableXendit) {
+  if (method === 'xendit') {
+    if (!settings.enableXendit) throw new Error("Xendit payment is disabled for this store.");
+    
     let secretKey = process.env.XENDIT_SECRET_KEY; // Assuming separate env var for Xendit platform key
 
     // Reuse paymentGatewaySecret if explicitly for Xendit (needs clarity, assuming shared field for now or separate logic)

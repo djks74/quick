@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createPaymentLink } from '@/lib/payment';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
@@ -64,6 +65,36 @@ export async function POST(req: NextRequest) {
     const phoneNumberId = value?.metadata?.phone_number_id;
 
     if (message && phoneNumberId) {
+      const from = message.from;
+
+      // 0. MERCHANT CHECK
+      // Check if sender is a registered Merchant
+      let user = await prisma.user.findUnique({
+        where: { phoneNumber: from },
+        include: { stores: true }
+      });
+
+      // Fallback: Check if this number is listed as a Store WhatsApp Number
+      if (!user) {
+          const storeByPhone = await prisma.store.findFirst({ 
+            where: { whatsapp: from }, 
+            include: { owner: true } 
+          });
+          
+          if (storeByPhone) {
+              // Found a store with this number. The owner is the merchant.
+              user = await prisma.user.findUnique({
+                  where: { id: storeByPhone.ownerId },
+                  include: { stores: true }
+              });
+          }
+      }
+
+      if (user && user.role === 'MERCHANT') {
+        await handleMerchantMessage(user, message, from);
+        return NextResponse.json({ success: true });
+      }
+
       let targetStore = null;
 
       // 1. Try finding store by Phone ID (Enterprise or Single Setup)
@@ -110,7 +141,6 @@ export async function POST(req: NextRequest) {
       }
 
       console.log('INCOMING_MESSAGE:', message, 'STORE:', targetStore.name);
-      const from = message.from; 
       const textBody = message.text?.body?.trim();
       const lowerText = textBody?.toLowerCase();
 
@@ -121,25 +151,13 @@ export async function POST(req: NextRequest) {
       
       // 1. GLOBAL COMMANDS (Reset state)
       
-      // Handle "Table X" -> Reset Session
-      const tableMatch = textBody.match(/(?:table|meja)\s*(\d+)/i);
+      // Handle "Table X" -> Enforce QR Scan
+      const tableMatch = textBody.match(/(?:table|meja)\s*(.+)/i);
       if (tableMatch) {
-        const tableNumber = tableMatch[1];
-        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}?table=${tableNumber}`;
-        
-        await updateSession(from, targetStore.id, { 
-          step: 'MENU_SELECTION', 
-          tableNumber,
-          cart: [] // Clear cart
-        });
-
         await sendWhatsAppMessage(from, 
-          `Welcome to ${targetStore.name} (Table ${tableNumber})! 👋\n\n` +
-          `How would you like to order?\n` +
-          `1. Order via Digital Menu (Web)\n` +
-          `2. Order via WhatsApp (Text)\n` +
-          `3. Quick Pay (Input Amount)\n\n` +
-          `Reply with 1, 2, or 3.`,
+          `👋 Welcome to ${targetStore.name}!\n\n` +
+          `To start ordering, please *scan the QR code* on your table using your phone's camera. 📷\n\n` +
+          `This ensures we get the correct table details.`,
           targetStore.id
         );
         return NextResponse.json({ success: true });
@@ -155,18 +173,22 @@ export async function POST(req: NextRequest) {
       // Handle "Menu" -> Jump to Ordering
       if (lowerText === 'menu') {
         await updateSession(from, targetStore.id, { step: 'ORDERING' });
-        // Fetch products
         const products = await prisma.product.findMany({ 
           where: { storeId: targetStore.id },
           take: 10,
           orderBy: { name: 'asc' }
         });
 
+        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+
         let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
+        menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
+        menuText += `👇 *Or Order via Text*:\n`;
+        
         products.forEach((p, index) => {
           menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
         });
-        menuText += `\nReply with "Number Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
+        menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
 
         await sendWhatsAppMessage(from, menuText, targetStore.id);
         return NextResponse.json({ success: true });
@@ -189,11 +211,17 @@ export async function POST(req: NextRequest) {
             take: 10,
             orderBy: { name: 'asc' }
           });
+          
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+
           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
+          menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
+          menuText += `👇 *Or Order via Text*:\n`;
+
           products.forEach((p, index) => {
             menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
           });
-          menuText += `\nReply with "Number Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
+          menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
           await sendWhatsAppMessage(from, menuText, targetStore.id);
         } else if (textBody === '3') {
           // Quick Pay

@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
 export async function sendWhatsAppMessage(to: string, message: string, storeId: number) {
+  // Sanitize Phone Number (Indonesia Default)
+  let formattedTo = to.replace(/\D/g, ''); 
+  if (formattedTo.startsWith('0')) {
+    formattedTo = '62' + formattedTo.substring(1);
+  }
+
   const store = await prisma.store.findUnique({ where: { id: storeId } });
   
   // Default to Super Admin (Platform) Config
@@ -37,7 +43,7 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to: to,
+        to: formattedTo,
         type: "text",
         text: { body: message }
       })
