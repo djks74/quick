@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "LCP Auto Cars",
-  description: "LCP Auto Cars - Auto Parts & Tuning",
+  title: "Quick",
+  description: "Quick - Digital Menu & Store",
 };
 
 export default function RootLayout({
