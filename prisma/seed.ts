@@ -1,78 +1,76 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
 const prisma = new PrismaClient();
 
 async function main() {
-  const hashedPasswordAdmin = await bcrypt.hash('admin', 10);
-  const hashedPasswordDemo = await bcrypt.hash('demo', 10);
+  const password = await bcrypt.hash('amazon74', 10);
 
-  // 1. Create Super Admin
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@lcp.com' },
-    update: { password: hashedPasswordAdmin },
+  // 1. Create Super Admin User (demo@mythoz.com)
+  const superAdmin = await prisma.user.upsert({
+    where: { email: 'demo@mythoz.com' },
+    update: {
+      password: password,
+      role: 'SUPER_ADMIN',
+      name: 'Super Admin'
+    },
     create: {
-      email: 'admin@lcp.com',
-      password: hashedPasswordAdmin,
+      email: 'demo@mythoz.com',
+      password: password,
       name: 'Super Admin',
       role: 'SUPER_ADMIN'
     }
   });
 
-  // 2. Create Merchant
-  const merchant = await prisma.user.upsert({
-    where: { email: 'demo@lcp.com' },
-    update: { password: hashedPasswordDemo },
-    create: {
-      email: 'demo@lcp.com',
-      password: hashedPasswordDemo,
-      name: 'Demo Merchant',
-      role: 'MERCHANT'
-    }
-  });
+  console.log('Created/Updated Super Admin:', superAdmin.email);
 
-  // 3. Create Store
+  // 2. Create Demo Store
+  // We'll assign the Super Admin as the owner of the Demo Store for simplicity
   const store = await prisma.store.upsert({
     where: { slug: 'demo' },
-    update: { ownerId: merchant.id },
-    create: {
+    update: {
+      ownerId: superAdmin.id,
       name: 'LCP Demo Store',
-      slug: 'demo',
-      ownerId: merchant.id,
-      whatsapp: '628123456789',
       enableWhatsApp: true,
       enableMidtrans: true,
       enableManualTransfer: true,
       subscriptionPlan: 'PRO'
+    },
+    create: {
+      name: 'LCP Demo Store',
+      slug: 'demo',
+      ownerId: superAdmin.id,
+      whatsapp: '628123456789',
+      enableWhatsApp: true,
+      enableMidtrans: true,
+      enableManualTransfer: true,
+      subscriptionPlan: 'PRO',
+      themeColor: '#000000'
     }
   });
 
-  // 4. Create Categories
-  try {
-    const catFood = await prisma.category.upsert({
-      where: { storeId_slug: { storeId: store.id, slug: 'food' } },
+  console.log('Created/Updated Store:', store.slug);
+
+  // 3. Create Basic Categories
+  const categories = [
+    { name: 'Hardware & Licence', slug: 'hardware-licence' },
+    { name: 'Custom Tunes', slug: 'custom-tunes' },
+    { name: 'Maintenance', slug: 'maintenance' }
+  ];
+
+  for (const cat of categories) {
+    await prisma.category.upsert({
+      where: {
+        storeId_slug: {
+          storeId: store.id,
+          slug: cat.slug
+        }
+      },
       update: {},
       create: {
-        name: 'Food',
-        slug: 'food',
+        name: cat.name,
+        slug: cat.slug,
         storeId: store.id
-      }
-    });
-  } catch (e) {
-    // Ignore unique constraint if schema differs slightly in dev
-    console.log('Category seed skipped or failed (might already exist)');
-  }
-
-  // 5. Create Products
-  const count = await prisma.product.count({ where: { storeId: store.id } });
-  if (count === 0) {
-    await prisma.product.create({
-      data: {
-        name: 'Nasi Goreng',
-        price: 25000,
-        storeId: store.id,
-        category: 'Food',
-        description: 'Delicious fried rice',
-        stock: 100
       }
     });
   }
