@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Demo store not found in DB' }, { status: 404 });
     }
 
+    const envPhoneId = process.env.WHATSAPP_PHONE_ID || 'MISSING';
+    const maskedPhoneId = envPhoneId.length > 4 ? envPhoneId.substring(0, 5) + '...' : envPhoneId;
+
     console.log(`[TEST] Sending WhatsApp message to ${phone} using Store ${store.id}`);
     
     // Trigger Send
@@ -33,7 +36,8 @@ export async function GET(req: NextRequest) {
       debug: {
         storeId: store.id,
         usingToken: process.env.WHATSAPP_TOKEN ? 'Yes (Env Var)' : 'No',
-        usingPhoneId: process.env.WHATSAPP_PHONE_ID ? 'Yes (Env Var)' : 'No'
+        usingPhoneId: process.env.WHATSAPP_PHONE_ID ? `Yes (${maskedPhoneId})` : 'No',
+        storePhoneId: store.whatsappPhoneId // Show what's in DB too
       }
     });
 
