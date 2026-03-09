@@ -17,7 +17,7 @@ export default function CartPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    getStoreSettings().then(setSettings);
+    getStoreSettings('demo').then(setSettings);
   }, []);
 
   const updateQuantity = (id: number, delta: number) => {

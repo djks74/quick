@@ -120,8 +120,8 @@ export async function POST(req: NextRequest) {
             orderBy: { updatedAt: 'desc' }
          });
          
-         if (recentSession) {
-            targetStore = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
+        if (recentSession) {
+            targetStore = await prisma.store.findUnique({ where: { id: recentSession.storeId! } });
          }
          
          // Fallback to Demo Store if still no context
@@ -365,7 +365,7 @@ export async function POST(req: NextRequest) {
               customerPhone: from,
               totalAmount: amount,
               status: 'PENDING',
-              items: [] 
+              items: { create: [] } 
             }
           });
           const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);

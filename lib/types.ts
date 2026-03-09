@@ -24,6 +24,7 @@ export interface Product {
   image: string;
   gallery?: string[]; // Array of image URLs
   rating: number;
+  stock: number;
   category: string; // Category slug
   subCategory?: string; // Sub-category slug
   type: "simple" | "variable";

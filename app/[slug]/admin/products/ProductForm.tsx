@@ -18,12 +18,12 @@ const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   price: z.number().min(0, "Price must be positive"),
   image: z.string().min(1, "Main image URL required"),
-  gallery: z.array(z.string()).default([]),
+  gallery: z.array(z.string()),
   category: z.string().min(1, "Please select a category"),
   subCategory: z.string().optional(),
   type: z.enum(["simple", "variable"]),
-  rating: z.number().min(0).max(5).default(0),
-  stock: z.number().min(0).default(0),
+  rating: z.number().min(0).max(5).optional(),
+  stock: z.number().min(0).optional(),
   variations: z.array(variationSchema).optional(),
 });
 
@@ -49,17 +49,17 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
     formState: { errors, isSubmitting },
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
-    defaultValues: product || {
-      name: "",
-      price: 0,
-      image: "/placeholder-product.jpg",
-      gallery: [],
-      category: categories[0].slug,
-      subCategory: "",
-      type: "simple",
-      rating: 0,
-      stock: 0,
-      variations: [],
+    defaultValues: {
+      name: product?.name || "",
+      price: product?.price || 0,
+      image: product?.image || "/placeholder-product.jpg",
+      gallery: product?.gallery || [],
+      category: product?.category || categories[0]?.slug || "",
+      subCategory: product?.subCategory || "",
+      type: (product?.type as "simple" | "variable") || "simple",
+      rating: product?.rating || 0,
+      stock: product?.stock || 0,
+      variations: product?.variations || [],
     },
   });
 

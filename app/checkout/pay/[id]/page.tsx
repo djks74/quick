@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 
-export default async function PaymentPage({ params }: { params: { id: string } }) {
+export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   // Await params to satisfy Next.js 15+ requirements for async params
   const { id } = await params;
   const orderId = parseInt(id);
@@ -16,7 +16,7 @@ export default async function PaymentPage({ params }: { params: { id: string } }
   if (!order) return notFound();
 
   // Get store settings for WhatsApp number
-  const settings = await prisma.storeSettings.findFirst();
+  const settings = await prisma.store.findUnique({ where: { id: order.storeId } });
   const whatsappNumber = settings?.whatsapp || "628123456789";
 
   // Construct message

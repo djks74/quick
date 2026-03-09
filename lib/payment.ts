@@ -142,17 +142,15 @@ export async function processPayment(orderId: number, amount: number, customerPh
       secretKey: secretKey,
     });
 
-    const { Invoice } = xendit;
-    const invoiceSpecificOptions = {};
-    const invoice = new Invoice(invoiceSpecificOptions);
-
-    const resp = await invoice.createInvoice({
-      externalId: `ORDER-${orderId}-${Date.now()}`,
-      amount: amount,
-      payerEmail: 'guest@example.com', // Optional if phone provided
-      description: `Payment for Order #${orderId}`,
-      customer: {
-        mobileNumber: customerPhone.startsWith('0') ? customerPhone.replace('0', '+62') : customerPhone
+    const resp = await xendit.Invoice.createInvoice({
+      data: {
+        externalId: `ORDER-${orderId}-${Date.now()}`,
+        amount: amount,
+        payerEmail: 'guest@example.com', // Optional if phone provided
+        description: `Payment for Order #${orderId}`,
+        customer: {
+          mobileNumber: customerPhone.startsWith('0') ? customerPhone.replace('0', '+62') : customerPhone
+        }
       }
     });
 

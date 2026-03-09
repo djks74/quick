@@ -17,10 +17,11 @@ export async function getStoreBySlug(slug: string) {
   }
 }
 
-export async function getStoreSettings(storeId: number) {
+export async function getStoreSettings(storeId: number | string) {
   try {
+    const where = typeof storeId === 'string' ? { slug: storeId } : { id: storeId };
     const settings = await prisma.store.findUnique({
-      where: { id: storeId }
+      where: where as any
     });
     return settings;
   } catch (error) {

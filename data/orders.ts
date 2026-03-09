@@ -1,4 +1,4 @@
-import { Product } from "./products";
+import { Product } from "@/lib/types";
 
 export interface OrderItem {
   id: string;

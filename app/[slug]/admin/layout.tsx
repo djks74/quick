@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import { getStoreBySlug } from "@/lib/api";
 import AdminShell from "./AdminShell";
@@ -17,13 +17,14 @@ export default async function AdminLayout({ children, params }: { children: Reac
   if (!store) notFound();
 
   // Access Control
-  const isSuperAdmin = session.user.role === 'SUPER_ADMIN';
-  const isOwner = session.user.storeSlug === slug;
+  const user = (session as any).user;
+  const isSuperAdmin = user.role === 'SUPER_ADMIN';
+  const isOwner = user.storeSlug === slug;
 
   if (!isSuperAdmin && !isOwner) {
     // If user has another store, redirect there. Else 403.
-    if (session.user.storeSlug) {
-        redirect(`/${session.user.storeSlug}/admin`);
+    if (user.storeSlug) {
+        redirect(`/${user.storeSlug}/admin`);
     } else {
         redirect('/'); // Or 403 page
     }

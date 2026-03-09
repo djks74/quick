@@ -2,14 +2,15 @@ import { getAllStores } from "@/lib/super-admin";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import StoreTable from "./StoreTable";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import SuperAdminNav from "./SuperAdminNav";
 
 export default async function SuperAdminPage() {
   const session = await getServerSession(authOptions);
   
   // Protect route
-  if (!session || session.user.role !== 'SUPER_ADMIN') {
+  const user = (session as any)?.user;
+  if (!session || user?.role !== 'SUPER_ADMIN') {
     redirect('/login');
   }
 
