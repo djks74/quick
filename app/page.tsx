@@ -1,7 +1,46 @@
+"use client";
+
 import Link from "next/link";
-import { MessageCircle, ShoppingBag, Store, ArrowRight } from "lucide-react";
+import { MessageCircle, ShoppingBag, Store, ArrowRight, Globe } from "lucide-react";
+import { useState } from "react";
+
+const translations = {
+  en: {
+    login: "Login",
+    badge: "WhatsApp Integration Ready",
+    title_start: "Launch Your",
+    title_highlight: "Digital Menu",
+    title_end: "in Seconds",
+    description: "Accept orders via WhatsApp effortlessly. Transform your business with a modern digital storefront today.",
+    view_demo: "View Demo Store",
+    create_store: "Create Your Store",
+    easy_setup: "Easy Setup",
+    instant_launch: "Instant Launch",
+    easy_payment: "Easy Payment",
+    order_via_whatsapp: "Order via WhatsApp",
+    new_order: "New Order"
+  },
+  id: {
+    login: "Masuk",
+    badge: "Integrasi WhatsApp Siap",
+    title_start: "Luncurkan",
+    title_highlight: "Menu Digital",
+    title_end: "dalam Detik",
+    description: "Terima pesanan via WhatsApp dengan mudah. Ubah bisnis Anda dengan toko online modern hari ini.",
+    view_demo: "Lihat Demo Toko",
+    create_store: "Buat Toko Anda",
+    easy_setup: "Setup Mudah",
+    instant_launch: "Luncurkan Instan",
+    easy_payment: "Pembayaran Mudah",
+    order_via_whatsapp: "Pesan via WhatsApp",
+    new_order: "Pesanan Baru"
+  }
+};
 
 export default function Home() {
+  const [lang, setLang] = useState<'en' | 'id'>('en');
+  const t = translations[lang];
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-50">
       {/* Navbar */}
@@ -10,12 +49,23 @@ export default function Home() {
           <Store className="w-6 h-6" />
           <span>QuickMenu</span>
         </div>
-        <Link 
-          href="/login" 
-          className="px-6 py-2 bg-white text-gray-700 font-medium rounded-full shadow-sm hover:shadow-md transition-all hover:text-blue-600"
-        >
-          Login
-        </Link>
+        
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setLang(lang === 'en' ? 'id' : 'en')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/50 hover:bg-white text-sm font-medium text-gray-600 transition-colors"
+          >
+            <Globe className="w-4 h-4" />
+            {lang === 'en' ? 'ID' : 'EN'}
+          </button>
+          
+          <Link 
+            href="/login" 
+            className="px-6 py-2 bg-white text-gray-700 font-medium rounded-full shadow-sm hover:shadow-md transition-all hover:text-blue-600"
+          >
+            {t.login}
+          </Link>
+        </div>
       </nav>
 
       {/* Hero Section */}
@@ -26,15 +76,15 @@ export default function Home() {
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium animate-pulse">
               <MessageCircle className="w-4 h-4" />
-              <span>WhatsApp Integration Ready</span>
+              <span>{t.badge}</span>
             </div>
             
             <h1 className="text-5xl lg:text-7xl font-extrabold text-gray-900 tracking-tight leading-tight">
-              Launch Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Digital Menu</span> in Seconds
+              {t.title_start} <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">{t.title_highlight}</span> {t.title_end}
             </h1>
             
             <p className="text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Accept orders via WhatsApp effortlessly. No coding required. Transform your business with a modern digital storefront today.
+              {t.description}
             </p>
           </div>
 
@@ -43,29 +93,29 @@ export default function Home() {
               href="/demo" 
               className="group px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/30 flex items-center justify-center gap-2"
             >
-              View Demo Store
+              {t.view_demo}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link 
               href="/register" 
               className="px-8 py-4 bg-white text-gray-800 border-2 border-gray-100 rounded-2xl font-bold hover:bg-gray-50 hover:border-gray-200 transition-all shadow-sm hover:shadow-md flex items-center justify-center"
             >
-              Create Your Store
+              {t.create_store}
             </Link>
           </div>
           
           <div className="pt-8 flex items-center justify-center lg:justify-start gap-8 text-gray-400 text-sm font-medium">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>Free Setup</span>
+              <span>{t.easy_setup}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>Instant Launch</span>
+              <span>{t.instant_launch}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>No Credit Card</span>
+              <span>{t.easy_payment}</span>
             </div>
           </div>
         </div>
@@ -114,7 +164,7 @@ export default function Home() {
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="bg-[#25D366] text-white p-4 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold transform hover:scale-105 transition-transform cursor-pointer">
                   <MessageCircle className="w-6 h-6" />
-                  Order via WhatsApp
+                  {t.order_via_whatsapp}
                 </div>
               </div>
             </div>
@@ -131,8 +181,8 @@ export default function Home() {
                  <MessageCircle className="w-6 h-6" />
                </div>
                <div>
-                 <p className="text-xs text-gray-500 font-medium">New Order</p>
-                 <p className="text-sm font-bold text-gray-900">+ $24.00</p>
+                 <p className="text-xs text-gray-500 font-medium">{t.new_order}</p>
+                 <p className="text-sm font-bold text-gray-900">+ Rp 240.000</p>
                </div>
              </div>
           </div>
