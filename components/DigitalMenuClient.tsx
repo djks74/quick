@@ -202,9 +202,14 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
           </h1>
           <p className="text-sm text-gray-500">WhatsApp Order: {settings?.whatsapp || siteConfig.whatsappNumber}</p>
         </div>
-        <a href={`/${settings?.slug || 'demo'}/admin`} className="text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600">
-            Owner Login
-        </a>
+        <div className="flex gap-2 items-center">
+          <a href="/" className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+            Home
+          </a>
+          <a href="/register" className="px-3 py-1.5 text-xs font-bold text-white bg-black rounded-lg hover:bg-gray-800 transition-colors">
+            Create Store
+          </a>
+        </div>
       </header>
 
       {/* Menu Grid */}
