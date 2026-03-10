@@ -63,6 +63,8 @@ export async function POST(req: NextRequest) {
     const value = changes?.value;
     const message = value?.messages?.[0];
     const phoneNumberId = value?.metadata?.phone_number_id;
+    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
     if (message && phoneNumberId) {
       const from = message.from;
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
 
       if (store) {
         targetStore = store;
-      } else if (phoneNumberId === process.env.WHATSAPP_PHONE_ID) {
+      } else if (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId) {
          // 2. If matches Platform ID, try to infer context from recent session
          console.log('Received message on Shared Platform Number');
          const from = message.from;

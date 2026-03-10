@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { LogOut, Users, Store } from "lucide-react";
+import { LogOut, Users, Store, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,16 @@ export default function SuperAdminNav({ totalStores }: { totalStores?: number })
         >
           <Users className="w-4 h-4 mr-2" />
           Users
+        </Link>
+        <Link 
+          href="/super-admin/settings" 
+          className={cn(
+            "px-4 py-2 rounded-md text-sm font-medium flex items-center transition-colors",
+            pathname === "/super-admin/settings" ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+          )}
+        >
+          <Settings className="w-4 h-4 mr-2" />
+          Settings
         </Link>
       </nav>
 

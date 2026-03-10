@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_ID;
+  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+  const token = platform?.whatsappToken || process.env.WHATSAPP_TOKEN;
+  const phoneId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
   if (!token) {
-    return NextResponse.json({ status: 'error', message: 'WHATSAPP_TOKEN is missing in env' });
+    return NextResponse.json({ status: 'error', message: 'WHATSAPP token is not configured (Platform or env)' });
   }
 
   try {
@@ -22,10 +24,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       status: 'success',
-      env: {
-        token_prefix: token.substring(0, 5) + '...',
-        phone_id: phoneId
-      },
+      token_prefix: token.substring(0, 5) + '...',
+      phone_id: phoneId,
       token_info: debugData,
       phone_info: phoneData
     });

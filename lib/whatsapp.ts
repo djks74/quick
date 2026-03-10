@@ -8,13 +8,13 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   }
 
   const store = await prisma.store.findUnique({ where: { id: storeId } });
+  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
   
-  // Default to Super Admin (Platform) Config
-  let token = process.env.WHATSAPP_TOKEN;
-  let phoneNumberId = process.env.WHATSAPP_PHONE_ID;
+  let token = platform?.whatsappToken || process.env.WHATSAPP_TOKEN;
+  let phoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
   // Enterprise Override: Use Store's own config if they are Enterprise and have set it up
-  if (store?.subscriptionPlan === 'ENTERPRISE' && store.whatsappToken && store.whatsappPhoneId) {
+  if (store?.slug !== "demo" && store?.subscriptionPlan === 'ENTERPRISE' && store.whatsappToken && store.whatsappPhoneId) {
     token = store.whatsappToken;
     phoneNumberId = store.whatsappPhoneId;
     console.log(`[WHATSAPP] Using Enterprise Config for Store ${storeId}`);

@@ -35,10 +35,12 @@ export async function updateStoreSettings(storeId: number, data: any) {
     // 1. Fetch store to get ownerId
     const store = await prisma.store.findUnique({
       where: { id: storeId },
-      select: { ownerId: true }
+      select: { ownerId: true, subscriptionPlan: true, slug: true }
     });
 
     if (!store) return null;
+
+    const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
 
     // 2. Transaction to update Store and User
     const [updatedStore] = await prisma.$transaction([
@@ -48,16 +50,19 @@ export async function updateStoreSettings(storeId: number, data: any) {
           name: data.storeName,
           whatsapp: data.whatsapp,
           themeColor: data.themeColor,
-          whatsappToken: data.whatsappToken,
-          whatsappPhoneId: data.whatsappPhoneId,
           enableWhatsApp: data.enableWhatsApp,
           enableMidtrans: data.enableMidtrans,
           enableXendit: data.enableXendit,
           enableManualTransfer: data.enableManualTransfer,
-          paymentGatewaySecret: data.paymentGatewaySecret,
-          paymentGatewayClientKey: data.paymentGatewayClientKey,
-          subscriptionPlan: data.subscriptionPlan,
-          bankAccount: data.bankAccount
+          ...(canUseOwnIntegrationConfig
+            ? {
+                whatsappToken: data.whatsappToken,
+                whatsappPhoneId: data.whatsappPhoneId,
+                paymentGatewaySecret: data.paymentGatewaySecret,
+                paymentGatewayClientKey: data.paymentGatewayClientKey,
+                bankAccount: data.bankAccount
+              }
+            : {})
         }
       }),
       // Only update user phone if whatsapp number is provided

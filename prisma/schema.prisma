@@ -142,3 +142,17 @@ model Table {
 
   @@unique([storeId, identifier])
 }
+
+model PlatformSettings {
+  key                String   @id @default("default")
+  whatsappToken      String?
+  whatsappPhoneId    String?
+  midtransServerKey  String?
+  midtransClientKey  String?
+  xenditSecretKey    String?
+  bankName           String?
+  bankAccountNumber  String?
+  bankAccountName    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

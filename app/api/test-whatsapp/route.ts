@@ -18,8 +18,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Demo store not found in DB' }, { status: 404 });
     }
 
-    const envPhoneId = process.env.WHATSAPP_PHONE_ID || 'MISSING';
-    const maskedPhoneId = envPhoneId.length > 4 ? envPhoneId.substring(0, 5) + '...' : envPhoneId;
+    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    const phoneId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID || 'MISSING';
+    const maskedPhoneId = phoneId.length > 4 ? phoneId.substring(0, 5) + '...' : phoneId;
 
     console.log(`[TEST] Sending WhatsApp message to ${phone} using Store ${store.id}`);
     
@@ -35,8 +36,10 @@ export async function GET(req: NextRequest) {
       message: `Message sent to ${phone}`,
       debug: {
         storeId: store.id,
-        usingToken: process.env.WHATSAPP_TOKEN ? 'Yes (Env Var)' : 'No',
-        usingPhoneId: process.env.WHATSAPP_PHONE_ID ? `Yes (${maskedPhoneId})` : 'No',
+        usingPlatformToken: platform?.whatsappToken ? 'Yes' : 'No',
+        usingPlatformPhoneId: platform?.whatsappPhoneId ? `Yes (${maskedPhoneId})` : 'No',
+        usingEnvToken: process.env.WHATSAPP_TOKEN ? 'Yes' : 'No',
+        usingEnvPhoneId: process.env.WHATSAPP_PHONE_ID ? 'Yes' : 'No',
         storePhoneId: store.whatsappPhoneId // Show what's in DB too
       }
     });

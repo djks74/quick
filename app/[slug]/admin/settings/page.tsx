@@ -105,6 +105,8 @@ export default function AdminSettings() {
   };
 
   const isEnterprise = subscriptionPlan === 'ENTERPRISE';
+  const isDemoStore = slug === "demo";
+  const canOverridePlatformConfig = isEnterprise && !isDemoStore;
 
   return (
     <div className="space-y-6">
@@ -168,7 +170,12 @@ export default function AdminSettings() {
                         Using Platform WhatsApp Config. Upgrade to Enterprise to use your own.
                     </div>
                 )}
-                <div className={cn(!isEnterprise && "opacity-50 pointer-events-none")}>
+                {isDemoStore && (
+                  <div className="bg-gray-100 text-gray-700 p-3 rounded-md text-sm mb-4">
+                    Demo store always uses Platform WhatsApp config.
+                  </div>
+                )}
+                <div className={cn(!canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
                     <div>
                     <label className="block text-sm font-medium mb-1">WhatsApp Token (Meta)</label>
                     <input 
@@ -223,7 +230,12 @@ export default function AdminSettings() {
                                     Funds will be transferred to Platform Account (BCA 888888888). Upgrade to Enterprise to use your own bank account.
                                 </div>
                              )}
-                             <div className={cn("space-y-3", !isEnterprise && "opacity-50 pointer-events-none")}>
+                             {isDemoStore && (
+                                <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                                    Demo store always uses Platform bank account.
+                                </div>
+                             )}
+                             <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Bank Name</label>
                                     <input 
@@ -277,7 +289,12 @@ export default function AdminSettings() {
                                 Using Platform Midtrans Account. Upgrade to Enterprise to use your own keys.
                             </div>
                        )}
-                       <div className={cn("space-y-3", !isEnterprise && "opacity-50 pointer-events-none")}>
+                       {isDemoStore && (
+                          <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                              Demo store always uses Platform Midtrans keys.
+                          </div>
+                       )}
+                       <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
                             <input 
                                 type="password" 
                                 className="w-full border px-3 py-1.5 text-sm" 

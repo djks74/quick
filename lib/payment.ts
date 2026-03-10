@@ -10,24 +10,24 @@ function generateUniqueCode() {
 export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number) {
   console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}`);
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
+  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
   
   if (!settings) {
     throw new Error("Store not found");
   }
 
-  const isEnterprise = settings.subscriptionPlan === 'ENTERPRISE';
+  const canOverridePlatformConfig = settings.slug !== "demo" && settings.subscriptionPlan === "ENTERPRISE";
 
   // 1. Manual Transfer
   if (method === 'manual') {
-    // Platform Defaults
     let bankDetails = {
-      bankName: 'BCA', 
-      accountNumber: process.env.PLATFORM_BANK_NUMBER || '888888888', 
-      accountName: process.env.PLATFORM_BANK_NAME || 'LCP Platform'
+      bankName: platform?.bankName || 'BCA', 
+      accountNumber: platform?.bankAccountNumber || process.env.PLATFORM_BANK_NUMBER || '888888888', 
+      accountName: platform?.bankAccountName || process.env.PLATFORM_BANK_NAME || 'LCP Platform'
     };
 
     // Override if Enterprise
-    if (isEnterprise && settings.bankAccount) {
+    if (canOverridePlatformConfig && settings.bankAccount) {
       const storeBank = settings.bankAccount as any;
       if (storeBank.bankName && storeBank.accountNumber) {
         bankDetails = {
@@ -66,17 +66,16 @@ export async function processPayment(orderId: number, amount: number, customerPh
   if (method === 'midtrans') {
     if (!settings.enableMidtrans) throw new Error("Midtrans payment is disabled for this store.");
     
-    let serverKey = process.env.PAYMENT_GATEWAY_SECRET;
-    let clientKey = process.env.PAYMENT_GATEWAY_CLIENT_KEY;
+    let serverKey = platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET;
+    let clientKey = platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY;
 
-    // Override if Enterprise AND Keys are set
-    if (isEnterprise && settings.paymentGatewaySecret && settings.paymentGatewayClientKey) {
+    if (canOverridePlatformConfig && settings.paymentGatewaySecret && settings.paymentGatewayClientKey) {
        serverKey = settings.paymentGatewaySecret;
        clientKey = settings.paymentGatewayClientKey;
     }
 
     if (!serverKey || !clientKey) {
-      console.error("Midtrans keys missing. Store:", storeId, "Is Enterprise:", isEnterprise);
+      console.error("Midtrans keys missing. Store:", storeId, "Can Override:", canOverridePlatformConfig);
       throw new Error("Midtrans keys not configured (Platform or Store)");
     }
 
@@ -124,13 +123,9 @@ export async function processPayment(orderId: number, amount: number, customerPh
   if (method === 'xendit') {
     if (!settings.enableXendit) throw new Error("Xendit payment is disabled for this store.");
     
-    let secretKey = process.env.XENDIT_SECRET_KEY; // Assuming separate env var for Xendit platform key
-
-    // Reuse paymentGatewaySecret if explicitly for Xendit (needs clarity, assuming shared field for now or separate logic)
-    // For Enterprise, we use paymentGatewaySecret as the API Key for whatever gateway they chose?
-    // Let's assume paymentGatewaySecret holds Xendit Secret Key if Xendit is enabled.
+    let secretKey = platform?.xenditSecretKey || process.env.XENDIT_SECRET_KEY;
     
-    if (isEnterprise && settings.paymentGatewaySecret) {
+    if (canOverridePlatformConfig && settings.paymentGatewaySecret) {
        secretKey = settings.paymentGatewaySecret;
     }
 
