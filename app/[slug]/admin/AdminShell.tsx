@@ -60,11 +60,12 @@ export default function AdminShell({
       href: `${baseUrl}/orders`,
       icon: ShoppingCart,
     },
-    { 
+    // Settings hidden for non-Super Admin
+    ...(isSuperAdmin ? [{ 
       name: "Settings", 
       href: `${baseUrl}/settings`, 
       icon: Settings 
-    },
+    }] : []),
     { 
       name: "Tables", 
       href: `${baseUrl}/tables`, 

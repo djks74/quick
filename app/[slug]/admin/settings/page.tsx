@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug } from "@/lib/api";
@@ -10,7 +11,19 @@ import { cn } from "@/lib/utils";
 
 export default function AdminSettings() {
   const { slug } = useParams();
+  const router = useRouter();
   const { setSiteName } = useAdmin();
+  const { data: session } = useSession();
+  const isSuperAdmin = (session as any)?.user?.role === "SUPER_ADMIN";
+
+  // Redirect non-super-admin users
+  useEffect(() => {
+    if (session && !isSuperAdmin) {
+      router.push(`/${slug}/admin`);
+    }
+  }, [session, isSuperAdmin, slug, router]);
+
+  if (!isSuperAdmin) return null;
   const { headerSettings, setHeaderSettings } = useShop();
   const [activeTab, setActiveTab] = useState("General");
   const [isSaving, setIsSaving] = useState(false);
