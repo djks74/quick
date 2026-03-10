@@ -285,8 +285,9 @@ export default function AdminSettings() {
                    {settings.enableMidtrans && (
                      <div className="pl-6 space-y-3">
                        {!isEnterprise && (
-                            <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
-                                Using Platform Midtrans Account. Upgrade to Enterprise to use your own keys.
+                            <div className="bg-green-50 text-green-700 p-3 rounded-md text-xs mb-3 flex items-center">
+                                <Check className="w-4 h-4 mr-2" />
+                                <span>Platform Midtrans Keys Active. Upgrade to Enterprise to use your own keys.</span>
                             </div>
                        )}
                        {isDemoStore && (
@@ -294,20 +295,22 @@ export default function AdminSettings() {
                               Demo store always uses Platform Midtrans keys.
                           </div>
                        )}
-                       <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
+                       <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-75 pointer-events-none")}>
                             <input 
                                 type="password" 
-                                className="w-full border px-3 py-1.5 text-sm" 
-                                placeholder="Server Key"
-                                value={settings.paymentGatewaySecret}
+                                className="w-full border px-3 py-1.5 text-sm bg-gray-50" 
+                                placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Server Key"}
+                                value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewaySecret}
                                 onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                                readOnly={!isEnterprise}
                             />
                             <input 
                                 type="text" 
-                                className="w-full border px-3 py-1.5 text-sm" 
-                                placeholder="Client Key"
-                                value={settings.paymentGatewayClientKey}
+                                className="w-full border px-3 py-1.5 text-sm bg-gray-50" 
+                                placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Client Key"}
+                                value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewayClientKey}
                                 onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
+                                readOnly={!isEnterprise}
                             />
                        </div>
                      </div>
