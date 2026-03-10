@@ -658,7 +658,7 @@ export async function POST(req: NextRequest) {
 
         // Parse "ItemIndex Quantity" (e.g. "1 2" or "1 2, 2 1")
         // Support comma separated orders: "1 2, 2 1"
-        const orderParts = textBody.split(',').map(p => p.trim());
+        const orderParts = textBody.split(',').map((p: string) => p.trim());
         const validOrders: { index: number, qty: number }[] = [];
         let hasInvalidFormat = false;
 
