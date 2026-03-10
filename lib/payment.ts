@@ -83,6 +83,10 @@ export async function processPayment(orderId: number, amount: number, customerPh
        clientKey = settings.paymentGatewayClientKey;
     }
 
+    // Add debug logs
+    console.log(`[Midtrans] Store: ${storeId}, Plan: ${settings.subscriptionPlan}, Override: ${canOverridePlatformConfig}`);
+    console.log(`[Midtrans] Keys Loaded: Server=${!!serverKey}, Client=${!!clientKey}`);
+
     if (!serverKey || !clientKey) {
       console.error("Midtrans keys missing. Store:", storeId, "Can Override:", canOverridePlatformConfig);
       // Fallback to Env vars if Store keys are missing but Enterprise is active?
@@ -94,9 +98,14 @@ export async function processPayment(orderId: number, amount: number, customerPh
           clientKey = platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY;
           
           if (!serverKey || !clientKey) {
+             console.error("[Midtrans] Fallback failed. No platform keys found.");
              throw new Error("Midtrans keys not configured (Platform or Store)");
+          } else {
+             console.log("[Midtrans] Falling back to Platform Keys for Enterprise Store");
           }
       } else {
+         // Non-enterprise stores MUST use platform keys. If missing here, it's a platform config error.
+         console.error("[Midtrans] Platform keys missing for non-enterprise store.");
          throw new Error("Midtrans keys not configured (Platform or Store)");
       }
     }
