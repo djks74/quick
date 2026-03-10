@@ -41,9 +41,17 @@ export async function updateStorePlan(storeId: number, plan: string, fee: number
           ? {
               whatsappToken: null,
               whatsappPhoneId: null,
-              paymentGatewaySecret: null,
-              paymentGatewayClientKey: null,
-              bankAccount: Prisma.DbNull
+              // Do NOT clear payment keys for non-enterprise, as we now want them to have keys
+              // But wait, if they downgrade to FREE (Registered), do we want to clear them?
+              // The user said "remove pro totally", so now we have ENTERPRISE (default) and FREE.
+              // If they are FREE, they should probably still use platform keys, which means their local keys should be null?
+              // YES. If plan is NOT Enterprise, we clear local keys so they fallback to platform.
+              // BUT we just implemented "Copy Platform Keys to Store" logic for new stores.
+              // So if we clear them here, we break that logic.
+              // So we should NOT clear them anymore.
+              // Let's remove this block entirely or just clear whatsapp if needed.
+              // actually, for safety, let's just NOT clear anything when changing plans for now, 
+              // to prevent accidental data loss of keys.
             }
           : {})
       }
