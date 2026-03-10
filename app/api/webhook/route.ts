@@ -76,6 +76,41 @@ export async function POST(req: NextRequest) {
         include: { stores: true }
       });
 
+      // Check if Merchant is in "User Mode"
+      // We can use a special session flag or just check if they are explicitly asking for User actions
+      // Simpler approach: If they type "User Mode", we ignore merchant handler for this session?
+      // Or we can check if they are scanning a QR code (Table ...) -> Force User Mode
+      
+      const isMerchant = user && (user.role === 'MERCHANT' || user.role === 'SUPER_ADMIN');
+      let forceUserMode = false;
+
+      // Detect User Intent that overrides Merchant Mode
+      if (isMerchant) {
+          const lower = message.text?.body?.toLowerCase() || "";
+          // 1. Explicit Switch
+          if (lower === 'user mode' || lower === 'mode user') {
+             // We need to store this state. using WhatsAppSession?
+             // Let's use a special storeId=0 session to store global user prefs?
+             // Or just let them fall through for this message?
+             // Better: If they type "User Mode", we send them a message "You are now in User Mode. Type 'Admin Mode' to switch back."
+             // And we need to persist this.
+             // For now, let's just allow specific commands to bypass.
+          }
+          
+          // 2. Scanning QR (Table ...)
+          if (lower.startsWith('table') || lower.startsWith('meja')) {
+             forceUserMode = true;
+          }
+          
+          // 3. Explicit "Buy" or "Order" command? 
+          // Merchant might want to "Add Product", so "Add" is ambiguous.
+          // "Menu" is ambiguous (Merchant Menu vs Store Menu).
+          
+          // Let's check session. If they have an active "User Session" recently updated?
+          // This is complex because Merchant Handler doesn't use WhatsAppSession table much yet.
+      }
+
+
       // Fallback: Check if this number is listed as a Store WhatsApp Number
       if (!user) {
           const storeByPhone = await prisma.store.findFirst({ 
@@ -92,12 +127,53 @@ export async function POST(req: NextRequest) {
           }
       }
 
-      if (user && user.role === 'MERCHANT') {
-        await handleMerchantMessage(user, message, from);
-        return NextResponse.json({ success: true });
+      // Use a special session for Merchant Mode Toggle
+      let merchantSession = null;
+      if (isMerchant) {
+        // Use storeId 0 for "Platform/User Context" session
+        merchantSession = await prisma.whatsAppSession.findFirst({
+          where: { phoneNumber: from, storeId: 0 }
+        });
+        
+        if (!merchantSession) {
+           merchantSession = await prisma.whatsAppSession.create({
+             data: { phoneNumber: from, storeId: 0, step: 'MERCHANT_MODE' }
+           });
+        }
+
+        const lower = message.text?.body?.toLowerCase() || "";
+        
+        // Mode Switching Logic
+        if (lower === 'user mode' || lower === 'mode user') {
+           await prisma.whatsAppSession.update({
+             where: { id: merchantSession.id },
+             data: { step: 'USER_MODE' }
+           });
+           await sendWhatsAppMessage(from, "🔄 Switched to **User Mode**. You can now order from other stores.\nType 'Admin Mode' to switch back.", 0);
+           return NextResponse.json({ success: true });
+        }
+        
+        if (lower === 'admin mode' || lower === 'mode admin') {
+           await prisma.whatsAppSession.update({
+             where: { id: merchantSession.id },
+             data: { step: 'MERCHANT_MODE' }
+           });
+           await sendWhatsAppMessage(from, "🔄 Switched to **Admin Mode**. You can manage your store.\nType 'User Mode' to switch back.", user.stores[0]?.id || 0);
+           return NextResponse.json({ success: true });
+        }
+
+        // Logic to bypass merchant handler
+        if (merchantSession.step === 'USER_MODE' || forceUserMode) {
+            // Proceed to User Logic (below)
+        } else {
+            // Default: Merchant Handler
+            await handleMerchantMessage(user, message, from);
+            return NextResponse.json({ success: true });
+        }
       }
 
       let targetStore = null;
+      let isSharedNumber = false;
 
       // 1. Try finding store by Phone ID (Enterprise or Single Setup)
       // Note: If multiple stores share the same ID in DB, findUnique will fail if unique constraint exists.
@@ -115,6 +191,7 @@ export async function POST(req: NextRequest) {
       } else if (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId) {
          // 2. If matches Platform ID, try to infer context from recent session
          console.log('Received message on Shared Platform Number');
+         isSharedNumber = true;
          const from = message.from;
          
          const recentSession = await prisma.whatsAppSession.findFirst({
@@ -172,8 +249,57 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      // Handle "Stores" -> Switch Store (Shared Number Only)
+      if (lowerText === 'stores' && isSharedNumber) {
+        const stores = await prisma.store.findMany({
+          where: { status: 'ACTIVE' },
+          take: 10,
+          orderBy: { name: 'asc' }
+        });
+        
+        let storeText = `🏪 *Select a Store*:\n\n`;
+        stores.forEach((s, index) => {
+          storeText += `${index + 1}. ${s.name}\n`;
+        });
+        storeText += `\nReply with number to select.`;
+        
+        await sendWhatsAppMessage(from, storeText, targetStore.id);
+        await updateSession(from, targetStore.id, { step: 'STORE_SELECTION' });
+        return NextResponse.json({ success: true });
+      }
+
       // Handle "Menu" -> Jump to Ordering
       if (lowerText === 'menu') {
+        // If on Shared Number, give option to switch or auto-show list if new
+        if (isSharedNumber) {
+           // If user specifically types "Menu", and they are on shared number.
+           // We show the current store's menu, but also mention they can switch.
+           // UNLESS they are in a "fresh" session (defaulted to demo without explicit choice).
+           // But detecting "fresh" is hard without extra flags.
+           // Let's just append the footer.
+           await updateSession(from, targetStore.id, { step: 'ORDERING' });
+           const products = await prisma.product.findMany({ 
+             where: { storeId: targetStore.id },
+             take: 10,
+             orderBy: { name: 'asc' }
+           });
+   
+           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+   
+           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
+           menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
+           menuText += `👇 *Or Order via Text*:\n`;
+           
+           products.forEach((p, index) => {
+             menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
+           });
+           menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
+           menuText += `\n\n(Reply 'Stores' to switch store)`;
+   
+           await sendWhatsAppMessage(from, menuText, targetStore.id);
+           return NextResponse.json({ success: true });
+        }
+
         await updateSession(from, targetStore.id, { step: 'ORDERING' });
         const products = await prisma.product.findMany({ 
           where: { storeId: targetStore.id },
@@ -181,7 +307,7 @@ export async function POST(req: NextRequest) {
           orderBy: { name: 'asc' }
         });
 
-        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
 
         let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
         menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
@@ -198,11 +324,53 @@ export async function POST(req: NextRequest) {
 
       // 2. STATE BASED HANDLING
 
+      // Step: STORE_SELECTION
+      if (session.step === 'STORE_SELECTION') {
+        const index = parseInt(textBody) - 1;
+        const stores = await prisma.store.findMany({
+          where: { status: 'ACTIVE' },
+          take: 10,
+          orderBy: { name: 'asc' }
+        });
+
+        if (index >= 0 && index < stores.length) {
+          const selectedStore = stores[index];
+          // Create/Update session for this store
+          // Actually, we need to update the session to point to this NEW storeId
+          // BUT `getSession` uses `phoneNumber_storeId` composite key.
+          // So we are creating a NEW session for the new store, or switching context?
+          // The `recentSession` logic in `POST` looks for *any* session by phone number, ordered by `updatedAt`.
+          // So if we create/update a session for the new store, it will become the "recent" one.
+          
+          let newSession = await prisma.whatsAppSession.findUnique({
+             where: { phoneNumber_storeId: { phoneNumber: from, storeId: selectedStore.id } }
+          });
+
+          if (!newSession) {
+             newSession = await prisma.whatsAppSession.create({
+               data: { phoneNumber: from, storeId: selectedStore.id, step: 'START' }
+             });
+          } else {
+             await prisma.whatsAppSession.update({
+               where: { id: newSession.id },
+               data: { updatedAt: new Date(), step: 'START' } // Bump timestamp
+             });
+          }
+
+          await sendWhatsAppMessage(from, `✅ Switched to *${selectedStore.name}*.\nReply 'Menu' to order.`, selectedStore.id);
+        } else {
+          await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      // 2. STATE BASED HANDLING
+
       // Step: MENU_SELECTION (After scanning table)
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           // Web Menu
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}?table=${session.tableNumber}`;
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}?table=${session.tableNumber}`;
           await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`, targetStore.id);
           await updateSession(from, targetStore.id, { step: 'START' }); // Reset
         } else if (textBody === '2') {
@@ -214,7 +382,7 @@ export async function POST(req: NextRequest) {
             orderBy: { name: 'asc' }
           });
           
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://laku.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
 
           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
           menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
