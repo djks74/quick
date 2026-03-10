@@ -238,13 +238,22 @@ export async function POST(req: NextRequest) {
       
       // 1. GLOBAL COMMANDS (Reset state)
       
-      // Handle "Table X" -> Enforce QR Scan
-      const tableMatch = textBody.match(/(?:table|meja)\s*(.+)/i);
-      if (tableMatch) {
+      // Handle "Check-in Table X" or "Table X" -> Enforce QR Scan / Welcome
+      // Regex to match "Check-in Table [Number]" or "Table [Number]" or "Meja [Number]"
+      const checkInMatch = textBody.match(/(?:check-in|table|meja)\s*(?:table|meja)?\s*(.+)/i);
+      
+      if (checkInMatch) {
+        const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim(); // Clean up if double words
+        
+        // Update session with table number
+        await updateSession(from, targetStore.id, { tableNumber: tableNum, step: 'MENU_SELECTION' });
+
         await sendWhatsAppMessage(from, 
-          `👋 Welcome to ${targetStore.name}!\n\n` +
-          `To start ordering, please *scan the QR code* on your table using your phone's camera. 📷\n\n` +
-          `This ensures we get the correct table details.`,
+          `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
+          `1. View Menu (Web)\n` +
+          `2. Order via WhatsApp\n` +
+          `3. Quick Pay\n\n` +
+          `Reply with number to select.`,
           targetStore.id
         );
         return NextResponse.json({ success: true });
