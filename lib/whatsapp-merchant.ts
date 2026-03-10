@@ -66,28 +66,61 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   // 3. Update Price
-  // Regex: update price <name> <amount>
+  // Regex: update price <name_and_variation> <amount>
   const updateMatch = commandText.match(/(?:update|ubah)\s+(?:price|harga)\s+(.+?)\s+(\d+)/i);
   if (updateMatch) {
-    const productName = updateMatch[1].trim();
+    const inputString = updateMatch[1].trim(); // "Nasi Goreng Small"
     const newPrice = parseInt(updateMatch[2]);
 
-    // Fuzzy Search
-    const product = await prisma.product.findFirst({
-      where: {
-        storeId: store.id,
-        name: { contains: productName, mode: 'insensitive' }
-      }
+    // Better Search Strategy: Fetch all products and find best match
+    const products = await prisma.product.findMany({
+      where: { storeId: store.id },
+      select: { id: true, name: true, variations: true, price: true }
     });
 
+    // Sort by name length desc to match longest name first (e.g. "Nasi Goreng Spesial" before "Nasi Goreng")
+    const sortedProducts = products.sort((a, b) => b.name.length - a.name.length);
+    
+    const product = sortedProducts.find(p => inputString.toLowerCase().includes(p.name.toLowerCase()));
+
     if (product) {
-      await prisma.product.update({
-        where: { id: product.id },
-        data: { price: newPrice }
-      });
-      await sendWhatsAppMessage(from, `✅ Updated *${product.name}* price to ${newPrice}`, store.id);
+      // Check for variation in the remainder of the string
+      // e.g. input: "Nasi Goreng Small", product: "Nasi Goreng" -> remainder: "Small"
+      const remainder = inputString.replace(new RegExp(product.name, 'i'), '').trim();
+      
+      if (remainder && product.variations && Array.isArray(product.variations)) {
+         // Update specific variation
+         const variations = product.variations as any[];
+         const variationIndex = variations.findIndex(v => v.name.toLowerCase() === remainder.toLowerCase());
+         
+         if (variationIndex >= 0) {
+            variations[variationIndex].price = newPrice;
+            await prisma.product.update({
+               where: { id: product.id },
+               data: { variations: variations }
+            });
+            await sendWhatsAppMessage(from, `✅ Updated *${product.name} (${variations[variationIndex].name})* to ${newPrice}`, store.id);
+         } else {
+            // Variation not found, maybe create it?
+            // For now, let's error or assume user meant base price if simple typo?
+            // Or Add new variation? "Auto-add variation" feature
+            variations.push({ name: remainder, price: newPrice }); // Auto-add variation!
+            await prisma.product.update({
+               where: { id: product.id },
+               data: { variations: variations }
+            });
+            await sendWhatsAppMessage(from, `✅ Added variation *${remainder}* to *${product.name}* at ${newPrice}`, store.id);
+         }
+      } else {
+         // No variation specified or product has no variations -> Update Base Price
+         await prisma.product.update({
+            where: { id: product.id },
+            data: { price: newPrice }
+         });
+         await sendWhatsAppMessage(from, `✅ Updated *${product.name}* price to ${newPrice}`, store.id);
+      }
     } else {
-      await sendWhatsAppMessage(from, `❌ Product "${productName}" not found.`, store.id);
+      await sendWhatsAppMessage(from, `❌ Product not found matching "${inputString}".`, store.id);
     }
     return;
   }

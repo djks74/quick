@@ -8,7 +8,8 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
 
   const store = await prisma.store.findUnique({
-    where: { slug }
+    where: { slug },
+    include: { categories: true }
   });
 
   if (!store) {
@@ -28,8 +29,9 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     unit: p.unit,
     image: p.image,
     description: p.description,
-    category: p.category
+    category: p.category,
+    variations: p.variations
   }));
 
-  return <DigitalMenuClient products={products} store={store} />;
+  return <DigitalMenuClient products={products} store={store} categories={store.categories || []} />;
 }

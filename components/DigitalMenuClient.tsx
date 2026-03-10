@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle, Phone, Globe } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle, Phone, Globe, X } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
 
@@ -12,13 +12,22 @@ interface Product {
   unit: string;
   image?: string;
   description?: string;
+  category?: string;
+  variations?: { name: string; price: number }[];
 }
 
 interface CartItem extends Product {
   quantity: number;
+  selectedVariation?: { name: string; price: number };
 }
 
-export default function DigitalMenuClient({ products, store }: { products: Product[], store: any }) {
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export default function DigitalMenuClient({ products, store, categories = [] }: { products: Product[], store: any, categories?: Category[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [settings, setSettings] = useState<any>(store);
@@ -31,6 +40,14 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
   const tableNumber = searchParams.get('table');
 
   const [mounted, setMounted] = useState(false);
+  
+  // Category State
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+
+  // Variation State
+  const [variationModalOpen, setVariationModalOpen] = useState(false);
+  const [productForVariation, setProductForVariation] = useState<Product | null>(null);
+  const [selectedVariation, setSelectedVariation] = useState<{ name: string; price: number } | null>(null);
   
   // Check-In State
   const [showCheckIn, setShowCheckIn] = useState(false);
@@ -86,25 +103,54 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
       }
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, variation?: { name: string; price: number }) => {
+    // If product has variations and none selected, open modal
+    if (product.variations && product.variations.length > 0 && !variation) {
+        setProductForVariation(product);
+        setSelectedVariation(product.variations[0]);
+        setVariationModalOpen(true);
+        return;
+    }
+
+    const price = variation ? variation.price : product.price;
+    const variationName = variation ? variation.name : undefined;
+
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      // Find exact match (Same ID AND Same Variation)
+      const existing = prev.find(item => 
+          item.id === product.id && 
+          item.selectedVariation?.name === variationName
+      );
+
       if (existing) {
         return prev.map(item => 
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          (item.id === product.id && item.selectedVariation?.name === variationName)
+            ? { ...item, quantity: item.quantity + 1 } 
+            : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      return [...prev, { ...product, price, quantity: 1, selectedVariation: variation }];
     });
   };
 
-  const removeFromCart = (productId: number) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
+  const confirmVariation = () => {
+    if (productForVariation && selectedVariation) {
+        addToCart(productForVariation, selectedVariation);
+        setVariationModalOpen(false);
+        setProductForVariation(null);
+        setSelectedVariation(null);
+    }
   };
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const removeFromCart = (productId: number, variationName?: string) => {
+    setCart(prev => prev.filter(item => 
+        !(item.id === productId && item.selectedVariation?.name === variationName)
+    ));
+  };
+
+  const updateQuantity = (productId: number, delta: number, variationName?: string) => {
     setCart(prev => prev.map(item => {
-      if (item.id === productId) {
+      if (item.id === productId && item.selectedVariation?.name === variationName) {
         const newQty = Math.max(0, item.quantity + delta);
         return { ...item, quantity: newQty };
       }
@@ -211,26 +257,69 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
 
       {/* Menu Grid */}
       <main className="max-w-md mx-auto p-4 space-y-4">
+        
+        {/* Category Tabs */}
+        {categories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 sticky top-[72px] z-10 bg-gray-50/95 backdrop-blur-sm py-2">
+            <button
+              onClick={() => setSelectedCategory("All")}
+              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
+                selectedCategory === "All" 
+                  ? "bg-black text-white" 
+                  : "bg-white text-gray-600 border border-gray-200"
+              }`}
+              style={selectedCategory === "All" ? { backgroundColor: themeColor } : {}}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
+                  selectedCategory === cat.name
+                    ? "bg-black text-white"
+                    : "bg-white text-gray-600 border border-gray-200"
+                }`}
+                style={selectedCategory === cat.name ? { backgroundColor: themeColor } : {}}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">Menu</h2>
-          <span className="text-xs text-gray-400 font-medium">{products.length} Items Available</span>
+          <h2 className="text-lg font-semibold text-gray-800">
+             {selectedCategory === "All" ? "Menu" : selectedCategory}
+          </h2>
+          <span className="text-xs text-gray-400 font-medium">
+            {products.filter(p => selectedCategory === "All" || p.category === selectedCategory).length} Items
+          </span>
         </div>
         
         <div className="grid gap-4">
-          {products.map((product) => {
-            const inCart = cart.find(item => item.id === product.id);
+          {products
+            .filter(p => selectedCategory === "All" || p.category === selectedCategory)
+            .map((product) => {
+            // Check if product is in cart (sum of all variations)
+            const cartItems = cart.filter(item => item.id === product.id);
+            const totalQty = cartItems.reduce((acc, item) => acc + item.quantity, 0);
             
             return (
               <div key={product.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                <div>
+                <div className="flex-1">
                   <h3 className="font-bold text-gray-900">{product.name}</h3>
                   <p className="text-sm text-gray-500">{product.unit}</p>
                   <p className="text-primary font-bold mt-1" style={{ color: themeColor }}>
-                    {formatPrice(product.price)}
+                    {product.variations && product.variations.length > 0 
+                      ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))} - ${formatPrice(Math.max(...product.variations.map(v => v.price)))}`
+                      : formatPrice(product.price)
+                    }
                   </p>
                 </div>
                 
-                {inCart ? (
+                {totalQty > 0 && !product.variations ? (
                    <div className="flex items-center space-x-3 bg-gray-50 rounded-lg p-1">
                       <button 
                         onClick={() => updateQuantity(product.id, -1)}
@@ -238,7 +327,7 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="font-bold text-gray-900 w-4 text-center">{inCart.quantity}</span>
+                      <span className="font-bold text-gray-900 w-4 text-center">{totalQty}</span>
                       <button 
                         onClick={() => updateQuantity(product.id, 1)}
                         className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-green-500 transition-colors"
@@ -252,7 +341,7 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
                     className="px-4 py-2 rounded-lg text-white font-medium text-sm transition-opacity hover:opacity-90 shadow-md shadow-primary/20"
                     style={{ backgroundColor: themeColor }}
                   >
-                    Add
+                    {totalQty > 0 ? 'Add More' : 'Add'}
                   </button>
                 )}
               </div>
@@ -381,10 +470,13 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
 
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {cart.map(item => (
-                <div key={item.id} className="flex justify-between items-start border-b border-gray-100 pb-4 last:border-0">
+              {cart.map((item, idx) => (
+                <div key={`${item.id}-${item.selectedVariation?.name || 'base'}-${idx}`} className="flex justify-between items-start border-b border-gray-100 pb-4 last:border-0">
                   <div className="flex-1">
-                    <h4 className="font-bold text-gray-900">{item.name}</h4>
+                    <h4 className="font-bold text-gray-900">
+                        {item.name}
+                        {item.selectedVariation && <span className="text-sm font-normal text-gray-500"> ({item.selectedVariation.name})</span>}
+                    </h4>
                     <p className="text-xs text-gray-500">{formatPrice(item.price)} x {item.quantity}</p>
                     <p className="text-sm font-bold text-primary mt-1" style={{ color: themeColor }}>
                       {formatPrice(item.price * item.quantity)}
@@ -392,14 +484,14 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
                   </div>
                   <div className="flex items-center space-x-3 bg-gray-50 rounded-lg p-1">
                       <button 
-                        onClick={() => updateQuantity(item.id, -1)}
+                        onClick={() => updateQuantity(item.id, -1, item.selectedVariation?.name)}
                         className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-red-500 transition-colors"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
                       <span className="font-bold text-gray-900 w-4 text-center">{item.quantity}</span>
                       <button 
-                        onClick={() => updateQuantity(item.id, 1)}
+                        onClick={() => updateQuantity(item.id, 1, item.selectedVariation?.name)}
                         className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-green-500 transition-colors"
                       >
                         <Plus className="w-4 h-4" />
@@ -499,6 +591,50 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
               className="w-full py-3 rounded-xl bg-gray-900 text-white font-bold shadow-lg"
             >
               Close & New Order
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Variation Selection Modal */}
+      {variationModalOpen && productForVariation && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{productForVariation.name}</h3>
+                <p className="text-gray-500 text-sm">Select Variation</p>
+              </div>
+              <button onClick={() => setVariationModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+               {productForVariation.variations?.map((v, idx) => (
+                 <button
+                   key={idx}
+                   onClick={() => setSelectedVariation(v)}
+                   className={`w-full flex justify-between items-center p-4 rounded-xl border-2 transition-all ${
+                     selectedVariation?.name === v.name 
+                       ? "bg-gray-50" 
+                       : "border-gray-100 hover:border-gray-200"
+                   }`}
+                   style={selectedVariation?.name === v.name ? { borderColor: themeColor, backgroundColor: `${themeColor}10` } : {}}
+                 >
+                   <span className="font-medium text-gray-900">{v.name}</span>
+                   <span className="font-bold" style={{ color: themeColor }}>{formatPrice(v.price)}</span>
+                 </button>
+               ))}
+            </div>
+
+            <button 
+              onClick={confirmVariation}
+              disabled={!selectedVariation}
+              className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: themeColor }}
+            >
+              Add to Order - {formatPrice(selectedVariation?.price || 0)}
             </button>
           </div>
         </div>

@@ -284,38 +284,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // Handle "Menu" -> Jump to Ordering
+      // Handle "Menu" -> Jump to Ordering or Category Selection
       if (lowerText === 'menu') {
-        // If on Shared Number, give option to switch or auto-show list if new
-        if (isSharedNumber) {
-           // If user specifically types "Menu", and they are on shared number.
-           // We show the current store's menu, but also mention they can switch.
-           // UNLESS they are in a "fresh" session (defaulted to demo without explicit choice).
-           // But detecting "fresh" is hard without extra flags.
-           // Let's just append the footer.
-           await updateSession(from, targetStore.id, { step: 'ORDERING' });
-           const products = await prisma.product.findMany({ 
-             where: { storeId: targetStore.id },
-             take: 10,
-             orderBy: { name: 'asc' }
-           });
-   
-           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-   
-           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
-           menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
-           menuText += `👇 *Or Order via Text*:\n`;
-           
-           products.forEach((p, index) => {
-             menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
-           });
-           menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
-           menuText += `\n\n(Reply 'Stores' to switch store)`;
-   
-           await sendWhatsAppMessage(from, menuText, targetStore.id);
-           return NextResponse.json({ success: true });
+        const categories = await prisma.category.findMany({
+            where: { storeId: targetStore.id },
+            orderBy: { name: 'asc' }
+        });
+
+        // If store has categories, ask user to select one
+        if (categories.length > 0) {
+            let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
+            catText += `Select a category:\n`;
+            catText += `1. All Menu\n`;
+            categories.forEach((c, idx) => {
+                catText += `${idx + 2}. ${c.name}\n`;
+            });
+            catText += `\nReply with number to view items.`;
+            
+            await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
+            await sendWhatsAppMessage(from, catText, targetStore.id);
+            return NextResponse.json({ success: true });
         }
 
+        // If NO categories, show all items (Default Behavior)
         await updateSession(from, targetStore.id, { step: 'ORDERING' });
         const products = await prisma.product.findMany({ 
           where: { storeId: targetStore.id },
@@ -330,9 +321,13 @@ export async function POST(req: NextRequest) {
         menuText += `👇 *Or Order via Text*:\n`;
         
         products.forEach((p, index) => {
-          menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
+          const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
+            ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
+            : new Intl.NumberFormat('id-ID').format(p.price);
+
+          menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
         });
-        menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
+        menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
 
         await sendWhatsAppMessage(from, menuText, targetStore.id);
         return NextResponse.json({ success: true });
@@ -340,7 +335,101 @@ export async function POST(req: NextRequest) {
 
       // 2. STATE BASED HANDLING
 
-      // Step: STORE_SELECTION
+      // Step: CATEGORY_SELECTION
+      if (session.step === 'CATEGORY_SELECTION') {
+          const index = parseInt(textBody) - 1; // User input 1-based
+          
+          if (isNaN(index)) {
+             await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
+             return NextResponse.json({ success: true });
+          }
+
+          let selectedCategoryName = null;
+          
+          if (index === 0) {
+              // "1. All Menu"
+              selectedCategoryName = null; // Show all
+          } else {
+              // Specific Category
+              const categories = await prisma.category.findMany({
+                  where: { storeId: targetStore.id },
+                  orderBy: { name: 'asc' }
+              });
+              
+              if (index > 0 && index <= categories.length) {
+                  selectedCategoryName = categories[index - 1].name;
+              } else {
+                  await sendWhatsAppMessage(from, `Invalid selection. Please check the list.`, targetStore.id);
+                  return NextResponse.json({ success: true });
+              }
+          }
+
+          // Fetch Products based on Category
+          const whereClause: any = { storeId: targetStore.id };
+          if (selectedCategoryName) {
+              whereClause.category = selectedCategoryName;
+          }
+
+          const products = await prisma.product.findMany({ 
+            where: whereClause,
+            take: 10,
+            orderBy: { name: 'asc' }
+          });
+
+          if (products.length === 0) {
+             await sendWhatsAppMessage(from, `No items found in this category.`, targetStore.id);
+             // Stay in CATEGORY_SELECTION? Or go back?
+             return NextResponse.json({ success: true });
+          }
+
+          // Save selected products to session? No, just list them and switch to ORDERING
+          // Wait, if we switch to ORDERING, how do we know which products correspond to "1", "2"?
+          // The current ORDERING logic assumes we fetched "take: 10" and ordered by name asc.
+          // If the user selects a category, the "index" 1 might correspond to a different product than if they selected "All".
+          // We need to store the CONTEXT of the menu shown.
+          // For MVP, we can just rely on the fact that if they reply "1 2" immediately after seeing the list, 
+          // we should re-fetch the SAME list to resolve the ID.
+          // BUT `ORDERING` step logic does a fresh fetch:
+          /*
+            const products = await prisma.product.findMany({ 
+                where: { storeId: targetStore.id },
+                take: 10,
+                orderBy: { name: 'asc' }
+            });
+          */
+          // This is a BUG in my previous design if we add filtering!
+          // We must store the filter in the session or re-apply it.
+          // Let's add `filterCategory` to the session metadata (using `cart` field or `step` encoded?)
+          // Schema: `cart Json?`. We can store `{ items: [], category: "Food" }`.
+
+          // Let's update session with the category filter context
+          // Note: `cart` field is currently used as an Array of items.
+          // I should ideally migrate `cart` to be an Object `{ items: [], filter: ... }` but that breaks existing code.
+          // Hack: Store filter in `tableNumber`? No.
+          // Hack: Store filter in a temporary cache? No.
+          // Solution: Use `cart` field but be careful.
+          // Or just use `step` like `ORDERING:Food`.
+          
+          const stepValue = selectedCategoryName ? `ORDERING:${selectedCategoryName}` : `ORDERING:ALL`;
+          await updateSession(from, targetStore.id, { step: stepValue });
+
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+          
+          let title = selectedCategoryName ? `${selectedCategoryName}` : `All Menu`;
+          let menuText = `🍽️ *${title}* 🍽️\n\n`;
+          menuText += `📱 *Web*: ${menuUrl}\n\n`;
+          
+          products.forEach((p, idx) => {
+             const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
+                ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
+                : new Intl.NumberFormat('id-ID').format(p.price);
+             menuText += `${idx + 1}. ${p.name} - ${priceRange}\n`;
+          });
+          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply 'Done' to pay.\nReply 'Menu' to change category.`;
+          
+          await sendWhatsAppMessage(from, menuText, targetStore.id);
+          return NextResponse.json({ success: true });
+      }
       if (session.step === 'STORE_SELECTION') {
         const index = parseInt(textBody) - 1;
         const stores = await prisma.store.findMany({
@@ -390,6 +479,25 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: 'START' }); // Reset
         } else if (textBody === '2') {
           // WhatsApp Menu
+          const categories = await prisma.category.findMany({
+            where: { storeId: targetStore.id },
+            orderBy: { name: 'asc' }
+          });
+
+          if (categories.length > 0) {
+            let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
+            catText += `Select a category:\n`;
+            catText += `1. All Menu\n`;
+            categories.forEach((c, idx) => {
+                catText += `${idx + 2}. ${c.name}\n`;
+            });
+            catText += `\nReply with number to view items.`;
+            
+            await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
+            await sendWhatsAppMessage(from, catText, targetStore.id);
+            return NextResponse.json({ success: true });
+          }
+
           await updateSession(from, targetStore.id, { step: 'ORDERING' });
           const products = await prisma.product.findMany({ 
             where: { storeId: targetStore.id },
@@ -404,9 +512,13 @@ export async function POST(req: NextRequest) {
           menuText += `👇 *Or Order via Text*:\n`;
 
           products.forEach((p, index) => {
-            menuText += `${index + 1}. ${p.name} - ${new Intl.NumberFormat('id-ID').format(p.price)}\n`;
+            const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
+              ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
+              : new Intl.NumberFormat('id-ID').format(p.price);
+
+            menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
           });
-          menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2' for 2 of item #1).\nReply 'Done' to checkout.`;
+          menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
           await sendWhatsAppMessage(from, menuText, targetStore.id);
         } else if (textBody === '3') {
           // Quick Pay
@@ -456,7 +568,10 @@ export async function POST(req: NextRequest) {
       }
 
       // Step: ORDERING (Adding items)
-      if (session.step === 'ORDERING') {
+      if (session.step && session.step.startsWith('ORDERING')) {
+        const stepParts = session.step.split(':');
+        const currentCategory = stepParts.length > 1 && stepParts[1] !== 'ALL' ? stepParts[1] : null;
+
         if (lowerText === 'done' || lowerText === 'checkout') {
           // Checkout logic
           const cart = (session.cart as any[]) || [];
@@ -505,8 +620,14 @@ export async function POST(req: NextRequest) {
           const index = parseInt(itemMatch[1]) - 1; // 1-based to 0-based
           const qty = parseInt(itemMatch[2]);
 
+          // Fetch products with SAME filter
+          const whereClause: any = { storeId: targetStore.id };
+          if (currentCategory) {
+              whereClause.category = currentCategory;
+          }
+
           const products = await prisma.product.findMany({ 
-            where: { storeId: targetStore.id },
+            where: whereClause,
             take: 10,
             orderBy: { name: 'asc' }
           });
