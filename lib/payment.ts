@@ -13,8 +13,8 @@ export async function processPayment(orderId: number, amount: number, customerPh
   
   // Use env variables as fallback since PlatformSettings might not be synced
   const platform = {
-      midtransServerKey: process.env.PAYMENT_GATEWAY_SECRET,
-      midtransClientKey: process.env.PAYMENT_GATEWAY_CLIENT_KEY,
+      midtransServerKey: process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY, // Try both env names
+      midtransClientKey: process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY,
       xenditSecretKey: process.env.XENDIT_SECRET_KEY,
       bankName: 'BCA',
       bankAccountNumber: process.env.PLATFORM_BANK_NUMBER,
