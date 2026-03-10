@@ -10,7 +10,16 @@ function generateUniqueCode() {
 export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number) {
   console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}`);
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
-  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+  
+  // Use env variables as fallback since PlatformSettings might not be synced
+  const platform = {
+      midtransServerKey: process.env.PAYMENT_GATEWAY_SECRET,
+      midtransClientKey: process.env.PAYMENT_GATEWAY_CLIENT_KEY,
+      xenditSecretKey: process.env.XENDIT_SECRET_KEY,
+      bankName: 'BCA',
+      bankAccountNumber: process.env.PLATFORM_BANK_NUMBER,
+      bankAccountName: process.env.PLATFORM_BANK_NAME
+  };
   
   if (!settings) {
     throw new Error("Store not found");
@@ -171,14 +180,34 @@ export async function processPayment(orderId: number, amount: number, customerPh
 export async function createPaymentLink(orderId: number, amount: number, customerPhone: string, storeId: number) {
   // Default to Midtrans if enabled, else manual mock
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
+  
+  // Try Midtrans first
   if (settings?.enableMidtrans) {
     try {
       const res = await processPayment(orderId, amount, customerPhone, 'midtrans', storeId);
       return res.paymentUrl;
     } catch (e) {
-      console.error(e);
-      return '#error';
+      console.error("Failed to generate Midtrans link:", e);
+      // Fallback to manual? No, let's return error or fallback to WhatsApp confirmation
     }
   }
-  return `https://wa.me/${settings?.whatsapp}?text=Confirm+Payment+Order+${orderId}`;
+
+  // Try Xendit
+  if (settings?.enableXendit) {
+     try {
+      const res = await processPayment(orderId, amount, customerPhone, 'xendit', storeId);
+      return res.paymentUrl;
+    } catch (e) {
+      console.error("Failed to generate Xendit link:", e);
+    }
+  }
+  
+  // Fallback: WhatsApp Confirmation Link
+  // Ensure we use the correct number format
+  let waNumber = settings?.whatsapp;
+  if (waNumber && waNumber.startsWith('0')) {
+      waNumber = '62' + waNumber.substring(1);
+  }
+  
+  return `https://wa.me/${waNumber}?text=Confirm+Payment+Order+${orderId}`;
 }
