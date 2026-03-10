@@ -104,9 +104,15 @@ export async function processPayment(orderId: number, amount: number, customerPh
              console.log("[Midtrans] Falling back to Platform Keys for Enterprise Store");
           }
       } else {
-         // Non-enterprise stores MUST use platform keys. If missing here, it's a platform config error.
-         console.error("[Midtrans] Platform keys missing for non-enterprise store.");
-         throw new Error("Midtrans keys not configured (Platform or Store)");
+         // Non-enterprise stores MUST use platform keys. 
+         // Force copy from platform object if local variables are empty
+         if (!serverKey) serverKey = platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET;
+         if (!clientKey) clientKey = platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY;
+
+         if (!serverKey || !clientKey) {
+            console.error("[Midtrans] Platform keys missing for non-enterprise store.");
+            throw new Error("Midtrans keys not configured (Platform or Store)");
+         }
       }
     }
 
