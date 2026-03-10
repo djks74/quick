@@ -13,17 +13,17 @@ export default function AdminSettings() {
   const { slug } = useParams();
   const router = useRouter();
   const { setSiteName } = useAdmin();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isSuperAdmin = (session as any)?.user?.role === "SUPER_ADMIN";
 
   // Redirect non-super-admin users
   useEffect(() => {
-    if (session && !isSuperAdmin) {
+    if (status !== "loading" && session && !isSuperAdmin) {
       router.push(`/${slug}/admin`);
     }
-  }, [session, isSuperAdmin, slug, router]);
-
-  if (!isSuperAdmin) return null;
+  }, [session, isSuperAdmin, slug, router, status]);
+  
+  // Hooks must be called unconditionally
   const { headerSettings, setHeaderSettings } = useShop();
   const [activeTab, setActiveTab] = useState("General");
   const [isSaving, setIsSaving] = useState(false);
@@ -120,6 +120,10 @@ export default function AdminSettings() {
   const isEnterprise = subscriptionPlan === 'ENTERPRISE';
   const isDemoStore = slug === "demo";
   const canOverridePlatformConfig = isEnterprise && !isDemoStore;
+  
+  // Early return ONLY after hooks are defined
+  if (status === "loading") return <div className="p-8">Loading...</div>;
+  if (!isSuperAdmin) return null; // Or a restricted access message
 
   return (
     <div className="space-y-6">
