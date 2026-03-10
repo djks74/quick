@@ -31,6 +31,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Transaction: Create User -> Create Store
+    // Fetch Platform Settings to copy defaults
+    let platformSettings = null;
+    try {
+        platformSettings = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    } catch (e) {
+        console.log("Platform settings not found, using defaults");
+    }
+
     const user = await prisma.user.create({
       data: {
         name,
@@ -43,7 +51,12 @@ export async function POST(req: NextRequest) {
             slug: slug,
             subscriptionPlan: "FREE",
             enableWhatsApp: true,
-            enableManualTransfer: true
+            enableManualTransfer: true,
+            // Copy Platform Keys if available
+            whatsappToken: platformSettings?.whatsappToken,
+            whatsappPhoneId: platformSettings?.whatsappPhoneId,
+            paymentGatewaySecret: platformSettings?.midtransServerKey,
+            paymentGatewayClientKey: platformSettings?.midtransClientKey
           }
         }
       },
