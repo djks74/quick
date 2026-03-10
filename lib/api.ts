@@ -32,24 +32,44 @@ export async function getStoreSettings(storeId: number | string) {
 
 export async function updateStoreSettings(storeId: number, data: any) {
   try {
-    return await prisma.store.update({
+    // 1. Fetch store to get ownerId
+    const store = await prisma.store.findUnique({
       where: { id: storeId },
-      data: {
-        name: data.storeName,
-        whatsapp: data.whatsapp,
-        themeColor: data.themeColor,
-        whatsappToken: data.whatsappToken,
-        whatsappPhoneId: data.whatsappPhoneId,
-        enableWhatsApp: data.enableWhatsApp,
-        enableMidtrans: data.enableMidtrans,
-        enableXendit: data.enableXendit,
-        enableManualTransfer: data.enableManualTransfer,
-        paymentGatewaySecret: data.paymentGatewaySecret,
-        paymentGatewayClientKey: data.paymentGatewayClientKey,
-        subscriptionPlan: data.subscriptionPlan,
-        bankAccount: data.bankAccount
-      }
+      select: { ownerId: true }
     });
+
+    if (!store) return null;
+
+    // 2. Transaction to update Store and User
+    const [updatedStore] = await prisma.$transaction([
+      prisma.store.update({
+        where: { id: storeId },
+        data: {
+          name: data.storeName,
+          whatsapp: data.whatsapp,
+          themeColor: data.themeColor,
+          whatsappToken: data.whatsappToken,
+          whatsappPhoneId: data.whatsappPhoneId,
+          enableWhatsApp: data.enableWhatsApp,
+          enableMidtrans: data.enableMidtrans,
+          enableXendit: data.enableXendit,
+          enableManualTransfer: data.enableManualTransfer,
+          paymentGatewaySecret: data.paymentGatewaySecret,
+          paymentGatewayClientKey: data.paymentGatewayClientKey,
+          subscriptionPlan: data.subscriptionPlan,
+          bankAccount: data.bankAccount
+        }
+      }),
+      // Only update user phone if whatsapp number is provided
+      ...(data.whatsapp ? [
+        prisma.user.update({
+          where: { id: store.ownerId },
+          data: { phoneNumber: data.whatsapp }
+        })
+      ] : [])
+    ]);
+
+    return updatedStore;
   } catch (error) {
     console.error('Error updating store settings:', error);
     return null;
