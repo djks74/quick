@@ -618,6 +618,30 @@ export async function POST(req: NextRequest) {
             }
           });
 
+          // NOTIFY MERCHANT (New)
+          // Find store owner or use store whatsapp number
+          // If store has a whatsapp number configured, send to that.
+          // Otherwise, find the owner's phone number.
+          
+          let merchantPhone = targetStore.whatsapp;
+          if (!merchantPhone) {
+              const owner = await prisma.user.findUnique({ where: { id: targetStore.ownerId } });
+              if (owner) merchantPhone = owner.phoneNumber;
+          }
+
+          if (merchantPhone) {
+              let merchantMsg = `🔔 *New Order #${order.id}*\n`;
+              if (session.tableNumber) merchantMsg += `📍 Table: *${session.tableNumber}*\n`;
+              merchantMsg += `👤 Customer: ${from}\n\n`;
+              cart.forEach(item => {
+                merchantMsg += `${item.qty}x ${item.name}\n`;
+              });
+              merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+              merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
+              
+              await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
+          }
+
           const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id);
           
           let summary = "🧾 *Order Summary*\n";
