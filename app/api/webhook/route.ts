@@ -190,7 +190,11 @@ export async function POST(req: NextRequest) {
 
       if (store) {
         targetStore = store;
-      } else if (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId) {
+      } 
+      
+      // Force Shared Number logic if Env var matches or Platform ID matches
+      // Also fallback to Shared Logic if NO store is found by ID (meaning it's the shared number)
+      if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
          // 2. If matches Platform ID, try to infer context from recent session
          console.log('Received message on Shared Platform Number');
          isSharedNumber = true;
@@ -201,8 +205,10 @@ export async function POST(req: NextRequest) {
             orderBy: { updatedAt: 'desc' }
          });
          
-        if (recentSession) {
-            targetStore = await prisma.store.findUnique({ where: { id: recentSession.storeId! } });
+        if (recentSession && recentSession.storeId) {
+            // Check if store exists
+            const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
+            if (s) targetStore = s;
          }
          
          // Fallback to Demo Store if still no context
