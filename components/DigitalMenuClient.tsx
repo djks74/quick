@@ -294,13 +294,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
              {selectedCategory === "All" ? "Menu" : selectedCategory}
           </h2>
           <span className="text-xs text-gray-400 font-medium">
-            {products.filter(p => selectedCategory === "All" || p.category === selectedCategory).length} Items
+            {products.filter(p => selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase()).length} Items
           </span>
         </div>
         
         <div className="grid gap-4">
           {products
-            .filter(p => selectedCategory === "All" || p.category === selectedCategory)
+            .filter(p => selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase())
             .map((product) => {
             // Check if product is in cart (sum of all variations)
             const cartItems = cart.filter(item => item.id === product.id);
