@@ -25,7 +25,10 @@ export async function processPayment(orderId: number, amount: number, customerPh
     throw new Error("Store not found");
   }
 
-  const canOverridePlatformConfig = settings.slug !== "demo" && settings.subscriptionPlan === "ENTERPRISE";
+  const canOverridePlatformConfig = settings.slug !== "demo"; // && settings.subscriptionPlan === "ENTERPRISE";
+  // Removed strict Enterprise check so PRO stores can also attempt to load keys if present.
+  // BUT we will rely on UI logic to prevent PRO users from editing them.
+  // This ensures that if keys were copied (like we just implemented), they are used.
 
   // 1. Manual Transfer
   if (method === 'manual') {
