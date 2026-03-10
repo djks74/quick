@@ -108,10 +108,10 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                 <select 
                   name="plan"
                   className="w-full border rounded-lg px-3 py-2"
-                  defaultValue={editingStore.subscriptionPlan}
+                  defaultValue="ENTERPRISE"
                 >
-                  <option value="PRO">Pro (IDR 199k/mo)</option>
                   <option value="ENTERPRISE">Enterprise</option>
+                  <option value="FREE">Registered (Free)</option>
                 </select>
               </div>
               
