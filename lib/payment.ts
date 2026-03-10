@@ -86,6 +86,14 @@ export async function processPayment(orderId: number, amount: number, customerPh
     // Add debug logs
     console.log(`[Midtrans] Store: ${storeId}, Plan: ${settings.subscriptionPlan}, Override: ${canOverridePlatformConfig}`);
     console.log(`[Midtrans] Keys Loaded: Server=${!!serverKey}, Client=${!!clientKey}`);
+    
+    // Debug environment variables safely (hide actual keys)
+    console.log(`[Midtrans] Env Vars Check: 
+      PAYMENT_GATEWAY_SECRET=${!!process.env.PAYMENT_GATEWAY_SECRET}, 
+      MIDTRANS_SERVER_KEY=${!!process.env.MIDTRANS_SERVER_KEY},
+      PAYMENT_GATEWAY_CLIENT_KEY=${!!process.env.PAYMENT_GATEWAY_CLIENT_KEY},
+      MIDTRANS_CLIENT_KEY=${!!process.env.MIDTRANS_CLIENT_KEY}
+    `);
 
     if (!serverKey || !clientKey) {
       console.error("Midtrans keys missing. Store:", storeId, "Can Override:", canOverridePlatformConfig);
