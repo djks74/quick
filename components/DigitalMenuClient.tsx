@@ -206,9 +206,6 @@ export default function DigitalMenuClient({ products, store }: { products: Produ
           <a href="/" className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             Home
           </a>
-          <a href="/register" className="px-3 py-1.5 text-xs font-bold text-white bg-black rounded-lg hover:bg-gray-800 transition-colors">
-            Create Store
-          </a>
         </div>
       </header>
 
