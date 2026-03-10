@@ -85,7 +85,20 @@ export async function processPayment(orderId: number, amount: number, customerPh
 
     if (!serverKey || !clientKey) {
       console.error("Midtrans keys missing. Store:", storeId, "Can Override:", canOverridePlatformConfig);
-      throw new Error("Midtrans keys not configured (Platform or Store)");
+      // Fallback to Env vars if Store keys are missing but Enterprise is active?
+      if (canOverridePlatformConfig) {
+          // If enterprise user didn't set keys, fallback to platform keys?
+          // Or strictly require them?
+          // Let's fallback to platform keys for now to avoid breakage
+          serverKey = platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET;
+          clientKey = platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY;
+          
+          if (!serverKey || !clientKey) {
+             throw new Error("Midtrans keys not configured (Platform or Store)");
+          }
+      } else {
+         throw new Error("Midtrans keys not configured (Platform or Store)");
+      }
     }
 
     const isProduction = !serverKey.startsWith("SB-");
