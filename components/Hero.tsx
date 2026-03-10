@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 export default function Hero() {
   return (
     <div className="relative bg-gray-900 text-white py-20 min-h-[500px] flex items-center">

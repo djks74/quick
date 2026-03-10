@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
              where: { id: merchantSession.id },
              data: { step: 'MERCHANT_MODE' }
            });
-           await sendWhatsAppMessage(from, "🔄 Switched to **Admin Mode**. You can manage your store.\nType 'User Mode' to switch back.", user.stores[0]?.id || 0);
+           await sendWhatsAppMessage(from, "🔄 Switched to **Admin Mode**. You can manage your store.\nType 'User Mode' to switch back.", user?.stores[0]?.id || 0);
            return NextResponse.json({ success: true });
         }
 
@@ -167,7 +167,9 @@ export async function POST(req: NextRequest) {
             // Proceed to User Logic (below)
         } else {
             // Default: Merchant Handler
-            await handleMerchantMessage(user, message, from);
+            if (user) {
+              await handleMerchantMessage(user, message, from);
+            }
             return NextResponse.json({ success: true });
         }
       }
@@ -250,12 +252,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Handle "Stores" -> Switch Store (Shared Number Only)
-      if (lowerText === 'stores' && isSharedNumber) {
-        const stores = await prisma.store.findMany({
-          where: { status: 'ACTIVE' },
-          take: 10,
-          orderBy: { name: 'asc' }
-        });
+       if (lowerText === 'stores' && isSharedNumber) {
+         const stores = await prisma.store.findMany({
+           take: 10,
+           orderBy: { name: 'asc' }
+         });
         
         let storeText = `🏪 *Select a Store*:\n\n`;
         stores.forEach((s, index) => {
@@ -328,7 +329,6 @@ export async function POST(req: NextRequest) {
       if (session.step === 'STORE_SELECTION') {
         const index = parseInt(textBody) - 1;
         const stores = await prisma.store.findMany({
-          where: { status: 'ACTIVE' },
           take: 10,
           orderBy: { name: 'asc' }
         });

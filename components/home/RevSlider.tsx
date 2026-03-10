@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/context/ShopContext";
@@ -9,9 +9,9 @@ export default function RevSlider() {
   const { slides } = useShop();
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  const nextSlide = () => {
+  const nextSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
-  };
+  }, [slides.length]);
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
@@ -22,7 +22,7 @@ export default function RevSlider() {
       const timer = setInterval(nextSlide, 8000);
       return () => clearInterval(timer);
     }
-  }, [slides.length]);
+  }, [slides.length, nextSlide]);
 
   if (slides.length === 0) return null;
 
@@ -39,6 +39,7 @@ export default function RevSlider() {
         >
           {/* Background Image */}
           <div className="absolute inset-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black/50" />
           </div>

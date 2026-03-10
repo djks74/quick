@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useState } from "react";
-import { Product, Variation } from "@/lib/types";
+import { Product } from "@/lib/types";
 
 interface ProductGridProps {
   products: Product[];
@@ -12,7 +10,7 @@ interface ProductGridProps {
 }
 
 export default function ProductGrid({ products, title = "Latest Products" }: ProductGridProps) {
-  const { formatPrice, currency, loading } = useCurrency();
+  const { formatPrice, loading } = useCurrency();
   const [processingId, setProcessingId] = useState<number | null>(null);
 
   const getPriceDisplay = (product: Product) => {
@@ -53,6 +51,7 @@ export default function ProductGrid({ products, title = "Latest Products" }: Pro
               <div className="h-64 bg-gray-100 flex items-center justify-center relative overflow-hidden">
                  <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors duration-300"></div>
                  {product.image ? (
+                   /* eslint-disable-next-line @next/next/no-img-element */
                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                  ) : (
                    <span className="text-gray-400 font-medium">No Image</span>

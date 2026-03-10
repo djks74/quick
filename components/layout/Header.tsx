@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Search, ShoppingCart, User, Menu, X } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 
