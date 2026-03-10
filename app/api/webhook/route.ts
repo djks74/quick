@@ -286,51 +286,65 @@ export async function POST(req: NextRequest) {
 
       // Handle "Menu" -> Jump to Ordering or Category Selection
       if (lowerText === 'menu') {
-        const categories = await prisma.category.findMany({
-            where: { storeId: targetStore.id },
-            orderBy: { name: 'asc' }
-        });
-
-        // If store has categories, ask user to select one
-        if (categories.length > 0) {
-            let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
-            catText += `Select a category:\n`;
-            catText += `1. All Menu\n`;
-            categories.forEach((c, idx) => {
-                catText += `${idx + 2}. ${c.name}\n`;
+        console.log('DEBUG: Menu command received for store', targetStore.name);
+        try {
+            const categories = await prisma.category.findMany({
+                where: { storeId: targetStore.id },
+                orderBy: { name: 'asc' }
             });
-            catText += `\nReply with number to view items.`;
+            console.log('DEBUG: Categories found', categories.length);
+
+            // If store has categories, ask user to select one
+            if (categories.length > 0) {
+                let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
+                catText += `Select a category:\n`;
+                catText += `1. All Menu\n`;
+                categories.forEach((c, idx) => {
+                    catText += `${idx + 2}. ${c.name}\n`;
+                });
+                catText += `\nReply with number to view items.`;
+                
+                await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
+                await sendWhatsAppMessage(from, catText, targetStore.id);
+                return NextResponse.json({ success: true });
+            }
+
+            // If NO categories, show all items (Default Behavior)
+            await updateSession(from, targetStore.id, { step: 'ORDERING' });
+            const products = await prisma.product.findMany({ 
+              where: { storeId: targetStore.id },
+              take: 10,
+              orderBy: { name: 'asc' }
+            });
+            console.log('DEBUG: Products found', products.length);
+
+            if (products.length === 0) {
+                 await sendWhatsAppMessage(from, `Sorry, this store has no products yet.`, targetStore.id);
+                 return NextResponse.json({ success: true });
+            }
+
+            const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+
+            let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
+            menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
+            menuText += `👇 *Or Order via Text*:\n`;
             
-            await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
-            await sendWhatsAppMessage(from, catText, targetStore.id);
+            products.forEach((p, index) => {
+              const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
+                ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
+                : new Intl.NumberFormat('id-ID').format(p.price);
+
+              menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
+            });
+            menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
+
+            await sendWhatsAppMessage(from, menuText, targetStore.id);
+            return NextResponse.json({ success: true });
+        } catch (err) {
+            console.error('DEBUG: Error in Menu Handler', err);
+            await sendWhatsAppMessage(from, `Error fetching menu. Please try again.`, targetStore.id);
             return NextResponse.json({ success: true });
         }
-
-        // If NO categories, show all items (Default Behavior)
-        await updateSession(from, targetStore.id, { step: 'ORDERING' });
-        const products = await prisma.product.findMany({ 
-          where: { storeId: targetStore.id },
-          take: 10,
-          orderBy: { name: 'asc' }
-        });
-
-        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-
-        let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
-        menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
-        menuText += `👇 *Or Order via Text*:\n`;
-        
-        products.forEach((p, index) => {
-          const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
-            ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
-            : new Intl.NumberFormat('id-ID').format(p.price);
-
-          menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
-        });
-        menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
-
-        await sendWhatsAppMessage(from, menuText, targetStore.id);
-        return NextResponse.json({ success: true });
       }
 
       // 2. STATE BASED HANDLING

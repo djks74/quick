@@ -17,7 +17,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   }
 
   const productsData = await prisma.product.findMany({
-    where: { storeId: store.id, stock: { gt: 0 } },
+    where: { storeId: store.id },
     orderBy: { name: 'asc' }
   });
 

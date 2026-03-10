@@ -137,7 +137,8 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         storeId: store.id,
         name: newName,
         price: newPrice,
-        description: "Added via WhatsApp"
+        description: "Added via WhatsApp",
+        stock: 100 // Set default stock to 100
       }
     });
     await sendWhatsAppMessage(from, `✅ Added new product *${newName}* at ${newPrice}`, store.id);
