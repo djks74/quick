@@ -656,12 +656,34 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true });
         }
 
-        // Parse "ItemIndex Quantity" (e.g. "1 2")
-        const itemMatch = textBody.match(/^(\d+)\s+(\d+)$/);
-        if (itemMatch) {
-          const index = parseInt(itemMatch[1]) - 1; // 1-based to 0-based
-          const qty = parseInt(itemMatch[2]);
+        // Parse "ItemIndex Quantity" (e.g. "1 2" or "1 2, 2 1")
+        // Support comma separated orders: "1 2, 2 1"
+        const orderParts = textBody.split(',').map(p => p.trim());
+        const validOrders: { index: number, qty: number }[] = [];
+        let hasInvalidFormat = false;
 
+        for (const part of orderParts) {
+            const itemMatch = part.match(/^(\d+)\s+(\d+)$/);
+            if (itemMatch) {
+                validOrders.push({
+                    index: parseInt(itemMatch[1]) - 1, // 1-based to 0-based
+                    qty: parseInt(itemMatch[2])
+                });
+            } else {
+                // If any part is "done", treat it as checkout trigger?
+                if (part.toLowerCase() === 'done' || part.toLowerCase() === 'checkout') {
+                    // Handled below but logic needs refactoring if mixed
+                } else {
+                    hasInvalidFormat = true;
+                }
+            }
+        }
+        
+        // Refactor: If the text *contains* "done" at the end, we should process orders THEN checkout?
+        // Or if the user types "1 2, done", we process "1 2" then trigger checkout.
+        const isCheckoutCommand = lowerText.endsWith('done') || lowerText.endsWith('checkout');
+        
+        if (validOrders.length > 0) {
           // Fetch products with SAME filter
           const whereClause: any = { storeId: targetStore.id };
           if (currentCategory) {
@@ -678,24 +700,109 @@ export async function POST(req: NextRequest) {
             orderBy: { name: 'asc' }
           });
 
-          if (index >= 0 && index < products.length && qty > 0) {
-            const product = products[index];
-            const currentCart = (session.cart as any[]) || [];
-            
-            // Add to cart
-            currentCart.push({
-              productId: product.id,
-              name: product.name,
-              price: product.price,
-              qty: qty
-            });
+          const currentCart = (session.cart as any[]) || [];
+          let addedItemsMsg = "";
 
-            await updateSession(from, targetStore.id, { cart: currentCart });
-            
-            await sendWhatsAppMessage(from, `Added ${qty}x ${product.name} to cart.\nReply with more items (e.g. '2 1') or 'Done' to checkout.`, targetStore.id);
-          } else {
-            await sendWhatsAppMessage(from, `Invalid item number. Please check the menu.`, targetStore.id);
+          for (const order of validOrders) {
+             if (order.index >= 0 && order.index < products.length && order.qty > 0) {
+                const product = products[order.index];
+                
+                // Add to cart
+                currentCart.push({
+                  productId: product.id,
+                  name: product.name,
+                  price: product.price,
+                  qty: order.qty
+                });
+                
+                addedItemsMsg += `- ${order.qty}x ${product.name}\n`;
+             }
           }
+
+          if (addedItemsMsg) {
+             await updateSession(from, targetStore.id, { cart: currentCart });
+             
+             if (isCheckoutCommand) {
+                 // Trigger Checkout Logic immediately
+                 // We need to jump to checkout logic block. 
+                 // Easiest way is to recursively call logic or copy-paste?
+                 // Let's refactor checkout logic into a helper function or just duplicate for now safely.
+                 
+                 // --- CHECKOUT LOGIC START ---
+                 const cart = currentCart; // Use updated cart
+                 const total = cart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+          
+                 // Create Order with items
+                 const order = await prisma.order.create({
+                    data: {
+                      storeId: targetStore.id,
+                      customerPhone: from,
+                      totalAmount: total,
+                      status: 'PENDING',
+                      tableNumber: session.tableNumber,
+                      items: {
+                        create: cart.map((item: any) => ({
+                          productId: item.productId,
+                          quantity: item.qty,
+                          price: item.price
+                        }))
+                      }
+                    }
+                 });
+
+                 // NOTIFY MERCHANT
+                 let merchantPhone = targetStore.whatsapp;
+                 if (!merchantPhone) {
+                    const owner = await prisma.user.findUnique({ where: { id: targetStore.ownerId } });
+                    if (owner) merchantPhone = owner.phoneNumber;
+                 }
+
+                 if (merchantPhone) {
+                    let merchantMsg = `🔔 *New Order #${order.id}*\n`;
+                    if (session.tableNumber) merchantMsg += `📍 Table: *${session.tableNumber}*\n`;
+                    merchantMsg += `👤 Customer: ${from}\n\n`;
+                    cart.forEach((item: any) => {
+                        merchantMsg += `${item.qty}x ${item.name}\n`;
+                    });
+                    merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+                    merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
+                    
+                    await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
+                 }
+
+                 const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id);
+                 
+                 let summary = "🧾 *Order Summary*\n";
+                 cart.forEach((item: any) => {
+                    summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
+                 });
+                 summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}*`;
+                 summary += `\n\nPay here: ${paymentLink}`;
+
+                 await sendWhatsAppMessage(from, summary, targetStore.id);
+                 await updateSession(from, targetStore.id, { step: 'START', cart: [] });
+                 return NextResponse.json({ success: true });
+                 // --- CHECKOUT LOGIC END ---
+
+             } else {
+                 await sendWhatsAppMessage(from, `Added to cart:\n${addedItemsMsg}\nReply with more items or 'Done' to checkout.`, targetStore.id);
+             }
+          } else {
+             await sendWhatsAppMessage(from, `Invalid item number(s). Please check the menu.`, targetStore.id);
+          }
+        } else if (isCheckoutCommand) {
+            // User just typed "Done" (handled at top) OR "something, done" where something was invalid
+             const cart = (session.cart as any[]) || [];
+             if (cart.length === 0) {
+                await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
+                return NextResponse.json({ success: true });
+             }
+             // Proceed to normal checkout (handled by top block if strict "done", but here for mixed cases)
+             // Actually, the top block `if (lowerText === 'done' ...)` handles exact match.
+             // If user typed "invalid, done", we might want to checkout existing cart?
+             // Let's rely on top block for simple "done". 
+             // If we are here, it means regex didn't match orders, so maybe it's just garbage text?
+             await sendWhatsAppMessage(from, `I didn't understand. Reply '1 2' to order Item #1 Quantity 2, or 'Done' to finish.`, targetStore.id);
         } else {
           // Maybe user typed text, try to fuzzy match or just ignore
           // Check if it's "Table X" or "Pay" to break out? (Handled at top)
