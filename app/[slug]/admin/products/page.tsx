@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { 
   Plus, 
   Search, 
   Edit2, 
   Trash2, 
+  Copy,
   Image as ImageIcon
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -18,6 +20,9 @@ import { cn } from "@/lib/utils";
 export default function AdminProducts() {
   const { slug } = useParams();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
+  
   const [activeTab, setActiveTab] = useState("products");
   const [storeId, setStoreId] = useState<number | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -80,6 +85,33 @@ export default function AdminProducts() {
     }
   };
 
+  const handleDuplicate = async (product: any) => {
+    if (!storeId) return;
+    if (!confirm(`Duplicate "${product.name}"?`)) return;
+    
+    // Create a copy without ID and timestamps
+    const { id, createdAt, updatedAt, ...productData } = product;
+    
+    const newProduct = {
+        ...productData,
+        name: `${product.name} (Copy)`,
+    };
+    
+    // Clean up variations if any to remove their IDs
+    if (newProduct.variations && Array.isArray(newProduct.variations)) {
+        newProduct.variations = newProduct.variations.map((v: any) => {
+            const { id, ...vData } = v;
+            return vData;
+        });
+    }
+
+    const created = await createProduct(storeId, newProduct);
+    if (created) {
+        const freshProducts = await getProducts(storeId);
+        setProducts(freshProducts);
+    }
+  };
+
   const handleEdit = (product: any) => {
     setEditingProduct(product);
     setIsFormOpen(true);
@@ -129,13 +161,15 @@ export default function AdminProducts() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          <button 
-            onClick={handleAddCategory}
-            className="bg-secondary/10 hover:bg-secondary/20 text-secondary px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-secondary/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Category</span>
-          </button>
+          {isSuperAdmin && (
+            <button 
+                onClick={handleAddCategory}
+                className="bg-secondary/10 hover:bg-secondary/20 text-secondary px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-secondary/20"
+            >
+                <Plus className="w-4 h-4" />
+                <span>Add Category</span>
+            </button>
+          )}
           {activeTab === 'products' && (
             <button 
                 onClick={handleAdd}
@@ -200,6 +234,13 @@ export default function AdminProducts() {
                         </td>
                         <td className="px-6 py-4 text-right">
                         <div className="flex justify-end space-x-2">
+                            <button 
+                            onClick={() => handleDuplicate(product)}
+                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Duplicate"
+                            >
+                            <Copy className="w-4 h-4" />
+                            </button>
                             <button 
                             onClick={() => handleEdit(product)}
                             className="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
@@ -267,12 +308,14 @@ export default function AdminProducts() {
                         >
                         <Edit2 className="w-4 h-4" />
                         </button>
-                        <button 
-                        onClick={() => handleDeleteCategory(parseInt(cat.id))}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                        <Trash2 className="w-4 h-4" />
-                        </button>
+                        {isSuperAdmin && (
+                            <button 
+                            onClick={() => handleDeleteCategory(parseInt(cat.id))}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                            <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                     </td>
                 </tr>
