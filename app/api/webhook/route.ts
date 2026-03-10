@@ -381,7 +381,11 @@ export async function POST(req: NextRequest) {
           // Fetch Products based on Category
           const whereClause: any = { storeId: targetStore.id };
           if (selectedCategoryName) {
-              whereClause.category = selectedCategoryName;
+              // Case-insensitive filtering
+              whereClause.category = {
+                  equals: selectedCategoryName,
+                  mode: 'insensitive'
+              };
           }
 
           const products = await prisma.product.findMany({ 
@@ -637,7 +641,11 @@ export async function POST(req: NextRequest) {
           // Fetch products with SAME filter
           const whereClause: any = { storeId: targetStore.id };
           if (currentCategory) {
-              whereClause.category = currentCategory;
+              // Case-insensitive filtering
+              whereClause.category = {
+                  equals: currentCategory,
+                  mode: 'insensitive'
+              };
           }
 
           const products = await prisma.product.findMany({ 
