@@ -44,6 +44,11 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
 
   const isCashier = dbUser?.role === "CASHIER" && dbUser?.workedAtId === store.id;
 
+  // Check Subscription - Only Enterprise can access POS
+  if (store.subscriptionPlan !== 'ENTERPRISE' && !isSuperAdmin) {
+    redirect(`/${slug}/admin`);
+  }
+
   if (!isOwner && !isSuperAdmin && !isCashier) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-100">

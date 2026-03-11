@@ -15,6 +15,8 @@ type PlatformSettings = {
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountName?: string | null;
+  subscriptionServerKey?: string | null;
+  subscriptionClientKey?: string | null;
 };
 
 export default function SettingsForm({ initialSettings }: { initialSettings: PlatformSettings | null }) {
@@ -28,7 +30,9 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
       xenditSecretKey: initialSettings?.xenditSecretKey || "",
       bankName: initialSettings?.bankName || "",
       bankAccountNumber: initialSettings?.bankAccountNumber || "",
-      bankAccountName: initialSettings?.bankAccountName || ""
+      bankAccountName: initialSettings?.bankAccountName || "",
+      subscriptionServerKey: initialSettings?.subscriptionServerKey || "",
+      subscriptionClientKey: initialSettings?.subscriptionClientKey || ""
     }),
     [initialSettings]
   );
@@ -121,6 +125,33 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
               className="w-full border border-gray-300 px-3 py-2 rounded-lg"
               value={form.xenditSecretKey}
               onChange={(e) => setForm({ ...form, xenditSecretKey: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900">Subscription (Midtrans)</h3>
+          <p className="text-xs text-gray-500 mt-1">Keys used for Monthly Subscription (Rp 299.000).</p>
+        </div>
+        <div className="md:col-span-2 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Subscription Server Key</label>
+            <input
+              type="password"
+              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              value={form.subscriptionServerKey}
+              onChange={(e) => setForm({ ...form, subscriptionServerKey: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Subscription Client Key</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              value={form.subscriptionClientKey}
+              onChange={(e) => setForm({ ...form, subscriptionClientKey: e.target.value })}
             />
           </div>
         </div>

@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
           create: {
             name: storeName,
             slug: slug,
-            subscriptionPlan: "ENTERPRISE", // Default to ENTERPRISE for all new users
+            subscriptionPlan: "FREE", // Start with FREE, must pay to upgrade
             enableWhatsApp: true,
             enableManualTransfer: true,
             // Copy Platform Keys if available

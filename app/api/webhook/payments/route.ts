@@ -9,11 +9,12 @@ export async function POST(req: NextRequest) {
 
     const { order_id, transaction_status, gross_amount } = body;
 
-    // Extract Order ID from "ORDER-123-171..."
-    const orderIdStr = order_id.split('-')[1]; // Get '123'
-    const orderId = parseInt(orderIdStr);
+    // Extract Order ID from "ORDER-123-171..." or "SUB-123-171..."
+    const orderIdParts = order_id.split('-');
+    const type = orderIdParts[0]; // 'ORDER' or 'SUB'
+    const id = parseInt(orderIdParts[1]);
 
-    if (isNaN(orderId)) {
+    if (isNaN(id)) {
       return NextResponse.json({ error: 'Invalid Order ID' }, { status: 400 });
     }
 
@@ -26,9 +27,21 @@ export async function POST(req: NextRequest) {
       status = 'PENDING';
     }
 
+    if (type === 'SUB') {
+        // Handle Subscription Upgrade
+        if (status === 'PAID') {
+            await prisma.store.update({
+                where: { id },
+                data: { subscriptionPlan: 'ENTERPRISE' }
+            });
+            console.log(`[SUBSCRIPTION] Store ${id} upgraded to ENTERPRISE`);
+        }
+        return NextResponse.json({ success: true });
+    }
+
     // Update Order
     const order = await prisma.order.update({
-      where: { id: orderId },
+      where: { id },
       data: { status }
     });
 

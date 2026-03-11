@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
 import { signOut } from "next-auth/react";
+import SubscriptionGate from "@/components/SubscriptionGate";
 
 interface SidebarItem {
   name: string;
@@ -84,11 +85,14 @@ export default function AdminShell({
   const isModern = layoutStyle === "modern";
   const isMinimal = layoutStyle === "minimal";
 
+  const showSubscriptionGate = !isSuperAdmin && store.subscriptionPlan !== 'ENTERPRISE';
+
   return (
     <div className={cn(
       "flex flex-col min-h-screen",
       isModern ? "bg-[#f8fafc]" : isMinimal ? "bg-white" : "bg-[#f0f0f1]"
     )}>
+      {showSubscriptionGate && <SubscriptionGate store={store} />}
       {/* WordPress Top Admin Bar */}
       <header className={cn(
         "h-[32px] flex items-center justify-between px-4 fixed top-0 w-full z-[100] text-sm transition-colors",

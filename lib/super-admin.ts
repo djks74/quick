@@ -95,6 +95,8 @@ export async function updatePlatformSettings(data: {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  subscriptionServerKey?: string;
+  subscriptionClientKey?: string;
 }) {
   await requireSuperAdmin();
   const updated = await prisma.platformSettings.upsert({
@@ -107,7 +109,9 @@ export async function updatePlatformSettings(data: {
       xenditSecretKey: data.xenditSecretKey || null,
       bankName: data.bankName || null,
       bankAccountNumber: data.bankAccountNumber || null,
-      bankAccountName: data.bankAccountName || null
+      bankAccountName: data.bankAccountName || null,
+      subscriptionServerKey: data.subscriptionServerKey || null,
+      subscriptionClientKey: data.subscriptionClientKey || null
     },
     create: {
       key: "default",
@@ -118,7 +122,9 @@ export async function updatePlatformSettings(data: {
       xenditSecretKey: data.xenditSecretKey || null,
       bankName: data.bankName || null,
       bankAccountNumber: data.bankAccountNumber || null,
-      bankAccountName: data.bankAccountName || null
+      bankAccountName: data.bankAccountName || null,
+      subscriptionServerKey: data.subscriptionServerKey || null,
+      subscriptionClientKey: data.subscriptionClientKey || null
     }
   });
   return { success: true, data: updated };
