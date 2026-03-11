@@ -539,11 +539,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span className="text-sm">Pay via QRIS</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
-                          <span className="text-sm font-black">
+                          <span className="text-lg font-black">
                              {formatPrice(totalPrice + calculatePlatformFee('qris'))}
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
-                            <span className="text-[10px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
                           )}
                        </div>
                     </button>
@@ -557,11 +557,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span className="text-sm">Bank Transfer</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
-                          <span className="text-sm font-black">
+                          <span className="text-lg font-black">
                              {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
                           </span>
                           {calculatePlatformFee('transfer') > 0 && (
-                            <span className="text-[10px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
                           )}
                        </div>
                     </button>
