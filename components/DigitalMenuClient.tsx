@@ -158,11 +158,42 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }).filter(item => item.quantity > 0));
   };
 
-  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const taxPercent = parseFloat(store.taxPercent?.toString() || "0");
+  const servicePercent = parseFloat(store.serviceChargePercent?.toString() || "0");
+  
+  // Calculate Platform Fee (only for display estimation)
+  const qrisFeePercent = parseFloat(store.qrisFeePercent?.toString() || "0");
+  const transferFee = parseFloat(store.manualTransferFee?.toString() || "0");
+  const isCustomerPaysFee = store.feePaidBy === 'CUSTOMER';
 
-  const handleWhatsAppCheckout = () => {
+  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const tax = subtotal * (taxPercent / 100);
+  const serviceCharge = subtotal * (servicePercent / 100);
+  const totalPrice = subtotal + tax + serviceCharge;
+
+  // Function to calculate fee based on potential payment method
+  const calculatePlatformFee = (method: 'qris' | 'transfer') => {
+      if (!isCustomerPaysFee) return 0;
+      if (method === 'qris') return totalPrice * (qrisFeePercent / 100);
+      if (method === 'transfer') return transferFee;
+      return 0;
+  };
+
+  const handleWhatsAppCheckout = (method: 'qris' | 'bank') => {
     if (cart.length === 0) return;
+
+    // Calculate specific fee for this method
+    let fee = 0;
+    if (isCustomerPaysFee) {
+        if (method === 'qris' && qrisFeePercent > 0) {
+            fee = totalPrice * (qrisFeePercent / 100);
+        } else if (method === 'bank' && transferFee > 0) {
+            fee = transferFee;
+        }
+    }
+    
+    const finalTotal = totalPrice + fee;
 
     // Construct WhatsApp message
     let message = `Hello ${store?.name || siteConfig.name}, I would like to order`;
@@ -174,8 +205,22 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     cart.forEach(item => {
       message += `- ${item.quantity}x ${item.name} @ ${formatPrice(item.price)}\n`;
     });
-    message += `\nTotal: *${formatPrice(totalPrice)}*`;
-    message += `\n\nPlease send the payment link. Thank you!`;
+    
+    if (tax > 0) {
+        message += `Tax (${taxPercent}%): ${formatPrice(tax)}\n`;
+    }
+    if (serviceCharge > 0) {
+        message += `Service Charge (${servicePercent}%): ${formatPrice(serviceCharge)}\n`;
+    }
+    
+    // Fee line
+    if (fee > 0) {
+        message += `Platform Fee (${method === 'qris' ? 'QRIS' : 'Bank Transfer'}): ${formatPrice(fee)}\n`;
+    }
+
+    message += `\nTotal: *${formatPrice(finalTotal)}*`;
+    message += `\n\nPayment Method: *${method === 'qris' ? 'QRIS' : 'Bank Transfer'}*`;
+    message += `\nPlease process my order. Thank you!`;
 
     // Encode for URL
     const encodedMessage = encodeURIComponent(message);
@@ -185,32 +230,81 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     window.open(whatsappUrl, '_blank');
   };
 
-  const handlePaymentGatewayCheckout = async (provider: string) => {
+  const handlePaymentGatewayCheckout = async (provider: string, type: 'qris' | 'bank_transfer' | 'manual' = 'manual') => {
     setIsProcessing(true);
     try {
+      // Calculate Payment Fee
+      let paymentFee = 0;
+      if (isCustomerPaysFee) {
+          if (provider === 'manual' && transferFee > 0) {
+              paymentFee = transferFee;
+          } else if ((provider === 'midtrans' || provider === 'xendit')) {
+              // Fee depends on the specific TYPE chosen (QRIS or Bank)
+              if (type === 'qris' && qrisFeePercent > 0) {
+                  paymentFee = totalPrice * (qrisFeePercent / 100);
+              } else if (type === 'bank_transfer' && transferFee > 0) {
+                  // For Midtrans Bank Transfer, usually it's a fixed fee + % or just fixed.
+                  // But based on your request: "if choose bank it will charged 5000"
+                  // So we apply the manualTransferFee (5000) logic here too?
+                  // OR do we use a separate "Payment Gateway Bank Fee"?
+                  // Let's assume we use the same `transferFee` (5000) for now as requested.
+                  paymentFee = transferFee;
+              }
+          }
+      }
+      
+      const finalTotal = totalPrice + paymentFee;
+
+      // If manual transfer, show bank details directly
+      if (provider === 'manual') {
+          // Construct order details for simulation (since we don't have real order ID yet)
+          // In real app, you might want to create order first via API then show details
+          const res = await fetch('/api/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storeId: store.id,
+              items: cart,
+              total: finalTotal,
+              paymentFee: paymentFee,
+              customerInfo: { phone: customerPhone || 'WEB_USER', tableNumber: tableNumber },
+              paymentMethod: 'manual'
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+              setLastOrderId(data.orderId);
+              setBankInfo(data.bankInfo);
+              setFinalAmount(data.amount);
+              setShowBankDetails(true);
+              setIsCartOpen(false);
+              setCart([]);
+          } else {
+              alert('Checkout failed: ' + (data.error || 'Unknown error'));
+          }
+          setIsProcessing(false);
+          return;
+      }
+
+      // If gateway (Midtrans/Xendit), create transaction with specific type
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeId: store.id, // Pass storeId
           items: cart,
-          total: totalPrice,
+          total: finalTotal, // Include fee
+          paymentFee: paymentFee, // Pass fee breakdown if API supports it
           customerInfo: { phone: customerPhone || 'WEB_USER', tableNumber: tableNumber },
-          paymentMethod: provider === 'manual' ? 'manual' : 'gateway'
+          paymentMethod: 'gateway', // Generic gateway trigger
+          specificType: type // Pass the specific type (qris/bank_transfer) to backend
         })
       });
       
       const data = await res.json();
       
       if (data.success) {
-        if (data.isManual) {
-          setLastOrderId(data.orderId);
-          setBankInfo(data.bankInfo);
-          setFinalAmount(data.amount);
-          setShowBankDetails(true);
-          setIsCartOpen(false); // Close cart
-          setCart([]); // Clear cart
-        } else if (data.paymentUrl) {
+         if (data.paymentUrl) {
           window.location.href = data.paymentUrl;
         }
       } else {
@@ -503,45 +597,130 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
             {/* Cart Footer */}
             <div className="p-4 border-t bg-gray-50 sm:rounded-b-2xl space-y-3">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-600 font-medium">Total Amount</span>
-                <span className="text-xl font-bold text-gray-900">{formatPrice(totalPrice)}</span>
+              <div className="space-y-1 text-sm text-gray-600 mb-4">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>{formatPrice(subtotal)}</span>
+                  </div>
+                  {taxPercent > 0 && (
+                      <div className="flex justify-between">
+                        <span>Tax ({taxPercent}%)</span>
+                        <span>{formatPrice(tax)}</span>
+                      </div>
+                  )}
+                  {servicePercent > 0 && (
+                      <div className="flex justify-between">
+                        <span>Service Charge ({servicePercent}%)</span>
+                        <span>{formatPrice(serviceCharge)}</span>
+                      </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                    <span className="text-gray-900 font-bold">Total Amount</span>
+                    <span className="text-xl font-bold text-gray-900">{formatPrice(totalPrice)}</span>
+                  </div>
+                  {store.feePaidBy === 'CUSTOMER' && (
+                      <p className="text-[10px] text-gray-400 italic mt-1 text-right">
+                        *Excl. payment fees (if applicable)
+                      </p>
+                  )}
               </div>
               
-              {/* WhatsApp Button */}
-              {(settings?.enableWhatsApp !== false) && (
-                <button 
-                  onClick={handleWhatsAppCheckout}
-                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200"
-                  style={{ backgroundColor: '#25D366' }}
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  <span>Checkout via WhatsApp</span>
-                </button>
-              )}
+              {/* WhatsApp Payment Buttons (Replaces Generic Checkout) */}
+              {/* {(settings?.enableWhatsApp !== false) && (
+                  <div className="space-y-2">
+                    <button 
+                      onClick={() => handleWhatsAppCheckout('qris')}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200"
+                      style={{ backgroundColor: '#25D366' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="w-5 h-5" />
+                        <span>Pay via QRIS</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>}
+                    </button>
 
-              {/* Midtrans Button */}
+                    <button 
+                      onClick={() => handleWhatsAppCheckout('bank')}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-emerald-600"
+                    >
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="w-5 h-5" />
+                        <span>Pay via Bank Transfer</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>}
+                    </button>
+                  </div>
+              )} */}
+
+              {/* Midtrans Button (Should be SPLIT into 2 buttons: QRIS and Bank) */}
               {settings?.enableMidtrans && (
-                <button 
-                  onClick={() => handlePaymentGatewayCheckout('midtrans')}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-blue-600 hover:bg-blue-700"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  <span>Pay Now (Midtrans)</span>
-                </button>
+                <div className="space-y-2">
+                    {/* QRIS Option */}
+                    <button 
+                      onClick={() => handlePaymentGatewayCheckout('midtrans', 'qris')}
+                      disabled={isProcessing}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5" />
+                        <span>Pay via QRIS (Midtrans)</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
+                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>
+                      )}
+                    </button>
+
+                    {/* Bank Transfer Option */}
+                    <button 
+                      onClick={() => handlePaymentGatewayCheckout('midtrans', 'bank_transfer')}
+                      disabled={isProcessing}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5" />
+                        <span>Pay via Bank (Midtrans)</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
+                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
+                      )}
+                    </button>
+                </div>
               )}
 
-              {/* Xendit Button */}
+              {/* Xendit Buttons (Split by Method) */}
               {settings?.enableXendit && (
-                <button 
-                  onClick={() => handlePaymentGatewayCheckout('xendit')}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-purple-600 hover:bg-purple-700"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  <span>Pay Now (Xendit)</span>
-                </button>
+                <div className="space-y-2">
+                     {/* QRIS Option */}
+                    <button 
+                      onClick={() => handlePaymentGatewayCheckout('xendit', 'qris')}
+                      disabled={isProcessing}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5" />
+                        <span>Pay via QRIS (Xendit)</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
+                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>
+                      )}
+                    </button>
+
+                     {/* Bank Option */}
+                     <button 
+                      onClick={() => handlePaymentGatewayCheckout('xendit', 'bank_transfer')}
+                      disabled={isProcessing}
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5" />
+                        <span>Pay via Bank (Xendit)</span>
+                      </div>
+                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
+                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
+                      )}
+                    </button>
+                </div>
               )}
 
               {/* Manual Transfer Button */}
@@ -549,10 +728,15 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                 <button 
                   onClick={() => handlePaymentGatewayCheckout('manual')}
                   disabled={isProcessing}
-                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform active:scale-95 transition-all duration-200 bg-gray-600 hover:bg-gray-700"
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-gray-600 hover:bg-gray-700"
                 >
-                  <CreditCard className="w-5 h-5" />
-                  <span>Manual Bank Transfer</span>
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" />
+                    <span>Manual Bank Transfer</span>
+                  </div>
+                  {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
+                      <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
+                  )}
                 </button>
               )}
             </div>

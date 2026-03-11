@@ -105,17 +105,26 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
 
   // Load from LocalStorage
   useEffect(() => {
-    const savedSlides = localStorage.getItem("shop_slides");
-    if (savedSlides) setSlidesState(JSON.parse(savedSlides));
+    try {
+        const savedSlides = localStorage.getItem("shop_slides");
+        if (savedSlides && savedSlides !== "undefined") setSlidesState(JSON.parse(savedSlides));
 
-    const savedHeader = localStorage.getItem("shop_header");
-    if (savedHeader) setHeaderSettingsState(JSON.parse(savedHeader));
+        const savedHeader = localStorage.getItem("shop_header");
+        if (savedHeader && savedHeader !== "undefined") setHeaderSettingsState(JSON.parse(savedHeader));
 
-    const savedPayment = localStorage.getItem("shop_payment");
-    if (savedPayment) setPaymentSettingsState(JSON.parse(savedPayment));
+        const savedPayment = localStorage.getItem("shop_payment");
+        if (savedPayment && savedPayment !== "undefined") setPaymentSettingsState(JSON.parse(savedPayment));
 
-    const savedCart = localStorage.getItem("shop_cart");
-    if (savedCart) setCart(JSON.parse(savedCart));
+        const savedCart = localStorage.getItem("shop_cart");
+        if (savedCart && savedCart !== "undefined") setCart(JSON.parse(savedCart));
+    } catch (e) {
+        console.error("Failed to parse localStorage data", e);
+        // Clear corrupted data
+        localStorage.removeItem("shop_slides");
+        localStorage.removeItem("shop_header");
+        localStorage.removeItem("shop_payment");
+        localStorage.removeItem("shop_cart");
+    }
   }, []);
 
   // Save to LocalStorage helpers

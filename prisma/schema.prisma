@@ -13,8 +13,10 @@ model User {
   phoneNumber String? @unique
   password  String
   name      String?
-  role      String   @default("MERCHANT") // MERCHANT, SUPER_ADMIN
+  role      String   @default("MERCHANT") // MERCHANT, SUPER_ADMIN, CASHIER
   stores    Store[]  @relation("StoreOwner")
+  workedAtId Int?
+  workedAt   Store?   @relation("StoreCashier", fields: [workedAtId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -25,6 +27,7 @@ model Store {
   name                    String
   ownerId                 Int
   owner                   User      @relation("StoreOwner", fields: [ownerId], references: [id])
+  cashiers                User[]    @relation("StoreCashier")
   
   // Settings
   whatsapp                String?
@@ -38,6 +41,18 @@ model Store {
   enableMidtrans          Boolean   @default(false)
   enableXendit            Boolean   @default(false)
   enableManualTransfer    Boolean   @default(false)
+  posEnabled              Boolean   @default(false)
+  
+  // Advanced Payment Settings
+  taxPercent              Float     @default(0.0)
+  serviceChargePercent    Float     @default(0.0)
+  qrisFeePercent          Float     @default(0.7) // Default 0.7% for QRIS
+  manualTransferFee       Float     @default(0.0) // Flat fee for Bank Transfer
+  feePaidBy               String    @default("CUSTOMER") // CUSTOMER or MERCHANT
+  
+  // POS Settings
+  posGridColumns          Int       @default(4) // 3, 4, 5, 6
+  
   paymentGatewaySecret    String?
   paymentGatewayClientKey String?
   bankAccount             Json?     // Stores manual transfer details
@@ -104,6 +119,10 @@ model Order {
   paymentMethod String?
   paymentUrl    String?
   transactionFee Float      @default(0.0) // Fee collected by platform
+  taxAmount     Float      @default(0.0)
+  serviceCharge Float      @default(0.0)
+  tipAmount     Float      @default(0.0)
+  paymentFee    Float      @default(0.0) // Fee charged to customer if applicable
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]

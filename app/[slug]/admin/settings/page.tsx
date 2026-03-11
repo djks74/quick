@@ -41,6 +41,13 @@ export default function AdminSettings() {
     enableMidtrans: false,
     enableXendit: false,
     enableManualTransfer: false,
+    enablePos: false,
+    taxPercent: "0",
+    serviceChargePercent: "0",
+    qrisFeePercent: "0.7",
+    manualTransferFee: "0",
+    feePaidBy: "CUSTOMER",
+    posGridColumns: 4,
     paymentGatewaySecret: "",
     paymentGatewayClientKey: ""
   });
@@ -77,6 +84,13 @@ export default function AdminSettings() {
           enableMidtrans: data.enableMidtrans ?? false,
           enableXendit: data.enableXendit ?? false,
           enableManualTransfer: data.enableManualTransfer ?? false,
+          enablePos: data.posEnabled ?? false,
+          taxPercent: (data.taxPercent ?? 0).toString(),
+          serviceChargePercent: (data.serviceChargePercent ?? 0).toString(),
+          qrisFeePercent: (data.qrisFeePercent ?? 0.7).toString(),
+          manualTransferFee: (data.manualTransferFee ?? 0).toString(),
+          feePaidBy: data.feePaidBy || "CUSTOMER",
+          posGridColumns: data.posGridColumns ?? 4,
           paymentGatewaySecret: data.paymentGatewaySecret || "",
           paymentGatewayClientKey: data.paymentGatewayClientKey || ""
         });
@@ -102,12 +116,31 @@ export default function AdminSettings() {
     setIsSaving(true);
     setSaveMessage(null);
     try {
-      await updateStoreSettings(storeId, {
+      const result = await updateStoreSettings(storeId, {
         ...settings,
+        taxPercent: parseFloat(settings.taxPercent.toString().replace(',', '.')) || 0,
+        serviceChargePercent: parseFloat(settings.serviceChargePercent.toString().replace(',', '.')) || 0,
+        qrisFeePercent: parseFloat(settings.qrisFeePercent.toString().replace(',', '.')) || 0,
+        manualTransferFee: parseFloat(settings.manualTransferFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount
       });
-      setSiteName(settings.storeName);
-      setSaveMessage("Settings saved successfully.");
+
+      if (result) {
+        setSiteName(settings.storeName);
+        setHeaderSettings(prev => ({ ...prev, siteName: settings.storeName }));
+        setSaveMessage("Settings saved successfully.");
+        // Update local state with returned data to ensure sync
+        setSettings(prev => ({
+            ...prev,
+            taxPercent: (result.taxPercent ?? 0).toString(),
+            serviceChargePercent: (result.serviceChargePercent ?? 0).toString(),
+            qrisFeePercent: (result.qrisFeePercent ?? 0).toString(),
+            manualTransferFee: (result.manualTransferFee ?? 0).toString(),
+        }));
+      } else {
+        console.error("Failed to save settings: Server returned null");
+        setSaveMessage("Failed to save settings. Please try again.");
+      }
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -128,7 +161,7 @@ export default function AdminSettings() {
   return (
     <div className="space-y-6">
       <div className="flex border-b border-[#ccd0d4] mb-6 overflow-x-auto">
-        {["General", "Payments", "Appearance"].map((tab) => (
+        {["General", "Payments", "Tax & Fees", "Appearance"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -172,6 +205,29 @@ export default function AdminSettings() {
                     placeholder="628..."
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327]">Point of Sale</h3>
+                <p className="text-xs text-gray-500 mt-1">Manage POS settings.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                 <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.enablePos}
+                      onChange={(e) => setSettings({ ...settings, enablePos: e.target.checked })}
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                    <label className="text-sm font-medium">Enable POS System</label>
+                 </div>
+                 {settings.enablePos && (
+                    <div className="bg-blue-50 p-3 rounded text-sm text-blue-700">
+                        POS is active at <a href={`/${slug}/pos`} target="_blank" className="font-bold hover:underline">/{slug}/pos</a>
+                    </div>
+                 )}
               </div>
             </div>
 
@@ -350,6 +406,88 @@ export default function AdminSettings() {
           </div>
         )}
 
+        {activeTab === "Tax & Fees" && (
+           <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+                 <div>
+                   <h3 className="text-sm font-bold text-[#1d2327]">Additional Charges</h3>
+                   <p className="text-xs text-gray-500 mt-1">Configure taxes and service charges.</p>
+                 </div>
+                 <div className="md:col-span-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Tax (%)</label>
+                            <input 
+                                type="text"
+                                inputMode="decimal"
+                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                value={settings.taxPercent}
+                                onChange={(e) => setSettings({ ...settings, taxPercent: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Service Charge (%)</label>
+                            <input 
+                                type="text"
+                                inputMode="decimal"
+                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                value={settings.serviceChargePercent}
+                                onChange={(e) => setSettings({ ...settings, serviceChargePercent: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+                 <div>
+                   <h3 className="text-sm font-bold text-[#1d2327]">Payment Fees</h3>
+                   <p className="text-xs text-gray-500 mt-1">Configure transaction fees.</p>
+                 </div>
+                 <div className="md:col-span-2 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Who pays the fees?</label>
+                        <select 
+                            className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none bg-white"
+                            value={settings.feePaidBy}
+                            onChange={(e) => setSettings({ ...settings, feePaidBy: e.target.value })}
+                        >
+                            <option value="CUSTOMER">Customer (Added to Total)</option>
+                            <option value="MERCHANT">Merchant (Deducted from Settlement)</option>
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">QRIS Fee (%)</label>
+                            <input 
+                                type="text"
+                                inputMode="decimal"
+                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                value={settings.qrisFeePercent}
+                                onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Default is 0.7%</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Bank Transfer Fee (Flat)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1.5 text-gray-500 text-sm">Rp</span>
+                                <input 
+                                    type="text"
+                                    inputMode="decimal"
+                                    className="w-full border border-[#ccd0d4] pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                    value={settings.manualTransferFee}
+                                    onChange={(e) => setSettings({ ...settings, manualTransferFee: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        )}
+
         {activeTab === "Appearance" && (
            <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
@@ -373,6 +511,27 @@ export default function AdminSettings() {
                           onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
                         />
                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                 <div>
+                   <h3 className="text-sm font-bold text-[#1d2327]">Layout</h3>
+                 </div>
+                 <div className="md:col-span-2 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">POS Grid Columns</label>
+                        <select 
+                            className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none bg-white"
+                            value={settings.posGridColumns}
+                            onChange={(e) => setSettings({ ...settings, posGridColumns: parseInt(e.target.value) })}
+                        >
+                            <option value={3}>3 Columns</option>
+                            <option value={4}>4 Columns</option>
+                            <option value={5}>5 Columns</option>
+                            <option value={6}>6 Columns</option>
+                        </select>
                     </div>
                  </div>
               </div>

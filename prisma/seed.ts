@@ -34,7 +34,8 @@ async function main() {
       enableWhatsApp: true,
       enableMidtrans: true,
       enableManualTransfer: true,
-      subscriptionPlan: 'PRO'
+      subscriptionPlan: 'PRO',
+      posEnabled: true
     },
     create: {
       name: 'LCP Demo Store',
@@ -45,11 +46,31 @@ async function main() {
       enableMidtrans: true,
       enableManualTransfer: true,
       subscriptionPlan: 'PRO',
-      themeColor: '#000000'
+      themeColor: '#000000',
+      posEnabled: true
     }
   });
 
   console.log('Created/Updated Store:', store.slug);
+
+  // 2.5 Create Cashier User
+  const cashier = await prisma.user.upsert({
+    where: { email: 'cashier@mythoz.com' },
+    update: {
+      password: password,
+      role: 'CASHIER',
+      name: 'Cashier Demo',
+      workedAtId: store.id
+    },
+    create: {
+      email: 'cashier@mythoz.com',
+      password: password,
+      name: 'Cashier Demo',
+      role: 'CASHIER',
+      workedAtId: store.id
+    }
+  });
+  console.log('Created/Updated Cashier:', cashier.email);
 
   // 3. Create Basic Categories
   const categories = [

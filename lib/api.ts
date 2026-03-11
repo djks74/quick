@@ -2,6 +2,7 @@
 
 import { prisma } from './prisma';
 import { Product, Category } from './types';
+import bcrypt from 'bcryptjs';
 
 // --- Store ---
 
@@ -30,6 +31,8 @@ export async function getStoreSettings(storeId: number | string) {
   }
 }
 
+import { revalidatePath } from 'next/cache';
+
 export async function updateStoreSettings(storeId: number, data: any) {
   try {
     // 1. Fetch store to get ownerId
@@ -40,10 +43,44 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     if (!store) return null;
 
+    console.log("SERVER: Updating store settings for", storeId, JSON.stringify(data));
+
     const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
 
     // 2. Transaction to update Store and User
     const [updatedStore] = await prisma.$transaction([
+      // prisma.store.update({
+      //   where: { id: storeId },
+      //   data: {
+      //     name: data.storeName,
+      //     whatsapp: data.whatsapp,
+      //     themeColor: data.themeColor,
+      //     enableWhatsApp: data.enableWhatsApp,
+      //     enableMidtrans: data.enableMidtrans,
+      //     enableXendit: data.enableXendit,
+      //     enableManualTransfer: data.enableManualTransfer,
+      //     posEnabled: data.posEnabled ?? data.enablePos,
+      //     taxPercent: data.taxPercent,
+      //     serviceChargePercent: data.serviceChargePercent,
+      //     qrisFeePercent: data.qrisFeePercent,
+      //     manualTransferFee: data.manualTransferFee,
+      //     feePaidBy: data.feePaidBy,
+      //     posGridColumns: data.posGridColumns,
+      //     ...(canUseOwnIntegrationConfig
+      //       ? {
+      //           whatsappToken: data.whatsappToken,
+      //           whatsappPhoneId: data.whatsappPhoneId,
+      //           paymentGatewaySecret: data.paymentGatewaySecret,
+      //           paymentGatewayClientKey: data.paymentGatewayClientKey,
+      //           bankAccount: data.bankAccount
+      //         }
+      //       : {})
+      //   }
+      // }),
+
+      // Using update without transaction to debug if transaction is the issue, or splitting
+      
+      // Update store settings first
       prisma.store.update({
         where: { id: storeId },
         data: {
@@ -54,6 +91,13 @@ export async function updateStoreSettings(storeId: number, data: any) {
           enableMidtrans: data.enableMidtrans,
           enableXendit: data.enableXendit,
           enableManualTransfer: data.enableManualTransfer,
+          posEnabled: data.posEnabled ?? data.enablePos,
+          taxPercent: data.taxPercent,
+          serviceChargePercent: data.serviceChargePercent,
+          qrisFeePercent: data.qrisFeePercent,
+          manualTransferFee: data.manualTransferFee,
+          feePaidBy: data.feePaidBy,
+          posGridColumns: data.posGridColumns,
           ...(canUseOwnIntegrationConfig
             ? {
                 whatsappToken: data.whatsappToken,
@@ -73,6 +117,11 @@ export async function updateStoreSettings(storeId: number, data: any) {
         })
       ] : [])
     ]);
+    
+    // Revalidate paths to ensure fresh data
+    revalidatePath(`/${store.slug}/admin/settings`);
+    revalidatePath(`/${store.slug}/pos`);
+    revalidatePath(`/${store.slug}`);
 
     return updatedStore;
   } catch (error) {
@@ -90,6 +139,136 @@ export async function updateStoreDomain(storeId: number, domain: string) {
   } catch (error) {
     console.error('Error updating store domain:', error);
     return null;
+  }
+}
+
+// --- Users / Cashiers ---
+
+export async function getStoreCashiers(storeId: number) {
+  try {
+    const cashiers = await prisma.user.findMany({
+      where: {
+        workedAtId: storeId,
+        role: "CASHIER"
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true
+      }
+    });
+    return cashiers;
+  } catch (error) {
+    console.error('Error fetching cashiers:', error);
+    return [];
+  }
+}
+
+export async function createPosOrder(storeId: number, data: any) {
+  try {
+    const { 
+        items, 
+        total, 
+        paymentMethod, 
+        cashReceived, 
+        customerPhone,
+        taxAmount,
+        serviceCharge,
+        tipAmount,
+        paymentFee
+    } = data;
+
+    const order = await prisma.order.create({
+      data: {
+        storeId,
+        customerPhone: customerPhone || "POS-CUSTOMER",
+        totalAmount: total,
+        status: "COMPLETED", // POS orders are completed immediately
+        paymentMethod: paymentMethod,
+        taxAmount: taxAmount || 0,
+        serviceCharge: serviceCharge || 0,
+        tipAmount: tipAmount || 0,
+        paymentFee: paymentFee || 0,
+        items: {
+            create: items.map((item: any) => ({
+                productId: item.id,
+                quantity: item.quantity,
+                price: item.price
+            }))
+        }
+      }
+    });
+    
+    // Update stock
+    for (const item of items) {
+        try {
+            await prisma.product.update({
+                where: { id: item.id },
+                data: { stock: { decrement: item.quantity } }
+            });
+        } catch (e) {
+            console.error(`Failed to update stock for product ${item.id}`, e);
+        }
+    }
+
+    return { success: true, orderId: order.id };
+  } catch (error) {
+    console.error('Error creating POS order:', error);
+    return { error: "Failed to create order" };
+  }
+}
+
+export async function createStoreCashier(storeId: number, data: any) {
+  try {
+    const { name, email, password } = data;
+    
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return { error: "User with this email already exists" };
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const cashier = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: "CASHIER",
+        workedAtId: storeId
+      }
+    });
+
+    return { success: true, cashier };
+  } catch (error) {
+    console.error('Error creating cashier:', error);
+    return { error: "Failed to create cashier" };
+  }
+}
+
+export async function deleteStoreCashier(storeId: number, cashierId: number) {
+  try {
+    // Verify the cashier belongs to this store
+    const cashier = await prisma.user.findFirst({
+      where: {
+        id: cashierId,
+        workedAtId: storeId,
+        role: "CASHIER"
+      }
+    });
+
+    if (!cashier) {
+      return { error: "Cashier not found or unauthorized" };
+    }
+
+    await prisma.user.delete({ where: { id: cashierId } });
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting cashier:', error);
+    return { error: "Failed to delete cashier" };
   }
 }
 

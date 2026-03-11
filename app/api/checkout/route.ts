@@ -5,7 +5,7 @@ import { processPayment } from '@/lib/payment';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { storeId, items, total, customerInfo, paymentMethod } = body;
+    const { storeId, items, total, customerInfo, paymentMethod, specificType } = body;
 
     if (!storeId) {
       return NextResponse.json({ error: 'Store ID is required' }, { status: 400 });
@@ -37,11 +37,11 @@ export async function POST(req: NextRequest) {
     if (method === 'gateway') {
        // Fallback logic
        const settings = await prisma.store.findUnique({ where: { id: parseInt(storeId) } });
-       if (settings?.enableMidtrans) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'midtrans', parseInt(storeId));
-       else if (settings?.enableXendit) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'xendit', parseInt(storeId));
+       if (settings?.enableMidtrans) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'midtrans', parseInt(storeId), specificType);
+       else if (settings?.enableXendit) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'xendit', parseInt(storeId), specificType);
        else throw new Error("No gateway enabled");
     } else {
-       result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', method, parseInt(storeId));
+       result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', method, parseInt(storeId), specificType);
     }
 
     if (result.type === 'manual') {

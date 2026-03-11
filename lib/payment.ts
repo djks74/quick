@@ -7,8 +7,8 @@ function generateUniqueCode() {
   return Math.floor(Math.random() * 999) + 1;
 }
 
-export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number) {
-  console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}`);
+export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number, specificType?: string) {
+  console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}, Type ${specificType}`);
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
   
   // Use env variables as fallback since PlatformSettings might not be synced
@@ -135,7 +135,7 @@ export async function processPayment(orderId: number, amount: number, customerPh
       clientKey: clientKey
     });
 
-    const parameter = {
+    const parameter: any = {
       transaction_details: {
         order_id: `ORDER-${orderId}-${Date.now()}`, // Unique ID for Midtrans
         gross_amount: amount
@@ -144,6 +144,13 @@ export async function processPayment(orderId: number, amount: number, customerPh
         phone: customerPhone
       }
     };
+
+    // Filter Payment Methods if specificType is provided
+    if (specificType === 'qris') {
+        parameter.enabled_payments = ['gopay', 'shopeepay', 'qris', 'other_qris'];
+    } else if (specificType === 'bank_transfer') {
+        parameter.enabled_payments = ['bca_va', 'bni_va', 'bri_va', 'permata_va', 'other_va', 'echannel']; // 'echannel' is Mandiri Bill
+    }
 
     try {
       const transaction = await snap.createTransaction(parameter);
