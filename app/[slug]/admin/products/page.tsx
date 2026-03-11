@@ -5,7 +5,7 @@ import ProductsManager from "@/app/[slug]/admin/components/ProductsManager";
 
 export default async function AdminProducts({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const session = await getServerSession(authOptions);
+  const session = (await getServerSession(authOptions)) as any;
   const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
   
   const store = await getStoreBySlug(slug);
