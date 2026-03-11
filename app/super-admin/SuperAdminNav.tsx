@@ -1,10 +1,10 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { LogOut, Users, Store, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Users, Store, Settings, Wallet } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function SuperAdminNav({ totalStores }: { totalStores?: number }) {
   const pathname = usePathname();
