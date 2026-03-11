@@ -41,11 +41,16 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  console.log("Current Form State:", form);
+  console.log("Initial Defaults:", defaults);
+
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
+    console.log("Attempting to save with form:", form);
     try {
       const res = await updatePlatformSettings(form);
+      console.log("Update response:", res);
       if (res.success) {
         setSaveMessage("Settings saved successfully.");
         router.refresh();
@@ -54,6 +59,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
       }
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (e) {
+      console.error("Save catch error:", e);
       setSaveMessage("An error occurred while saving.");
     } finally {
       setIsSaving(false);
