@@ -16,7 +16,10 @@ import {
   Info,
   Clock,
   ArrowRight,
-  ChevronDown
+  ChevronDown,
+  Utensils,
+  CupSoda,
+  Package
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
@@ -43,6 +46,37 @@ interface Category {
   name: string;
   slug: string;
 }
+
+// Helper component for category-based animated icons
+const CategoryIcon = ({ category, themeColor }: { category?: string, themeColor: string }) => {
+  const name = category?.toLowerCase() || "";
+  
+  // Logic to detect category type
+  const isFood = name.includes("makan") || name.includes("food") || name.includes("nasi") || name.includes("mie") || name.includes("snack") || name.includes("ayam") || name.includes("satay") || name.includes("bread") || name.includes("cake");
+  const isDrink = name.includes("minum") || name.includes("drink") || name.includes("teh") || name.includes("kopi") || name.includes("coffee") || name.includes("juice") || name.includes("water") || name.includes("milk") || name.includes("soda") || name.includes("tea");
+
+  if (isFood) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center bg-orange-50/50 rounded-2xl group-hover:bg-orange-100/50 transition-colors">
+        <Utensils className="w-8 h-8 text-orange-400 animate-bounce duration-2000" style={{ color: themeColor }} />
+      </div>
+    );
+  }
+
+  if (isDrink) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center bg-blue-50/50 rounded-2xl group-hover:bg-blue-100/50 transition-colors">
+        <CupSoda className="w-8 h-8 text-blue-400 animate-pulse duration-1500" style={{ color: themeColor }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-gray-50/50 rounded-2xl group-hover:bg-gray-100/50 transition-colors">
+      <Package className="w-8 h-8 text-gray-300" />
+    </div>
+  );
+};
 
 export default function DigitalMenuClient({ products, store, categories = [] }: { products: Product[], store: any, categories?: Category[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -278,52 +312,54 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
             const totalQty = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
             return (
-              <div key={product.id} className="group bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all duration-300 flex gap-5">
-                {product.image && (
-                  <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-50">
+              <div key={product.id} className="group bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all duration-300 flex gap-4">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-50 relative">
+                  {product.image ? (
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  </div>
-                )}
-                <div className="flex-1 flex flex-col justify-between">
+                  ) : (
+                    <CategoryIcon category={product.category} themeColor={themeColor} />
+                  )}
+                </div>
+                <div className="flex-1 flex flex-col justify-between py-0.5">
                   <div>
                     <div className="flex justify-between items-start">
-                      <h3 className="font-black text-gray-900 leading-tight">{product.name}</h3>
-                      <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">{product.unit}</span>
+                      <h3 className="font-black text-gray-900 leading-tight text-sm">{product.name}</h3>
+                      <span className="text-[9px] font-black text-gray-300 uppercase tracking-tighter">{product.unit}</span>
                     </div>
                     {product.description && (
-                      <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">{product.description}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1 leading-relaxed">{product.description}</p>
                     )}
                   </div>
                   
-                  <div className="flex justify-between items-end mt-4">
-                    <p className="font-black text-primary text-lg" style={{ color: themeColor }}>
+                  <div className="flex justify-between items-end mt-2">
+                    <p className="font-black text-primary text-base" style={{ color: themeColor }}>
                       {product.variations && product.variations.length > 0 
                         ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))}`
                         : formatPrice(product.price)
                       }
-                      {product.variations && product.variations.length > 0 && <span className="text-[10px] text-gray-300 ml-1 font-bold italic">Start from</span>}
+                      {product.variations && product.variations.length > 0 && <span className="text-[9px] text-gray-300 ml-1 font-bold italic">Start from</span>}
                     </p>
 
                     {totalQty > 0 && !product.variations ? (
-                      <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-xl border border-gray-100">
+                      <div className="flex items-center gap-2 bg-gray-50 p-0.5 rounded-xl border border-gray-100">
                         <button 
                           onClick={() => updateQuantity(product.id, -1)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors"
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="font-black text-gray-900 w-4 text-center text-sm">{totalQty}</span>
+                        <span className="font-black text-gray-900 w-4 text-center text-xs">{totalQty}</span>
                         <button 
                           onClick={() => updateQuantity(product.id, 1)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-green-500 transition-colors"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-green-500 transition-colors"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ) : (
                       <button 
                         onClick={() => addToCart(product)}
-                        className="px-6 py-2.5 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5"
+                        className="px-4 py-2 rounded-xl bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5"
                         style={{ backgroundColor: themeColor }}
                       >
                         {totalQty > 0 ? 'Add More' : 'Add to Cart'}
