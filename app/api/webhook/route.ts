@@ -336,7 +336,7 @@ export async function POST(req: NextRequest) {
 
               menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
             });
-            menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
+            menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
 
             await sendWhatsAppMessage(from, menuText, targetStore.id);
             return NextResponse.json({ success: true });
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
                 : new Intl.NumberFormat('id-ID').format(p.price);
              menuText += `${idx + 1}. ${p.name} - ${priceRange}\n`;
           });
-          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply 'Done' to pay.\nReply 'Menu' to change category.`;
+          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
           
           await sendWhatsAppMessage(from, menuText, targetStore.id);
           return NextResponse.json({ success: true });
@@ -536,7 +536,7 @@ export async function POST(req: NextRequest) {
 
             menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
           });
-          menuText += `\nReply with "ItemNumber Quantity" (e.g. '1 2').\nReply 'Done' to checkout.`;
+          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
           await sendWhatsAppMessage(from, menuText, targetStore.id);
         } else if (textBody === '3') {
           // Quick Pay
@@ -590,7 +590,7 @@ export async function POST(req: NextRequest) {
         const stepParts = session.step.split(':');
         const currentCategory = stepParts.length > 1 && stepParts[1] !== 'ALL' ? stepParts[1] : null;
 
-        if (lowerText === 'done' || lowerText === 'checkout') {
+        if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank') {
           // Checkout logic
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
@@ -600,6 +600,11 @@ export async function POST(req: NextRequest) {
 
           const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
           
+          // Determine method from command if it's a simple "done [method]"
+          let method = undefined;
+          if (lowerText.includes('qris')) method = 'qris';
+          else if (lowerText.includes('bank')) method = 'bank_transfer';
+
           // Create Order with items
           const order = await prisma.order.create({
             data: {
@@ -618,11 +623,7 @@ export async function POST(req: NextRequest) {
             }
           });
 
-          // NOTIFY MERCHANT (New)
-          // Find store owner or use store whatsapp number
-          // If store has a whatsapp number configured, send to that.
-          // Otherwise, find the owner's phone number.
-          
+          // NOTIFY MERCHANT
           let merchantPhone = targetStore.whatsapp;
           if (!merchantPhone) {
               const owner = await prisma.user.findUnique({ where: { id: targetStore.ownerId } });
@@ -642,7 +643,7 @@ export async function POST(req: NextRequest) {
               await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
           }
 
-          const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id);
+          const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id, method);
           
           let summary = "🧾 *Order Summary*\n";
           cart.forEach(item => {
@@ -658,31 +659,37 @@ export async function POST(req: NextRequest) {
 
         // Parse "ItemIndex Quantity" (e.g. "1 2" or "1 2, 2 1")
         // Support comma separated orders: "1 2, 2 1"
+        // Support quick checkout: "1 1 done qris" or "1 1 done bank"
         const orderParts = textBody.split(',').map((p: string) => p.trim());
         const validOrders: { index: number, qty: number }[] = [];
-        let hasInvalidFormat = false;
+        let quickCheckoutMethod: string | undefined = undefined;
 
         for (const part of orderParts) {
-            const itemMatch = part.match(/^(\d+)\s+(\d+)$/);
+            // Regex to match "ItemNumber Quantity" with optional "done method"
+            const itemMatch = part.match(/^(\d+)\s+(\d+)(?:\s+done\s+(\w+))?$/i);
+            
             if (itemMatch) {
                 validOrders.push({
                     index: parseInt(itemMatch[1]) - 1, // 1-based to 0-based
                     qty: parseInt(itemMatch[2])
                 });
-            } else {
-                // If any part is "done", treat it as checkout trigger?
-                if (part.toLowerCase() === 'done' || part.toLowerCase() === 'checkout') {
-                    // Handled below but logic needs refactoring if mixed
-                } else {
-                    hasInvalidFormat = true;
+                // If this part has the checkout method, capture it
+                if (itemMatch[3]) {
+                    quickCheckoutMethod = itemMatch[3].toLowerCase();
                 }
             }
         }
         
-        // Refactor: If the text *contains* "done" at the end, we should process orders THEN checkout?
-        // Or if the user types "1 2, done", we process "1 2" then trigger checkout.
-        const isCheckoutCommand = lowerText.endsWith('done') || lowerText.endsWith('checkout');
+        const isCheckoutCommand = lowerText.includes('done') || lowerText.includes('checkout');
+        // Extract method from the whole text if not captured in parts
+        if (isCheckoutCommand && !quickCheckoutMethod) {
+            if (lowerText.includes('qris')) quickCheckoutMethod = 'qris';
+            else if (lowerText.includes('bank')) quickCheckoutMethod = 'bank_transfer';
+        }
         
+        // Normalize method names for createPaymentLink
+        if (quickCheckoutMethod === 'bank') quickCheckoutMethod = 'bank_transfer';
+
         if (validOrders.length > 0) {
           // Fetch products with SAME filter
           const whereClause: any = { storeId: targetStore.id };
@@ -724,10 +731,6 @@ export async function POST(req: NextRequest) {
              
              if (isCheckoutCommand) {
                  // Trigger Checkout Logic immediately
-                 // We need to jump to checkout logic block. 
-                 // Easiest way is to recursively call logic or copy-paste?
-                 // Let's refactor checkout logic into a helper function or just duplicate for now safely.
-                 
                  // --- CHECKOUT LOGIC START ---
                  const cart = currentCart; // Use updated cart
                  const total = cart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
@@ -770,7 +773,7 @@ export async function POST(req: NextRequest) {
                     await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
                  }
 
-                 const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id);
+                 const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id, quickCheckoutMethod);
                  
                  let summary = "🧾 *Order Summary*\n";
                  cart.forEach((item: any) => {
@@ -785,7 +788,7 @@ export async function POST(req: NextRequest) {
                  // --- CHECKOUT LOGIC END ---
 
              } else {
-                 await sendWhatsAppMessage(from, `Added to cart:\n${addedItemsMsg}\nReply with more items or 'Done' to checkout.`, targetStore.id);
+                 await sendWhatsAppMessage(from, `Added to cart:\n${addedItemsMsg}\nReply with more items, or "Done Qris/Bank" to checkout.\nReply 'Menu' to go back.`, targetStore.id);
              }
           } else {
              await sendWhatsAppMessage(from, `Invalid item number(s). Please check the menu.`, targetStore.id);

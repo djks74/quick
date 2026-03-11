@@ -223,14 +223,14 @@ export async function processPayment(orderId: number, amount: number, customerPh
 }
 
 // Deprecated function kept for backward compatibility (WhatsApp flow)
-export async function createPaymentLink(orderId: number, amount: number, customerPhone: string, storeId: number) {
+export async function createPaymentLink(orderId: number, amount: number, customerPhone: string, storeId: number, specificType?: string) {
   // Default to Midtrans if enabled, else manual mock
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
   
   // Try Midtrans first
   if (settings?.enableMidtrans) {
     try {
-      const res = await processPayment(orderId, amount, customerPhone, 'midtrans', storeId);
+      const res = await processPayment(orderId, amount, customerPhone, 'midtrans', storeId, specificType);
       return res.paymentUrl;
     } catch (e) {
       console.error("Failed to generate Midtrans link:", e);
@@ -241,7 +241,7 @@ export async function createPaymentLink(orderId: number, amount: number, custome
   // Try Xendit
   if (settings?.enableXendit) {
      try {
-      const res = await processPayment(orderId, amount, customerPhone, 'xendit', storeId);
+      const res = await processPayment(orderId, amount, customerPhone, 'xendit', storeId, specificType);
       return res.paymentUrl;
     } catch (e) {
       console.error("Failed to generate Xendit link:", e);
