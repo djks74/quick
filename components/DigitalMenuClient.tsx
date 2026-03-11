@@ -176,7 +176,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const calculatePlatformFee = (method: 'qris' | 'transfer') => {
       if (!isCustomerPaysFee) return 0;
       if (method === 'qris') return totalPrice * (qrisFeePercent / 100);
-      if (method === 'transfer') return transferFee;
+      // For bank transfer, it should be the flat fee, REGARDLESS of the total price (unless it's percentage based, but here it is flat)
+      if (method === 'transfer') return transferFee; 
       return 0;
   };
 
@@ -681,8 +682,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <CreditCard className="w-5 h-5" />
                         <span>Pay via Bank (Midtrans)</span>
                       </div>
-                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
+                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 ? (
                           <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
+                      ) : (
+                          // Fallback or empty if 0
+                          null
                       )}
                     </button>
                 </div>
