@@ -532,37 +532,36 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
                       disabled={!store.isOpen}
-                      className="py-5 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      className="py-6 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <div className="flex items-center gap-2">
                           <MessageCircle className="w-5 h-5" />
                           <span className="text-sm">Pay via QRIS</span>
                        </div>
-                       <div className="flex flex-col items-center opacity-95">
-                          <span className="text-xs font-black">
+                       <div className="flex flex-col items-center opacity-100">
+                          <span className="text-sm font-black">
                              {formatPrice(totalPrice + calculatePlatformFee('qris'))}
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
-                            <span className="text-[8px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
                           )}
                        </div>
                     </button>
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
                       disabled={!store.isOpen}
-                      className="py-5 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
-                      style={store.isOpen ? { backgroundColor: themeColor } : {}}
+                      className="py-6 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50"
                     >
                        <div className="flex items-center gap-2">
                           <CreditCard className="w-5 h-5" />
                           <span className="text-sm">Bank Transfer</span>
                        </div>
-                       <div className="flex flex-col items-center opacity-95">
-                          <span className="text-xs font-black">
+                       <div className="flex flex-col items-center opacity-100">
+                          <span className="text-sm font-black">
                              {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
                           </span>
                           {calculatePlatformFee('transfer') > 0 && (
-                            <span className="text-[8px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
                           )}
                        </div>
                     </button>
