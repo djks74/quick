@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { MessageCircle, ShoppingBag, Store, ArrowRight, Globe } from "lucide-react";
+import { MessageCircle, ShoppingBag, Store, ArrowRight, Globe, QrCode } from "lucide-react";
 import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 const translations = {
   en: {
@@ -19,7 +20,8 @@ const translations = {
     easy_payment: "Easy Payment",
     order_via_whatsapp: "Order via WhatsApp",
     new_order: "New Order",
-    whatsapp_features: "Manage products, update pricing, and fulfill orders—all directly within WhatsApp."
+    whatsapp_features: "Manage products, update pricing, and fulfill orders—all directly within WhatsApp.",
+    scan_demo: "Scan to try Demo"
   },
   id: {
     login: "Masuk",
@@ -35,7 +37,8 @@ const translations = {
     easy_payment: "Pembayaran Mudah",
     order_via_whatsapp: "Pesan via WhatsApp",
     new_order: "Pesanan Baru",
-    whatsapp_features: "Kelola produk, perbarui harga, dan penuhi pesanan—semuanya langsung di dalam WhatsApp."
+    whatsapp_features: "Kelola produk, perbarui harga, dan penuhi pesanan—semuanya langsung di dalam WhatsApp.",
+    scan_demo: "Scan untuk coba Demo"
   }
 };
 
@@ -203,6 +206,33 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Floating QR Demo (Desktop only) */}
+      <div className="fixed bottom-8 left-8 z-40 hidden xl:flex flex-col items-center gap-3 animate-fade-in">
+        <div className="bg-white p-4 rounded-[2rem] shadow-2xl border border-gray-100 group hover:scale-105 transition-transform duration-300">
+           <div className="relative">
+              <QRCodeSVG 
+                value="https://quick.mythoz.com/demo" 
+                size={120}
+                level="H"
+                includeMargin={false}
+                imageSettings={{
+                  src: "/favicon.ico",
+                  x: undefined,
+                  y: undefined,
+                  height: 24,
+                  width: 24,
+                  excavate: true,
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors rounded-xl"></div>
+           </div>
+        </div>
+        <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-white flex items-center gap-2">
+           <QrCode className="w-4 h-4 text-blue-600" />
+           <span className="text-xs font-bold text-gray-800 tracking-tight">{t.scan_demo}</span>
+        </div>
+      </div>
     </div>
   );
 }
