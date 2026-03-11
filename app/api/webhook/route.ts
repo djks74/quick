@@ -605,12 +605,24 @@ export async function POST(req: NextRequest) {
           if (lowerText.includes('qris')) method = 'qris';
           else if (lowerText.includes('bank')) method = 'bank_transfer';
 
+          // Calculate specific fee for this method (Server-side)
+          let fee = 0;
+          if (targetStore.feePaidBy === 'CUSTOMER') {
+              if (method === 'qris' && targetStore.qrisFeePercent) {
+                  fee = total * (Number(targetStore.qrisFeePercent) / 100);
+              } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
+                  fee = Number(targetStore.manualTransferFee);
+              }
+          }
+          
+          const finalTotal = total + fee;
+
           // Create Order with items
           const order = await prisma.order.create({
             data: {
               storeId: targetStore.id,
               customerPhone: from,
-              totalAmount: total,
+              totalAmount: finalTotal, // Use final total including fees
               status: 'PENDING',
               tableNumber: session.tableNumber,
               items: {
@@ -637,19 +649,26 @@ export async function POST(req: NextRequest) {
               cart.forEach(item => {
                 merchantMsg += `${item.qty}x ${item.name}\n`;
               });
-              merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+              if (fee > 0) {
+                  merchantMsg += `➕ Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+              }
+              merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n`;
               merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
               
               await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
           }
 
-          const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id, method);
+          const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
           
           let summary = "🧾 *Order Summary*\n";
           cart.forEach(item => {
             summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
           });
-          summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}*`;
+          
+          if (fee > 0) {
+              summary += `\nFee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}`;
+          }
+          summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
           summary += `\n\nPay here: ${paymentLink}`;
 
           await sendWhatsAppMessage(from, summary, targetStore.id);
@@ -735,12 +754,27 @@ export async function POST(req: NextRequest) {
                  const cart = currentCart; // Use updated cart
                  const total = cart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
           
+                 // Determine method from command if it's a simple "done [method]"
+                 let method = quickCheckoutMethod;
+                 
+                 // Calculate specific fee for this method (Server-side)
+                 let fee = 0;
+                 if (targetStore.feePaidBy === 'CUSTOMER') {
+                     if (method === 'qris' && targetStore.qrisFeePercent) {
+                         fee = total * (Number(targetStore.qrisFeePercent) / 100);
+                     } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
+                         fee = Number(targetStore.manualTransferFee);
+                     }
+                 }
+                 
+                 const finalTotal = total + fee;
+
                  // Create Order with items
                  const order = await prisma.order.create({
                     data: {
                       storeId: targetStore.id,
                       customerPhone: from,
-                      totalAmount: total,
+                      totalAmount: finalTotal, // Use final total including fees
                       status: 'PENDING',
                       tableNumber: session.tableNumber,
                       items: {
@@ -767,19 +801,25 @@ export async function POST(req: NextRequest) {
                     cart.forEach((item: any) => {
                         merchantMsg += `${item.qty}x ${item.name}\n`;
                     });
-                    merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+                    if (fee > 0) {
+                        merchantMsg += `➕ Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+                    }
+                    merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n`;
                     merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
                     
                     await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
                  }
 
-                 const paymentLink = await createPaymentLink(order.id, total, from, targetStore.id, quickCheckoutMethod);
+                 const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
                  
                  let summary = "🧾 *Order Summary*\n";
                  cart.forEach((item: any) => {
                     summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
                  });
-                 summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(total)}*`;
+                 if (fee > 0) {
+                     summary += `\nFee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}`;
+                 }
+                 summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
                  summary += `\n\nPay here: ${paymentLink}`;
 
                  await sendWhatsAppMessage(from, summary, targetStore.id);
