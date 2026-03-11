@@ -532,7 +532,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
                       disabled={!store.isOpen}
-                      className="py-6 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      className="py-[18px] bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <div className="flex items-center gap-2">
                           <MessageCircle className="w-5 h-5" />
@@ -550,7 +550,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
                       disabled={!store.isOpen}
-                      className="py-6 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                      className="py-[18px] bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
                     >
                        <div className="flex items-center gap-2">
                           <CreditCard className="w-5 h-5" />
