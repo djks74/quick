@@ -127,7 +127,6 @@ export default function AdminSettings() {
 
       if (result) {
         setSiteName(settings.storeName);
-        setHeaderSettings(prev => ({ ...prev, siteName: settings.storeName }));
         setSaveMessage("Settings saved successfully.");
         // Update local state with returned data to ensure sync
         setSettings(prev => ({

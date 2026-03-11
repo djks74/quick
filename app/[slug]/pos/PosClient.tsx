@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { createPosOrder } from "@/lib/api";
-import useSound from 'use-sound'; // We need to install this or implement simple audio
+// import useSound from 'use-sound'; // Removed to fix build error, using native Audio API instead
 
 // Simple sound player
 const playBeep = () => {
