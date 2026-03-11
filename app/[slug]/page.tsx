@@ -34,16 +34,13 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   }));
 
   // Serialize store data to avoid "Date object" error in Client Component
-  const serializedStore = {
+  // Using JSON parse/stringify as a foolproof way to ensure everything is serializable
+  const serializedStore = JSON.parse(JSON.stringify({
     ...store,
-    createdAt: store.createdAt.toISOString(),
-    updatedAt: store.updatedAt.toISOString(),
-    categories: (store.categories || []).map(c => ({
-      ...c,
-      createdAt: c.createdAt.toISOString(),
-      updatedAt: c.updatedAt.toISOString()
-    }))
-  };
+    categories: store.categories || []
+  }));
 
-  return <DigitalMenuClient products={products} store={serializedStore} categories={serializedStore.categories} />;
+  const serializedProducts = JSON.parse(JSON.stringify(products));
+
+  return <DigitalMenuClient products={serializedProducts} store={serializedStore} categories={serializedStore.categories} />;
 }
