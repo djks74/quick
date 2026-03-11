@@ -478,17 +478,33 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               <div className="flex-1 overflow-y-auto p-8 space-y-6">
                  {cart.map((item, idx) => (
                     <div key={idx} className="flex gap-4 items-center animate-in slide-in-from-right duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
-                       <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0">
-                          {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-200 font-black">{item.name.charAt(0)}</div>}
+                       <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0 relative">
+                          {item.image ? (
+                            <img src={item.image} className="w-full h-full object-cover" />
+                          ) : (
+                            <CategoryIcon category={item.category} themeColor={themeColor} />
+                          )}
                        </div>
                        <div className="flex-1">
                           <h4 className="font-black text-gray-900 text-sm">{item.name}{item.selectedVariation && <span className="text-gray-400 font-bold text-[10px] block uppercase">Variation: {item.selectedVariation.name}</span>}</h4>
                           <p className="text-xs font-black text-primary mt-1" style={{ color: themeColor }}>{formatPrice(item.price)}</p>
                        </div>
                        <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-xl">
-                          <button onClick={() => updateQuantity(item.id, -1, item.selectedVariation?.name)} className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400"><Minus className="w-3 h-3" /></button>
+                          <button 
+                            onClick={() => updateQuantity(item.id, -1, item.selectedVariation?.name)}
+                            disabled={!store.isOpen}
+                            className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400 disabled:opacity-50"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
                           <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.id, 1, item.selectedVariation?.name)} className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400"><Plus className="w-3 h-3" /></button>
+                          <button 
+                            onClick={() => updateQuantity(item.id, 1, item.selectedVariation?.name)}
+                            disabled={!store.isOpen}
+                            className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400 disabled:opacity-50"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
                        </div>
                     </div>
                  ))}
@@ -516,19 +532,31 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
                       disabled={!store.isOpen}
-                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
-                       <MessageCircle className="w-4 h-4" />
-                       Pay via QRIS
+                       <div className="flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4" />
+                          <span>Pay via QRIS</span>
+                       </div>
+                       <span className="opacity-80 text-[8px]">
+                          {formatPrice(totalPrice + calculatePlatformFee('qris'))} 
+                          {calculatePlatformFee('qris') > 0 && ` (Inc. Fee)`}
+                       </span>
                     </button>
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
                       disabled={!store.isOpen}
-                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-black/20 flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform disabled:opacity-50"
                       style={store.isOpen ? { backgroundColor: themeColor } : {}}
                     >
-                       <CreditCard className="w-4 h-4" />
-                       Bank Transfer
+                       <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4" />
+                          <span>Bank Transfer</span>
+                       </div>
+                       <span className="opacity-80 text-[8px]">
+                          {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
+                          {calculatePlatformFee('transfer') > 0 && ` (Inc. Fee)`}
+                       </span>
                     </button>
                  </div>
                  {!store.isOpen && (
