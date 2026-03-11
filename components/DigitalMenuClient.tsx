@@ -51,28 +51,28 @@ interface Category {
 const CategoryIcon = ({ category, themeColor }: { category?: string, themeColor: string }) => {
   const name = category?.toLowerCase() || "";
   
-  // Logic to detect category type
-  const isFood = name.includes("makan") || name.includes("food") || name.includes("nasi") || name.includes("mie") || name.includes("snack") || name.includes("ayam") || name.includes("satay") || name.includes("bread") || name.includes("cake");
-  const isDrink = name.includes("minum") || name.includes("drink") || name.includes("teh") || name.includes("kopi") || name.includes("coffee") || name.includes("juice") || name.includes("water") || name.includes("milk") || name.includes("soda") || name.includes("tea");
+  // Expanded logic to detect category type
+  const isFood = name.includes("makan") || name.includes("food") || name.includes("nasi") || name.includes("mie") || name.includes("snack") || name.includes("ayam") || name.includes("satay") || name.includes("bread") || name.includes("cake") || name.includes("goreng") || name.includes("bakso") || name.includes("soto");
+  const isDrink = name.includes("minum") || name.includes("drink") || name.includes("teh") || name.includes("kopi") || name.includes("coffee") || name.includes("juice") || name.includes("water") || name.includes("milk") || name.includes("soda") || name.includes("tea") || name.includes("ice") || name.includes("es");
 
   if (isFood) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center bg-orange-50/50 rounded-2xl group-hover:bg-orange-100/50 transition-colors">
-        <Utensils className="w-8 h-8 text-orange-400 animate-bounce duration-2000" style={{ color: themeColor }} />
+      <div className="relative w-full h-full flex items-center justify-center bg-orange-50 rounded-2xl group-hover:bg-orange-100 transition-colors">
+        <Utensils className="w-8 h-8 text-orange-500 animate-bounce duration-2000" style={{ color: themeColor }} />
       </div>
     );
   }
 
   if (isDrink) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center bg-blue-50/50 rounded-2xl group-hover:bg-blue-100/50 transition-colors">
-        <CupSoda className="w-8 h-8 text-blue-400 animate-pulse duration-1500" style={{ color: themeColor }} />
+      <div className="relative w-full h-full flex items-center justify-center bg-blue-50 rounded-2xl group-hover:bg-blue-100 transition-colors">
+        <CupSoda className="w-8 h-8 text-blue-500 animate-pulse duration-1500" style={{ color: themeColor }} />
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-gray-50/50 rounded-2xl group-hover:bg-gray-100/50 transition-colors">
+    <div className="relative w-full h-full flex items-center justify-center bg-gray-50 rounded-2xl group-hover:bg-gray-100 transition-colors">
       <Package className="w-8 h-8 text-gray-300" />
     </div>
   );
@@ -323,10 +323,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
             return (
               <div key={product.id} className="group bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all duration-300 flex gap-4">
                 <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-50 relative">
-                  {product.image ? (
+                  {product.image && product.image.startsWith('http') ? (
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   ) : (
-                    <CategoryIcon category={product.category} themeColor={themeColor} />
+                    <CategoryIcon category={product.category || product.name} themeColor={themeColor} />
                   )}
                 </div>
                 <div className="flex-1 flex flex-col justify-between py-0.5">
@@ -479,10 +479,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  {cart.map((item, idx) => (
                     <div key={idx} className="flex gap-4 items-center animate-in slide-in-from-right duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
                        <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0 relative">
-                          {item.image ? (
+                          {item.image && item.image.startsWith('http') ? (
                             <img src={item.image} className="w-full h-full object-cover" />
                           ) : (
-                            <CategoryIcon category={item.category} themeColor={themeColor} />
+                            <CategoryIcon category={item.category || item.name} themeColor={themeColor} />
                           )}
                        </div>
                        <div className="flex-1">
@@ -532,31 +532,39 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
                       disabled={!store.isOpen}
-                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      className="py-5 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <div className="flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4" />
-                          <span>Pay via QRIS</span>
+                          <MessageCircle className="w-5 h-5" />
+                          <span className="text-sm">Pay via QRIS</span>
                        </div>
-                       <span className="opacity-80 text-[8px]">
-                          {formatPrice(totalPrice + calculatePlatformFee('qris'))} 
-                          {calculatePlatformFee('qris') > 0 && ` (Inc. Fee)`}
-                       </span>
+                       <div className="flex flex-col items-center opacity-95">
+                          <span className="text-xs font-black">
+                             {formatPrice(totalPrice + calculatePlatformFee('qris'))}
+                          </span>
+                          {calculatePlatformFee('qris') > 0 && (
+                            <span className="text-[8px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
+                          )}
+                       </div>
                     </button>
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
                       disabled={!store.isOpen}
-                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-black/20 flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                      className="py-5 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
                       style={store.isOpen ? { backgroundColor: themeColor } : {}}
                     >
                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4" />
-                          <span>Bank Transfer</span>
+                          <CreditCard className="w-5 h-5" />
+                          <span className="text-sm">Bank Transfer</span>
                        </div>
-                       <span className="opacity-80 text-[8px]">
-                          {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
-                          {calculatePlatformFee('transfer') > 0 && ` (Inc. Fee)`}
-                       </span>
+                       <div className="flex flex-col items-center opacity-95">
+                          <span className="text-xs font-black">
+                             {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
+                          </span>
+                          {calculatePlatformFee('transfer') > 0 && (
+                            <span className="text-[8px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
+                          )}
+                       </div>
                     </button>
                  </div>
                  {!store.isOpen && (
