@@ -10,8 +10,8 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import ProductForm from "./ProductForm";
-import CategoryForm from "./CategoryForm";
+import ProductForm from "@/app/[slug]/admin/products/ProductForm";
+import CategoryForm from "@/app/[slug]/admin/products/CategoryForm";
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, updateCategory, deleteCategory } from "@/lib/api";
 import { cn } from "@/lib/utils";
 

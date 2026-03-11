@@ -1,7 +1,7 @@
 import { getProducts, getCategories, getStoreBySlug } from "@/lib/api";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import ProductsManager from "../components/ProductsManager";
+import ProductsManager from "@/app/[slug]/admin/components/ProductsManager";
 
 export default async function AdminProducts({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
