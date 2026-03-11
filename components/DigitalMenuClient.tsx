@@ -1,9 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ShoppingCart, Minus, Plus, Trash2, CreditCard, MessageCircle, Phone, Globe, X } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { 
+  ShoppingCart, 
+  Minus, 
+  Plus, 
+  Trash2, 
+  CreditCard, 
+  MessageCircle, 
+  Phone, 
+  Globe, 
+  X,
+  Search,
+  ChevronRight,
+  Info,
+  Clock,
+  ArrowRight,
+  ChevronDown
+} from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: number;
@@ -30,7 +47,6 @@ interface Category {
 export default function DigitalMenuClient({ products, store, categories = [] }: { products: Product[], store: any, categories?: Category[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [settings, setSettings] = useState<any>(store);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<number | null>(null);
@@ -40,8 +56,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const tableNumber = searchParams.get('table');
 
   const [mounted, setMounted] = useState(false);
-  
-  // Category State
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   // Variation State
@@ -53,14 +68,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [customerPhone, setCustomerPhone] = useState("");
   const [checkInStep, setCheckInStep] = useState<'input' | 'choice' | 'success'>('input');
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
   
   useEffect(() => {
     setMounted(true);
-    if (store) {
-        setSettings(store);
-    }
-    
     // Check-In Logic
     if (tableNumber) {
         const stored = localStorage.getItem('customerPhone');
@@ -70,7 +80,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
             setCustomerPhone(stored);
         }
     }
-  }, [store, tableNumber]);
+  }, [tableNumber]);
 
   const handleCheckIn = () => {
     if (!customerPhone) return;
@@ -79,8 +89,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
   const handleChoice = async (choice: 'whatsapp' | 'web') => {
       localStorage.setItem('customerPhone', customerPhone);
-      
-      // Call API to trigger server message
       try {
           await fetch('/api/check-in', {
               method: 'POST',
@@ -96,7 +104,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
       }
 
       if (choice === 'whatsapp') {
-          // Show Success, Don't Redirect
           setCheckInStep('success');
       } else {
           setShowCheckIn(false);
@@ -104,7 +111,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   };
 
   const addToCart = (product: Product, variation?: { name: string; price: number }) => {
-    // If product has variations and none selected, open modal
     if (product.variations && product.variations.length > 0 && !variation) {
         setProductForVariation(product);
         setSelectedVariation(product.variations[0]);
@@ -116,7 +122,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     const variationName = variation ? variation.name : undefined;
 
     setCart(prev => {
-      // Find exact match (Same ID AND Same Variation)
       const existing = prev.find(item => 
           item.id === product.id && 
           item.selectedVariation?.name === variationName
@@ -133,21 +138,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     });
   };
 
-  const confirmVariation = () => {
-    if (productForVariation && selectedVariation) {
-        addToCart(productForVariation, selectedVariation);
-        setVariationModalOpen(false);
-        setProductForVariation(null);
-        setSelectedVariation(null);
-    }
-  };
-
-  const removeFromCart = (productId: number, variationName?: string) => {
-    setCart(prev => prev.filter(item => 
-        !(item.id === productId && item.selectedVariation?.name === variationName)
-    ));
-  };
-
   const updateQuantity = (productId: number, delta: number, variationName?: string) => {
     setCart(prev => prev.map(item => {
       if (item.id === productId && item.selectedVariation?.name === variationName) {
@@ -160,684 +150,385 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
   const taxPercent = parseFloat(store.taxPercent?.toString() || "0");
   const servicePercent = parseFloat(store.serviceChargePercent?.toString() || "0");
-  
-  // Calculate Platform Fee (only for display estimation)
   const qrisFeePercent = parseFloat((store.qrisFeePercent ?? 0).toString());
   const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
   const isCustomerPaysFee = store.feePaidBy === 'CUSTOMER';
 
-  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
   const tax = subtotal * (taxPercent / 100);
   const serviceCharge = subtotal * (servicePercent / 100);
   const totalPrice = subtotal + tax + serviceCharge;
 
-  // Function to calculate fee based on potential payment method
   const calculatePlatformFee = (method: 'qris' | 'transfer') => {
       if (!isCustomerPaysFee) return 0;
       if (method === 'qris') return totalPrice * (qrisFeePercent / 100);
-      // For bank transfer, it should be the flat fee, REGARDLESS of the total price (unless it's percentage based, but here it is flat)
       if (method === 'transfer') return transferFee; 
       return 0;
   };
 
   const handleWhatsAppCheckout = (method: 'qris' | 'bank') => {
     if (cart.length === 0) return;
-
-    // Calculate specific fee for this method
-    let fee = 0;
-    if (isCustomerPaysFee) {
-        if (method === 'qris' && qrisFeePercent > 0) {
-            fee = totalPrice * (qrisFeePercent / 100);
-        } else if (method === 'bank' && transferFee > 0) {
-            fee = transferFee;
-        }
-    }
-    
+    let fee = isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
     const finalTotal = totalPrice + fee;
 
-    // Construct WhatsApp message
-    let message = `Hello ${store?.name || siteConfig.name}, I would like to order`;
-    if (tableNumber) {
-      message += ` for *Table ${tableNumber}*`;
-    }
+    let message = `Hello ${store?.name}, I'd like to order`;
+    if (tableNumber) message += ` for *Table ${tableNumber}*`;
     message += `:\n\n`;
-    
     cart.forEach(item => {
-      message += `- ${item.quantity}x ${item.name} @ ${formatPrice(item.price)}\n`;
+      message += `- ${item.quantity}x ${item.name}${item.selectedVariation ? ` (${item.selectedVariation.name})` : ''} @ ${formatPrice(item.price)}\n`;
     });
-    
-    if (tax > 0) {
-        message += `Tax (${taxPercent}%): ${formatPrice(tax)}\n`;
-    }
-    if (serviceCharge > 0) {
-        message += `Service Charge (${servicePercent}%): ${formatPrice(serviceCharge)}\n`;
-    }
-    
-    // Fee line
-    if (fee > 0) {
-        message += `Platform Fee (${method === 'qris' ? 'QRIS' : 'Bank Transfer'}): ${formatPrice(fee)}\n`;
-    }
-
+    if (tax > 0) message += `Tax (${taxPercent}%): ${formatPrice(tax)}\n`;
+    if (serviceCharge > 0) message += `Service Charge (${servicePercent}%): ${formatPrice(serviceCharge)}\n`;
+    if (fee > 0) message += `Fee: ${formatPrice(fee)}\n`;
     message += `\nTotal: *${formatPrice(finalTotal)}*`;
-    message += `\n\nDone ${method === 'qris' ? 'qris' : 'bank'}`;
-    message += `\nPlease process my order. Thank you!`;
-
-    // Encode for URL
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${settings?.whatsapp || siteConfig.whatsappNumber}?text=${encodedMessage}`;
-    
-    // Open WhatsApp
+    const whatsappUrl = `https://wa.me/${store?.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
-  };
-
-  const handlePaymentGatewayCheckout = async (provider: string, type: 'qris' | 'bank_transfer' | 'manual' = 'manual') => {
-    setIsProcessing(true);
-    try {
-      // Calculate Payment Fee
-      let paymentFee = 0;
-      if (isCustomerPaysFee) {
-          if (provider === 'manual' && transferFee > 0) {
-              paymentFee = transferFee;
-          } else if ((provider === 'midtrans' || provider === 'xendit')) {
-              // Fee depends on the specific TYPE chosen (QRIS or Bank)
-              if (type === 'qris' && qrisFeePercent > 0) {
-                  paymentFee = totalPrice * (qrisFeePercent / 100);
-              } else if (type === 'bank_transfer' && transferFee > 0) {
-                  // For Midtrans Bank Transfer, usually it's a fixed fee + % or just fixed.
-                  // But based on your request: "if choose bank it will charged 5000"
-                  // So we apply the manualTransferFee (5000) logic here too?
-                  // OR do we use a separate "Payment Gateway Bank Fee"?
-                  // Let's assume we use the same `transferFee` (5000) for now as requested.
-                  paymentFee = transferFee;
-              }
-          }
-      }
-      
-      const finalTotal = totalPrice + paymentFee;
-
-      // If manual transfer, show bank details directly
-      if (provider === 'manual') {
-          // Construct order details for simulation (since we don't have real order ID yet)
-          // In real app, you might want to create order first via API then show details
-          const res = await fetch('/api/checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              storeId: store.id,
-              items: cart,
-              total: finalTotal,
-              paymentFee: paymentFee,
-              customerInfo: { phone: customerPhone || 'WEB_USER', tableNumber: tableNumber },
-              paymentMethod: 'manual'
-            })
-          });
-          const data = await res.json();
-          if (data.success) {
-              setLastOrderId(data.orderId);
-              setBankInfo(data.bankInfo);
-              setFinalAmount(data.amount);
-              setShowBankDetails(true);
-              setIsCartOpen(false);
-              setCart([]);
-          } else {
-              alert('Checkout failed: ' + (data.error || 'Unknown error'));
-          }
-          setIsProcessing(false);
-          return;
-      }
-
-      // If gateway (Midtrans/Xendit), create transaction with specific type
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storeId: store.id, // Pass storeId
-          items: cart,
-          total: finalTotal, // Include fee
-          paymentFee: paymentFee, // Pass fee breakdown if API supports it
-          customerInfo: { phone: customerPhone || 'WEB_USER', tableNumber: tableNumber },
-          paymentMethod: 'gateway', // Generic gateway trigger
-          specificType: type // Pass the specific type (qris/bank_transfer) to backend
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) {
-         if (data.paymentUrl) {
-          window.location.href = data.paymentUrl;
-        }
-      } else {
-        alert('Checkout failed: ' + (data.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Checkout failed. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
 
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase();
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchQuery, selectedCategory]);
 
-  const themeColor = settings?.themeColor || siteConfig.themeColor;
+  const themeColor = store?.themeColor || siteConfig.themeColor;
+
+  if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24" style={{ '--theme-color': themeColor } as any}>
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-white shadow-sm px-4 py-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900" style={{ color: themeColor }}>
-            {settings?.name || siteConfig.name}
-          </h1>
-          <p className="text-sm text-gray-500">WhatsApp Order: {settings?.whatsapp || siteConfig.whatsappNumber}</p>
-        </div>
-        <div className="flex gap-2 items-center">
-          <a href="/" className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-            Home
-          </a>
-        </div>
-      </header>
-
-      {/* Menu Grid */}
-      <main className="max-w-md mx-auto p-4 space-y-4">
-        
-        {/* Category Tabs */}
-        {categories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 sticky top-[72px] z-10 bg-gray-50/95 backdrop-blur-sm py-2">
-            <button
-              onClick={() => setSelectedCategory("All")}
-              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
-                selectedCategory === "All" 
-                  ? "bg-black text-white" 
-                  : "bg-white text-gray-600 border border-gray-200"
-              }`}
-              style={selectedCategory === "All" ? { backgroundColor: themeColor } : {}}
-            >
-              All
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.name)}
-                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
-                  selectedCategory === cat.name
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-600 border border-gray-200"
-                }`}
-                style={selectedCategory === cat.name ? { backgroundColor: themeColor } : {}}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">
-             {selectedCategory === "All" ? "Menu" : selectedCategory}
-          </h2>
-          <span className="text-xs text-gray-400 font-medium">
-            {products.filter(p => selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase()).length} Items
-          </span>
-        </div>
-        
-        <div className="grid gap-4">
-          {products
-            .filter(p => selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase())
-            .map((product) => {
-            // Check if product is in cart (sum of all variations)
-            const cartItems = cart.filter(item => item.id === product.id);
-            const totalQty = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-            
-            return (
-              <div key={product.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900">{product.name}</h3>
-                  <p className="text-sm text-gray-500">{product.unit}</p>
-                  <p className="text-primary font-bold mt-1" style={{ color: themeColor }}>
-                    {product.variations && product.variations.length > 0 
-                      ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))} - ${formatPrice(Math.max(...product.variations.map(v => v.price)))}`
-                      : formatPrice(product.price)
-                    }
-                  </p>
-                </div>
-                
-                {totalQty > 0 && !product.variations ? (
-                   <div className="flex items-center space-x-3 bg-gray-50 rounded-lg p-1">
-                      <button 
-                        onClick={() => updateQuantity(product.id, -1)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-red-500 transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="font-bold text-gray-900 w-4 text-center">{totalQty}</span>
-                      <button 
-                        onClick={() => updateQuantity(product.id, 1)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-green-500 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                   </div>
-                ) : (
-                  <button 
-                    onClick={() => addToCart(product)}
-                    className="px-4 py-2 rounded-lg text-white font-medium text-sm transition-opacity hover:opacity-90 shadow-md shadow-primary/20"
-                    style={{ backgroundColor: themeColor }}
-                  >
-                    {totalQty > 0 ? 'Add More' : 'Add'}
-                  </button>
-                )}
+    <div className="min-h-screen bg-[#F8F9FB] text-[#1A1C1E] pb-32 font-sans selection:bg-opacity-30" style={{ '--theme-color': themeColor } as any}>
+      {/* Dynamic Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-4">
+        <div className="max-w-2xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gray-900 to-gray-700 flex items-center justify-center text-white font-black shadow-lg shadow-black/5" style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}dd)` }}>
+              {store.name.charAt(0)}
+            </div>
+            <div>
+              <h1 className="text-lg font-black tracking-tight leading-none">{store.name}</h1>
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Open Now</span>
               </div>
-            );
-          })}
-
-          {products.length === 0 && (
-            <div className="text-center py-10 text-gray-400">
-              <p className="mb-2">Welcome to {settings?.name}!</p>
-              <p className="text-xs">No products available yet.</p>
+            </div>
+          </div>
+          {tableNumber && (
+            <div className="px-3 py-1.5 bg-gray-100 rounded-full flex items-center gap-2 border border-gray-200/50">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Table</span>
+              <span className="text-sm font-black text-gray-900">{tableNumber}</span>
             </div>
           )}
         </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-6 pt-8 space-y-8">
+        {/* Search Bar */}
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 group-focus-within:text-primary transition-colors" />
+          <input 
+            type="text"
+            placeholder="Search our menu..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border border-gray-100 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-sm font-medium"
+          />
+        </div>
+
+        {/* Category Scroll */}
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6 sticky top-[81px] z-30 bg-[#F8F9FB]/95 backdrop-blur-md py-4">
+          <button
+            onClick={() => setSelectedCategory("All")}
+            className={cn(
+              "px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap",
+              selectedCategory === "All" 
+                ? "bg-gray-900 text-white shadow-xl shadow-black/10 scale-105" 
+                : "bg-white text-gray-400 border border-gray-100 hover:border-gray-200"
+            )}
+            style={selectedCategory === "All" ? { backgroundColor: themeColor } : {}}
+          >
+            All Menu
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.name)}
+              className={cn(
+                "px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                selectedCategory === cat.name
+                  ? "bg-gray-900 text-white shadow-xl shadow-black/10 scale-105"
+                  : "bg-white text-gray-400 border border-gray-100 hover:border-gray-200"
+              )}
+              style={selectedCategory === cat.name ? { backgroundColor: themeColor } : {}}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Product List */}
+        <div className="grid gap-6">
+          {filteredProducts.map((product) => {
+            const cartItems = cart.filter(item => item.id === product.id);
+            const totalQty = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+
+            return (
+              <div key={product.id} className="group bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all duration-300 flex gap-5">
+                {product.image && (
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-50">
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  </div>
+                )}
+                <div className="flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-black text-gray-900 leading-tight">{product.name}</h3>
+                      <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">{product.unit}</span>
+                    </div>
+                    {product.description && (
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">{product.description}</p>
+                    )}
+                  </div>
+                  
+                  <div className="flex justify-between items-end mt-4">
+                    <p className="font-black text-primary text-lg" style={{ color: themeColor }}>
+                      {product.variations && product.variations.length > 0 
+                        ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))}`
+                        : formatPrice(product.price)
+                      }
+                      {product.variations && product.variations.length > 0 && <span className="text-[10px] text-gray-300 ml-1 font-bold italic">Start from</span>}
+                    </p>
+
+                    {totalQty > 0 && !product.variations ? (
+                      <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-xl border border-gray-100">
+                        <button 
+                          onClick={() => updateQuantity(product.id, -1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="font-black text-gray-900 w-4 text-center text-sm">{totalQty}</span>
+                        <button 
+                          onClick={() => updateQuantity(product.id, 1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-green-500 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => addToCart(product)}
+                        className="px-6 py-2.5 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5"
+                        style={{ backgroundColor: themeColor }}
+                      >
+                        {totalQty > 0 ? 'Add More' : 'Add to Cart'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </main>
-      
-      {/* Floating Cart Button */}
-      {totalItems > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto z-20">
+
+      {/* Floating Modern Cart */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-8 left-6 right-6 z-50">
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full py-3 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center transform active:scale-95 transition-all duration-200"
+            className="max-w-lg mx-auto w-full bg-gray-900 p-2 rounded-3xl shadow-2xl shadow-black/20 flex items-center gap-4 group"
             style={{ backgroundColor: themeColor }}
           >
-            <div className="flex items-center space-x-2">
-              <div className="bg-white/20 px-2 py-0.5 rounded text-sm">
-                {totalItems}
-              </div>
-              <span className="text-sm font-medium">Items</span>
+            <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white relative">
+              <ShoppingCart className="w-6 h-6" />
+              <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full text-[10px] font-black flex items-center justify-center border-2 border-gray-900" style={{ borderColor: themeColor }}>
+                {cart.reduce((acc, item) => acc + item.quantity, 0)}
+              </span>
             </div>
-            <span className="text-lg">View Order</span>
-            <span className="text-sm font-medium">{formatPrice(totalPrice)}</span>
+            <div className="flex-1 text-left">
+              <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Your Order</p>
+              <p className="text-white font-black text-lg">{formatPrice(totalPrice)}</p>
+            </div>
+            <div className="pr-4">
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white group-hover:translate-x-1 transition-transform">
+                <ArrowRight className="w-5 h-5" />
+              </div>
+            </div>
           </button>
         </div>
       )}
 
-      {/* Check-In Modal */}
-      {showCheckIn && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-6">
-                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-blue-600">
-                    <MessageCircle className="w-8 h-8" />
-                </div>
-                
-                {checkInStep === 'input' ? (
-                    <>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900">Welcome to {settings?.name}!</h2>
-                            <p className="text-gray-500 text-sm mt-1">Please enter your WhatsApp number to start.</p>
-                        </div>
-                        <input 
-                            type="tel" 
-                            placeholder="e.g. 628123456789" 
-                            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg text-center focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            value={customerPhone}
-                            onChange={(e) => setCustomerPhone(e.target.value)}
-                        />
-                        <button 
-                            onClick={handleCheckIn}
-                            disabled={!customerPhone}
-                            className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold shadow-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                        >
-                            Start
-                        </button>
-                    </>
-                ) : checkInStep === 'choice' ? (
-                    <>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900">How would you like to order?</h2>
-                            <p className="text-gray-500 text-sm mt-1">We've sent a welcome message to your WhatsApp.</p>
-                        </div>
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => handleChoice('whatsapp')}
-                                className="w-full py-4 rounded-xl bg-[#25D366] text-white font-bold shadow-lg hover:bg-[#1dbf57] transition-colors flex items-center justify-center gap-2"
-                            >
-                                <MessageCircle className="w-5 h-5" />
-                                Order via WhatsApp
-                            </button>
-                            <button 
-                                onClick={() => handleChoice('web')}
-                                className="w-full py-4 rounded-xl bg-white border-2 border-gray-200 text-gray-900 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <Globe className="w-5 h-5" />
-                                Order via Website
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900">Message Sent!</h2>
-                            <p className="text-gray-500 text-sm mt-1">Please check your WhatsApp to continue ordering.</p>
-                        </div>
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 animate-in zoom-in duration-300">
-                            <MessageCircle className="w-8 h-8" />
-                        </div>
-                        <button 
-                            onClick={() => setShowCheckIn(false)}
-                            className="w-full py-3 rounded-xl bg-gray-900 text-white font-bold shadow-lg hover:bg-black transition-colors"
-                        >
-                            Close
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
-      )}
-
-      {/* Cart Modal / Sheet */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md h-[80vh] sm:h-auto sm:rounded-2xl flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
-            {/* Cart Header */}
-            <div className="p-4 border-b flex justify-between items-center bg-gray-50 sm:rounded-t-2xl">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" />
-                Your Order
-              </h2>
-              <button 
-                onClick={() => setIsCartOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-sm font-medium"
-              >
-                Close
-              </button>
-            </div>
-
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {cart.map((item, idx) => (
-                <div key={`${item.id}-${item.selectedVariation?.name || 'base'}-${idx}`} className="flex justify-between items-start border-b border-gray-100 pb-4 last:border-0">
-                  <div className="flex-1">
-                    <h4 className="font-bold text-gray-900">
-                        {item.name}
-                        {item.selectedVariation && <span className="text-sm font-normal text-gray-500"> ({item.selectedVariation.name})</span>}
-                    </h4>
-                    <p className="text-xs text-gray-500">{formatPrice(item.price)} x {item.quantity}</p>
-                    <p className="text-sm font-bold text-primary mt-1" style={{ color: themeColor }}>
-                      {formatPrice(item.price * item.quantity)}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-3 bg-gray-50 rounded-lg p-1">
-                      <button 
-                        onClick={() => updateQuantity(item.id, -1, item.selectedVariation?.name)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-red-500 transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="font-bold text-gray-900 w-4 text-center">{item.quantity}</span>
-                      <button 
-                        onClick={() => updateQuantity(item.id, 1, item.selectedVariation?.name)}
-                        className="w-8 h-8 flex items-center justify-center rounded-md bg-white shadow-sm text-gray-600 hover:text-green-500 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                   </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Cart Footer */}
-            <div className="p-4 border-t bg-gray-50 sm:rounded-b-2xl space-y-3">
-              <div className="space-y-1 text-sm text-gray-600 mb-4">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(subtotal)}</span>
-                  </div>
-                  {taxPercent > 0 && (
-                      <div className="flex justify-between">
-                        <span>Tax ({taxPercent}%)</span>
-                        <span>{formatPrice(tax)}</span>
-                      </div>
-                  )}
-                  {servicePercent > 0 && (
-                      <div className="flex justify-between">
-                        <span>Service Charge ({servicePercent}%)</span>
-                        <span>{formatPrice(serviceCharge)}</span>
-                      </div>
-                  )}
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                    <span className="text-gray-900 font-bold">Total Amount</span>
-                    <span className="text-xl font-bold text-gray-900">{formatPrice(totalPrice)}</span>
-                  </div>
-                  {store.feePaidBy === 'CUSTOMER' && (
-                      <p className="text-[10px] text-gray-400 italic mt-1 text-right">
-                        *Excl. payment fees (if applicable)
-                      </p>
-                  )}
-              </div>
-              
-              {/* WhatsApp Payment Buttons (Replaces Generic Checkout) */}
-              {(settings?.enableWhatsApp !== false) && (
-                  <div className="space-y-2">
-                    <button 
-                      onClick={() => handleWhatsAppCheckout('qris')}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200"
-                      style={{ backgroundColor: '#25D366' }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <MessageCircle className="w-5 h-5" />
-                        <span>Pay via QRIS</span>
-                      </div>
-                      <div className="text-right">
-                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('qris') : 0))}</span>
-                          {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
-                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('qris'))}</span>
-                          )}
-                      </div>
-                    </button>
-
-                    <button 
-                      onClick={() => handleWhatsAppCheckout('bank')}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-emerald-600"
-                    >
-                      <div className="flex items-center gap-2">
-                        <MessageCircle className="w-5 h-5" />
-                        <span>Pay via Bank Transfer</span>
-                      </div>
-                      <div className="text-right">
-                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('transfer') : 0))}</span>
-                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
-                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('transfer'))}</span>
-                          )}
-                      </div>
-                    </button>
-                  </div>
-              )}
-
-              {/* Midtrans Button (Should be SPLIT into 2 buttons: QRIS and Bank) */}
-              {settings?.enableMidtrans && (
-                <div className="space-y-2">
-                    {/* QRIS Option */}
-                    <button 
-                      onClick={() => handlePaymentGatewayCheckout('midtrans', 'qris')}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        <span>Pay via QRIS (Midtrans)</span>
-                      </div>
-                      <div className="text-right">
-                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('qris') : 0))}</span>
-                          {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
-                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('qris'))}</span>
-                          )}
-                      </div>
-                    </button>
-
-                    {/* Bank Transfer Option */}
-                    <button 
-                      onClick={() => handlePaymentGatewayCheckout('midtrans', 'bank_transfer')}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        <span>Pay via Bank (Midtrans)</span>
-                      </div>
-                      <div className="text-right">
-                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('transfer') : 0))}</span>
-                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
-                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('transfer'))}</span>
-                          )}
-                      </div>
-                    </button>
-                </div>
-              )}
-
-              {/* Xendit Buttons (Split by Method) */}
-              {settings?.enableXendit && (
-                <div className="space-y-2">
-                     {/* QRIS Option */}
-                    <button 
-                      onClick={() => handlePaymentGatewayCheckout('xendit', 'qris')}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        <span>Pay via QRIS (Xendit)</span>
-                      </div>
-                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
-                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>
-                      )}
-                    </button>
-
-                     {/* Bank Option */}
-                     <button 
-                      onClick={() => handlePaymentGatewayCheckout('xendit', 'bank_transfer')}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        <span>Pay via Bank (Xendit)</span>
-                      </div>
-                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
-                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
-                      )}
-                    </button>
-                </div>
-              )}
-
-              {/* Manual Transfer Button */}
-              {settings?.enableManualTransfer && (
-                <button 
-                  onClick={() => handlePaymentGatewayCheckout('manual')}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-gray-600 hover:bg-gray-700"
-                >
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" />
-                    <span>Manual Bank Transfer</span>
-                  </div>
-                  {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
-                      <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bank Details Modal */}
-      {showBankDetails && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-4">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 mb-2">
-              <ShoppingCart className="w-8 h-8" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Order #{lastOrderId} Placed!</h2>
-            <p className="text-gray-500 text-sm">Please transfer the total amount to:</p>
-            
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-              <p className="font-bold text-gray-900 text-lg">{bankInfo?.accountNumber || '1234567890'}</p>
-              <p className="text-sm text-gray-500 uppercase tracking-wider font-bold">
-                {bankInfo?.bankName || 'BCA'} - {bankInfo?.accountName || 'PT Laku Keras'}
-              </p>
-              <div className="mt-2 pt-2 border-t border-gray-200">
-                 <p className="text-xs text-gray-400">Total Amount (Exact)</p>
-                 <p className="text-lg font-bold text-primary" style={{ color: themeColor }}>
-                   {formatPrice(finalAmount || totalPrice)}
-                 </p>
-                 <p className="text-[10px] text-red-500 italic mt-1">
-                   *Please transfer the EXACT amount including unique code
-                 </p>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => { setShowBankDetails(false); window.location.reload(); }}
-              className="w-full py-3 rounded-xl bg-gray-900 text-white font-bold shadow-lg"
-            >
-              Close & New Order
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Variation Selection Modal */}
+      {/* Variation Modal */}
       {variationModalOpen && productForVariation && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-t-[40px] sm:rounded-[40px] p-8 space-y-8 animate-in slide-in-from-bottom duration-500">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-bold text-gray-900">{productForVariation.name}</h3>
-                <p className="text-gray-500 text-sm">Select Variation</p>
+                <h3 className="text-2xl font-black text-gray-900">{productForVariation.name}</h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Select Variation</p>
               </div>
-              <button onClick={() => setVariationModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                <X className="w-5 h-5 text-gray-500" />
+              <button onClick={() => setVariationModalOpen(false)} className="p-3 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
             
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <div className="grid gap-3">
                {productForVariation.variations?.map((v, idx) => (
                  <button
                    key={idx}
                    onClick={() => setSelectedVariation(v)}
-                   className={`w-full flex justify-between items-center p-4 rounded-xl border-2 transition-all ${
+                   className={cn(
+                     "w-full flex justify-between items-center p-5 rounded-3xl border-2 transition-all group",
                      selectedVariation?.name === v.name 
-                       ? "bg-gray-50" 
-                       : "border-gray-100 hover:border-gray-200"
-                   }`}
-                   style={selectedVariation?.name === v.name ? { borderColor: themeColor, backgroundColor: `${themeColor}10` } : {}}
+                       ? "bg-gray-50 border-primary" 
+                       : "border-gray-50 hover:border-gray-100"
+                   )}
+                   style={selectedVariation?.name === v.name ? { borderColor: themeColor, backgroundColor: `${themeColor}08` } : {}}
                  >
-                   <span className="font-medium text-gray-900">{v.name}</span>
-                   <span className="font-bold" style={{ color: themeColor }}>{formatPrice(v.price)}</span>
+                   <span className="font-black text-gray-900">{v.name}</span>
+                   <span className="font-black text-primary" style={{ color: themeColor }}>{formatPrice(v.price)}</span>
                  </button>
                ))}
             </div>
 
             <button 
-              onClick={confirmVariation}
-              disabled={!selectedVariation}
-              className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (productForVariation && selectedVariation) {
+                  addToCart(productForVariation, selectedVariation);
+                  setVariationModalOpen(false);
+                }
+              }}
+              className="w-full py-5 rounded-[24px] bg-gray-900 text-white text-sm font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
               style={{ backgroundColor: themeColor }}
             >
-              Add to Order - {formatPrice(selectedVariation?.price || 0)}
+              Add to Cart • {formatPrice(selectedVariation?.price || 0)}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Cart Sheet */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-2xl mx-auto h-[90vh] rounded-t-[40px] flex flex-col animate-in slide-in-from-bottom duration-500 shadow-2xl">
+              <div className="p-8 border-b border-gray-50 flex justify-between items-center">
+                 <div>
+                    <h2 className="text-2xl font-black text-gray-900">Your Tray</h2>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{cart.length} Unique Items</p>
+                 </div>
+                 <button onClick={() => setIsCartOpen(false)} className="p-3 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors">
+                    <X className="w-6 h-6 text-gray-400" />
+                 </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                 {cart.map((item, idx) => (
+                    <div key={idx} className="flex gap-4 items-center animate-in slide-in-from-right duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+                       <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0">
+                          {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-200 font-black">{item.name.charAt(0)}</div>}
+                       </div>
+                       <div className="flex-1">
+                          <h4 className="font-black text-gray-900 text-sm">{item.name}{item.selectedVariation && <span className="text-gray-400 font-bold text-[10px] block uppercase">Variation: {item.selectedVariation.name}</span>}</h4>
+                          <p className="text-xs font-black text-primary mt-1" style={{ color: themeColor }}>{formatPrice(item.price)}</p>
+                       </div>
+                       <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-xl">
+                          <button onClick={() => updateQuantity(item.id, -1, item.selectedVariation?.name)} className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400"><Minus className="w-3 h-3" /></button>
+                          <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.id, 1, item.selectedVariation?.name)} className="w-7 h-7 bg-white rounded-lg shadow-sm flex items-center justify-center text-gray-400"><Plus className="w-3 h-3" /></button>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+
+              <div className="p-8 bg-gray-50/50 rounded-t-[40px] space-y-6">
+                 <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-bold text-gray-400">
+                       <span>Subtotal</span>
+                       <span>{formatPrice(subtotal)}</span>
+                    </div>
+                    {tax > 0 && (
+                       <div className="flex justify-between text-xs font-bold text-gray-400">
+                          <span>Tax ({taxPercent}%)</span>
+                          <span>{formatPrice(tax)}</span>
+                       </div>
+                    )}
+                    <div className="flex justify-between items-end pt-4 border-t border-gray-100">
+                       <span className="text-sm font-black text-gray-900 uppercase tracking-widest">Total Amount</span>
+                       <span className="text-3xl font-black text-gray-900">{formatPrice(totalPrice)}</span>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => handleWhatsAppCheckout('qris')}
+                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+                    >
+                       <MessageCircle className="w-4 h-4" />
+                       Pay via QRIS
+                    </button>
+                    <button 
+                      onClick={() => handleWhatsAppCheckout('bank')}
+                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+                      style={{ backgroundColor: themeColor }}
+                    >
+                       <CreditCard className="w-4 h-4" />
+                       Bank Transfer
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Check-In Overlay */}
+      {showCheckIn && (
+        <div className="fixed inset-0 z-[200] bg-white flex items-center justify-center p-8 text-center animate-in fade-in duration-500">
+           <div className="max-w-xs w-full space-y-8">
+              <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center mx-auto shadow-2xl shadow-black/5 animate-bounce duration-2000">
+                 <Phone className="w-10 h-10 text-primary" style={{ color: themeColor }} />
+              </div>
+              
+              {checkInStep === 'input' ? (
+                <>
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-black text-gray-900">Welcome.</h2>
+                    <p className="text-gray-400 text-sm font-medium">Please enter your WhatsApp number to view our menu.</p>
+                  </div>
+                  <input 
+                    type="tel" 
+                    placeholder="e.g. 62812..." 
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full bg-gray-50 border-none rounded-[24px] px-6 py-5 text-center text-xl font-black focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-gray-200"
+                  />
+                  <button 
+                    onClick={handleCheckIn}
+                    disabled={!customerPhone}
+                    className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl disabled:opacity-30 transition-all active:scale-95"
+                    style={{ backgroundColor: themeColor }}
+                  >
+                    Enter Store
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-6 animate-in zoom-in duration-300">
+                   <div className="space-y-2">
+                    <h2 className="text-2xl font-black text-gray-900">One more thing...</h2>
+                    <p className="text-gray-400 text-sm font-medium">How would you like to receive order updates?</p>
+                   </div>
+                   <div className="grid gap-3">
+                      <button onClick={() => handleChoice('whatsapp')} className="w-full py-5 bg-[#25D366] text-white rounded-[24px] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2"><MessageCircle className="w-5 h-5" /> Via WhatsApp</button>
+                      <button onClick={() => handleChoice('web')} className="w-full py-5 bg-gray-50 text-gray-400 rounded-[24px] font-black text-sm uppercase tracking-widest border border-gray-100">Directly on Web</button>
+                   </div>
+                </div>
+              )}
+           </div>
         </div>
       )}
     </div>

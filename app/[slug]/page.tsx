@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import DigitalMenuClient from "@/components/DigitalMenuClient";
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60; // Revalidate every minute (ISR)
 
 export default async function StorePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -21,7 +21,13 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     orderBy: { name: 'asc' }
   });
 
-  // Serialize data
+  // Serialize and prepare data efficiently
+  const categories = store.categories.map(c => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug
+  }));
+
   const products = productsData.map((p: any) => ({
     id: p.id,
     name: p.name,
@@ -33,14 +39,22 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     variations: p.variations
   }));
 
-  // Serialize store data to avoid "Date object" error in Client Component
-  // Using JSON parse/stringify as a foolproof way to ensure everything is serializable
-  const serializedStore = JSON.parse(JSON.stringify({
-    ...store,
-    categories: store.categories || []
-  }));
+  const storeData = {
+    id: store.id,
+    name: store.name,
+    slug: store.slug,
+    whatsapp: store.whatsapp,
+    themeColor: store.themeColor,
+    taxPercent: store.taxPercent,
+    serviceChargePercent: store.serviceChargePercent,
+    qrisFeePercent: store.qrisFeePercent,
+    manualTransferFee: store.manualTransferFee,
+    feePaidBy: store.feePaidBy,
+    enableWhatsApp: store.enableWhatsApp,
+    enableMidtrans: store.enableMidtrans,
+    enableXendit: store.enableXendit,
+    enableManualTransfer: store.enableManualTransfer
+  };
 
-  const serializedProducts = JSON.parse(JSON.stringify(products));
-
-  return <DigitalMenuClient products={serializedProducts} store={serializedStore} categories={serializedStore.categories} />;
+  return <DigitalMenuClient products={products} store={storeData} categories={categories} />;
 }
