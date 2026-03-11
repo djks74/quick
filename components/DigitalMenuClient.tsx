@@ -667,9 +667,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <CreditCard className="w-5 h-5" />
                         <span>Pay via QRIS (Midtrans)</span>
                       </div>
-                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
-                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>
-                      )}
+                      <div className="text-right">
+                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('qris') : 0))}</span>
+                          {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
+                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('qris'))}</span>
+                          )}
+                      </div>
                     </button>
 
                     {/* Bank Transfer Option */}
@@ -682,12 +685,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <CreditCard className="w-5 h-5" />
                         <span>Pay via Bank (Midtrans)</span>
                       </div>
-                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 ? (
-                          <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>
-                      ) : (
-                          // Fallback or empty if 0
-                          null
-                      )}
+                      <div className="text-right">
+                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('transfer') : 0))}</span>
+                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 ? (
+                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('transfer'))}</span>
+                          ) : null}
+                      </div>
                     </button>
                 </div>
               )}
