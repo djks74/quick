@@ -14,7 +14,10 @@ import {
   Layers,
   Plus,
   Home,
-  MousePointer2
+  MousePointer2,
+  Wallet,
+  History,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
@@ -60,6 +63,14 @@ export default function AdminShell({
       name: "Orders", 
       href: `${baseUrl}/orders`,
       icon: ShoppingCart,
+    },
+    {
+      name: "Finance",
+      icon: Wallet,
+      children: [
+        { name: "Ledger Book", href: `${baseUrl}/finance/ledger` },
+        { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
+      ]
     },
     // Settings hidden for non-Super Admin
     ...(isSuperAdmin ? [{ 

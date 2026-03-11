@@ -4,7 +4,7 @@ import { signOut } from "next-auth/react";
 import { LogOut, Users, Store, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { LogOut, Users, Store, Settings, Wallet } from "lucide-react";
 
 export default function SuperAdminNav({ totalStores }: { totalStores?: number }) {
   const pathname = usePathname();
@@ -21,6 +21,16 @@ export default function SuperAdminNav({ totalStores }: { totalStores?: number })
         >
           <Store className="w-4 h-4 mr-2" />
           Stores
+        </Link>
+        <Link 
+          href="/super-admin/withdrawals" 
+          className={cn(
+            "px-4 py-2 rounded-md text-sm font-medium flex items-center transition-colors",
+            pathname === "/super-admin/withdrawals" ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+          )}
+        >
+          <Wallet className="w-4 h-4 mr-2" />
+          Withdrawals
         </Link>
         <Link 
           href="/super-admin/users" 

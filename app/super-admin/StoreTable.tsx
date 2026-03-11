@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Edit, ExternalLink, MoreVertical } from "lucide-react";
+import { Edit, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { updateStorePlan } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore } from "@/lib/super-admin";
 
 export default function StoreTable({ stores }: { stores: any[] }) {
   const router = useRouter();
@@ -25,6 +25,19 @@ export default function StoreTable({ stores }: { stores: any[] }) {
     setLoading(false);
     setEditingStore(null);
     router.refresh();
+  };
+
+  const handleDeleteStore = async (id: number, name: string) => {
+    if (!confirm(`Are you sure you want to PERMANENTLY delete "${name}"? This action cannot be undone.`)) return;
+    
+    setLoading(true);
+    const res = await deleteStore(id);
+    if (res.success) {
+      router.refresh();
+    } else {
+      alert("Failed to delete store");
+    }
+    setLoading(false);
   };
 
   return (
@@ -89,6 +102,13 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                     title="Edit Subscription"
                   >
                     <Edit className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteStore(store.id, store.name)}
+                    className="text-gray-400 hover:text-red-600 p-1"
+                    title="Delete Store"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </td>

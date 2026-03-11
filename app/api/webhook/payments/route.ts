@@ -47,6 +47,13 @@ export async function POST(req: NextRequest) {
 
     // Send WhatsApp Notification if PAID
     if (status === 'PAID') {
+      // Update Store Balance (Net Amount)
+      const netAmount = order.totalAmount - (order.paymentFee || 0) - (order.transactionFee || 0);
+      await prisma.store.update({
+        where: { id: order.storeId },
+        data: { balance: { increment: netAmount } }
+      });
+
       // 1. Notify Customer
       await sendWhatsAppMessage(
         order.customerPhone,

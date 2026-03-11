@@ -141,19 +141,6 @@ export default function AdminDashboard() {
             </table>
           </div>
         </div>
-
-        {/* Pro Tip / Info */}
-        <div className="space-y-8">
-          <div className="bg-primary/5 rounded-2xl border border-primary/10 p-6">
-            <h3 className="font-bold text-primary mb-2">Pro Tip</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Connect your payment gateways in Settings to start accepting real payments. Enable Xendit or Midtrans for seamless transactions.
-            </p>
-            <Link href={`/${slug}/admin/settings`} className="inline-block mt-4 text-xs font-black uppercase tracking-widest text-primary hover:text-orange-700">
-              Go to Settings →
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );

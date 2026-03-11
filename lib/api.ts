@@ -576,16 +576,38 @@ export async function getOrders(storeId: number) {
       id: o.id.toString(),
       customerName: o.customerPhone,
       customerEmail: "",
+      customerPhone: o.customerPhone,
       date: o.createdAt.toISOString(),
       status: o.status.toLowerCase(),
       total: o.totalAmount,
       currency: "IDR",
       items: o.items.length,
       paymentMethod: o.paymentMethod || 'manual',
-      uniqueCode: o.uniqueCode
+      uniqueCode: o.uniqueCode,
+      taxAmount: o.taxAmount,
+      serviceCharge: o.serviceCharge,
+      paymentFee: o.paymentFee,
+      transactionFee: o.transactionFee,
+      tableNumber: o.tableNumber
     }));
   } catch (error) {
     console.error('Error fetching orders:', error);
     return [];
+  }
+}
+
+export async function getOrderDetails(orderId: number) {
+  try {
+    return await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { 
+        items: {
+          include: { product: true }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    return null;
   }
 }

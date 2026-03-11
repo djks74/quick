@@ -136,3 +136,53 @@ export async function updatePlatformSettings(data: {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to update settings' };
   }
 }
+
+export async function deleteStore(storeId: number) {
+  try {
+    await requireSuperAdmin();
+    await prisma.store.delete({ where: { id: storeId } });
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting store:', error);
+    return { success: false, error: 'Failed to delete store' };
+  }
+}
+
+export async function getAllWithdrawals() {
+  try {
+    await requireSuperAdmin();
+    return await prisma.withdrawal.findMany({
+      include: { store: true },
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    console.error('Error fetching all withdrawals:', error);
+    return [];
+  }
+}
+
+export async function updateWithdrawalStatus(id: number, status: string) {
+  try {
+    await requireSuperAdmin();
+    
+    if (status === 'REJECTED') {
+      // Return balance to store
+      const withdrawal = await prisma.withdrawal.findUnique({ where: { id } });
+      if (withdrawal) {
+        await prisma.store.update({
+          where: { id: withdrawal.storeId },
+          data: { balance: { increment: withdrawal.amount } }
+        });
+      }
+    }
+
+    const updated = await prisma.withdrawal.update({
+      where: { id },
+      data: { status }
+    });
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error updating withdrawal status:', error);
+    return { success: false, error: 'Failed to update status' };
+  }
+}
