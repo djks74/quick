@@ -98,34 +98,41 @@ export async function updatePlatformSettings(data: {
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
 }) {
-  await requireSuperAdmin();
-  const updated = await prisma.platformSettings.upsert({
-    where: { key: "default" },
-    update: {
-      whatsappToken: data.whatsappToken || null,
-      whatsappPhoneId: data.whatsappPhoneId || null,
-      midtransServerKey: data.midtransServerKey || null,
-      midtransClientKey: data.midtransClientKey || null,
-      xenditSecretKey: data.xenditSecretKey || null,
-      bankName: data.bankName || null,
-      bankAccountNumber: data.bankAccountNumber || null,
-      bankAccountName: data.bankAccountName || null,
-      subscriptionServerKey: data.subscriptionServerKey || null,
-      subscriptionClientKey: data.subscriptionClientKey || null
-    },
-    create: {
-      key: "default",
-      whatsappToken: data.whatsappToken || null,
-      whatsappPhoneId: data.whatsappPhoneId || null,
-      midtransServerKey: data.midtransServerKey || null,
-      midtransClientKey: data.midtransClientKey || null,
-      xenditSecretKey: data.xenditSecretKey || null,
-      bankName: data.bankName || null,
-      bankAccountNumber: data.bankAccountNumber || null,
-      bankAccountName: data.bankAccountName || null,
-      subscriptionServerKey: data.subscriptionServerKey || null,
-      subscriptionClientKey: data.subscriptionClientKey || null
-    }
-  });
-  return { success: true, data: updated };
+  try {
+    await requireSuperAdmin();
+    console.log('[PLATFORM_SETTINGS] Updating with data:', { ...data, midtransServerKey: '***', xenditSecretKey: '***', subscriptionServerKey: '***' });
+    
+    const updated = await prisma.platformSettings.upsert({
+      where: { key: "default" },
+      update: {
+        whatsappToken: data.whatsappToken || null,
+        whatsappPhoneId: data.whatsappPhoneId || null,
+        midtransServerKey: data.midtransServerKey || null,
+        midtransClientKey: data.midtransClientKey || null,
+        xenditSecretKey: data.xenditSecretKey || null,
+        bankName: data.bankName || null,
+        bankAccountNumber: data.bankAccountNumber || null,
+        bankAccountName: data.bankAccountName || null,
+        subscriptionServerKey: data.subscriptionServerKey || null,
+        subscriptionClientKey: data.subscriptionClientKey || null
+      },
+      create: {
+        key: "default",
+        whatsappToken: data.whatsappToken || null,
+        whatsappPhoneId: data.whatsappPhoneId || null,
+        midtransServerKey: data.midtransServerKey || null,
+        midtransClientKey: data.midtransClientKey || null,
+        xenditSecretKey: data.xenditSecretKey || null,
+        bankName: data.bankName || null,
+        bankAccountNumber: data.bankAccountNumber || null,
+        bankAccountName: data.bankAccountName || null,
+        subscriptionServerKey: data.subscriptionServerKey || null,
+        subscriptionClientKey: data.subscriptionClientKey || null
+      }
+    });
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('[PLATFORM_SETTINGS_ERROR]', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update settings' };
+  }
 }
