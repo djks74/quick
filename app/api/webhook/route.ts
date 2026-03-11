@@ -605,17 +605,22 @@ export async function POST(req: NextRequest) {
           if (lowerText.includes('qris')) method = 'qris';
           else if (lowerText.includes('bank')) method = 'bank_transfer';
 
+          // Calculate Tax and Service Charge
+          const taxAmount = total * (targetStore.taxPercent / 100);
+          const serviceCharge = total * (targetStore.serviceChargePercent / 100);
+          const subtotalWithTaxService = total + taxAmount + serviceCharge;
+
           // Calculate specific fee for this method (Server-side)
           let fee = 0;
           if (targetStore.feePaidBy === 'CUSTOMER') {
               if (method === 'qris' && targetStore.qrisFeePercent) {
-                  fee = total * (Number(targetStore.qrisFeePercent) / 100);
+                  fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
               } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
                   fee = Number(targetStore.manualTransferFee);
               }
           }
           
-          const finalTotal = total + fee;
+          const finalTotal = subtotalWithTaxService + fee;
 
           // Create Order with items
           const order = await prisma.order.create({
@@ -623,6 +628,9 @@ export async function POST(req: NextRequest) {
               storeId: targetStore.id,
               customerPhone: from,
               totalAmount: finalTotal, // Use final total including fees
+              taxAmount: taxAmount,
+              serviceCharge: serviceCharge,
+              paymentFee: fee,
               status: 'PENDING',
               tableNumber: session.tableNumber,
               items: {
@@ -649,10 +657,15 @@ export async function POST(req: NextRequest) {
               cart.forEach(item => {
                 merchantMsg += `${item.qty}x ${item.name}\n`;
               });
+              
+              merchantMsg += `\n------------------\n`;
+              merchantMsg += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+              if (taxAmount > 0) merchantMsg += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+              if (serviceCharge > 0) merchantMsg += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
               if (fee > 0) {
-                  merchantMsg += `➕ Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+                  merchantMsg += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
               }
-              merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n`;
+              merchantMsg += `\n💰 *Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*\n`;
               merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
               
               await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
@@ -665,8 +678,12 @@ export async function POST(req: NextRequest) {
             summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
           });
           
+          summary += `\n------------------\n`;
+          summary += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+          if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+          if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
           if (fee > 0) {
-              summary += `\nFee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}`;
+              summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           }
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
 
@@ -759,17 +776,22 @@ export async function POST(req: NextRequest) {
                  // Determine method from command if it's a simple "done [method]"
                  let method = quickCheckoutMethod;
                  
+                 // Calculate Tax and Service Charge
+                 const taxAmount = total * (targetStore.taxPercent / 100);
+                 const serviceCharge = total * (targetStore.serviceChargePercent / 100);
+                 const subtotalWithTaxService = total + taxAmount + serviceCharge;
+
                  // Calculate specific fee for this method (Server-side)
                  let fee = 0;
                  if (targetStore.feePaidBy === 'CUSTOMER') {
                      if (method === 'qris' && targetStore.qrisFeePercent) {
-                         fee = total * (Number(targetStore.qrisFeePercent) / 100);
+                         fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
                      } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
                          fee = Number(targetStore.manualTransferFee);
                      }
                  }
                  
-                 const finalTotal = total + fee;
+                 const finalTotal = subtotalWithTaxService + fee;
 
                  // Create Order with items
                  const order = await prisma.order.create({
@@ -777,6 +799,9 @@ export async function POST(req: NextRequest) {
                       storeId: targetStore.id,
                       customerPhone: from,
                       totalAmount: finalTotal, // Use final total including fees
+                      taxAmount: taxAmount,
+                      serviceCharge: serviceCharge,
+                      paymentFee: fee,
                       status: 'PENDING',
                       tableNumber: session.tableNumber,
                       items: {
@@ -803,10 +828,15 @@ export async function POST(req: NextRequest) {
                     cart.forEach((item: any) => {
                         merchantMsg += `${item.qty}x ${item.name}\n`;
                     });
+                    
+                    merchantMsg += `\n------------------\n`;
+                    merchantMsg += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+                    if (taxAmount > 0) merchantMsg += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+                    if (serviceCharge > 0) merchantMsg += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
                     if (fee > 0) {
-                        merchantMsg += `➕ Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+                        merchantMsg += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
                     }
-                    merchantMsg += `\n💰 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n`;
+                    merchantMsg += `\n💰 *Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*\n`;
                     merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
                     
                     await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
@@ -818,8 +848,13 @@ export async function POST(req: NextRequest) {
                  cart.forEach((item: any) => {
                     summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
                  });
+                 
+                 summary += `\n------------------\n`;
+                 summary += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+                 if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+                 if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
                  if (fee > 0) {
-                     summary += `\nFee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}`;
+                     summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
                  }
                  summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
 

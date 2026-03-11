@@ -11,14 +11,15 @@ const translations = {
     title_start: "Launch Your",
     title_highlight: "Digital Menu",
     title_end: "in Seconds",
-    description: "Accept orders via WhatsApp effortlessly. Transform your business with a modern digital storefront today.",
+    description: "One system for your shop, your chat, and your deliveries. Accept orders via WhatsApp, manage your physical store with our POS, and track every shipment effortlessly.",
     view_demo: "View Demo Store",
     create_store: "Create Your Store",
     easy_setup: "Easy Setup",
     instant_launch: "Instant Launch",
     easy_payment: "Easy Payment",
     order_via_whatsapp: "Order via WhatsApp",
-    new_order: "New Order"
+    new_order: "New Order",
+    whatsapp_features: "Manage products, update pricing, and fulfill orders—all directly within WhatsApp."
   },
   id: {
     login: "Masuk",
@@ -26,14 +27,15 @@ const translations = {
     title_start: "Luncurkan",
     title_highlight: "Menu Digital",
     title_end: "dalam Detik",
-    description: "Terima pesanan via WhatsApp dengan mudah. Ubah bisnis Anda dengan toko online modern hari ini.",
+    description: "Satu sistem untuk toko, chat, dan pengiriman Anda. Terima pesanan via WhatsApp, kelola toko fisik dengan POS kami, dan lacak setiap pengiriman dengan mudah.",
     view_demo: "Lihat Demo Toko",
     create_store: "Buat Toko Anda",
     easy_setup: "Setup Mudah",
     instant_launch: "Luncurkan Instan",
     easy_payment: "Pembayaran Mudah",
     order_via_whatsapp: "Pesan via WhatsApp",
-    new_order: "Pesanan Baru"
+    new_order: "Pesanan Baru",
+    whatsapp_features: "Kelola produk, perbarui harga, dan penuhi pesanan—semuanya langsung di dalam WhatsApp."
   }
 };
 
@@ -117,6 +119,19 @@ export default function Home() {
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
               <span>{t.easy_payment}</span>
             </div>
+          </div>
+
+          <div className="pt-4 flex flex-col gap-3">
+             <div className="flex items-center justify-center lg:justify-start gap-3 p-4 bg-white/50 backdrop-blur-sm rounded-2xl border border-white shadow-sm hover:shadow-md transition-all group max-w-xl mx-auto lg:mx-0">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
+                   <MessageCircle className="w-6 h-6" />
+                </div>
+                <div className="flex-1 text-left">
+                   <p className="text-gray-800 font-bold text-lg leading-snug">
+                      {t.whatsapp_features}
+                   </p>
+                </div>
+             </div>
           </div>
         </div>
 
