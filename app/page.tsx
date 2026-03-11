@@ -212,37 +212,37 @@ export default function Home() {
         <div className="bg-white p-3 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl border border-gray-100 group hover:scale-105 transition-transform duration-300">
            <div className="relative">
               <div className="block sm:hidden">
-                <QRCodeSVG 
-                  value="https://quick.mythoz.com/demo" 
-                  size={80}
-                  level="H"
-                  includeMargin={false}
-                  imageSettings={{
-                    src: "/favicon.ico",
-                    x: undefined,
-                    y: undefined,
-                    height: 16,
-                    width: 16,
-                    excavate: true,
-                  }}
-                />
-              </div>
-              <div className="hidden sm:block">
-                <QRCodeSVG 
-                  value="https://quick.mythoz.com/demo" 
-                  size={120}
-                  level="H"
-                  includeMargin={false}
-                  imageSettings={{
-                    src: "/favicon.ico",
-                    x: undefined,
-                    y: undefined,
-                    height: 24,
-                    width: 24,
-                    excavate: true,
-                  }}
-                />
-              </div>
+                 <QRCodeSVG 
+                   value="https://quick.mythoz.com/demo?table=toko" 
+                   size={80}
+                   level="H"
+                   includeMargin={false}
+                   imageSettings={{
+                     src: "/favicon.ico",
+                     x: undefined,
+                     y: undefined,
+                     height: 16,
+                     width: 16,
+                     excavate: true,
+                   }}
+                 />
+               </div>
+               <div className="hidden sm:block">
+                 <QRCodeSVG 
+                   value="https://quick.mythoz.com/demo?table=toko" 
+                   size={120}
+                   level="H"
+                   includeMargin={false}
+                   imageSettings={{
+                     src: "/favicon.ico",
+                     x: undefined,
+                     y: undefined,
+                     height: 24,
+                     width: 24,
+                     excavate: true,
+                   }}
+                 />
+               </div>
               <div className="absolute inset-0 flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors rounded-xl"></div>
            </div>
         </div>
