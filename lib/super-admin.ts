@@ -18,7 +18,26 @@ export async function getAllStores() {
   try {
     await requireSuperAdmin();
     const stores = await prisma.store.findMany({
-      include: { owner: true, _count: { select: { orders: true, products: true } } },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        subscriptionPlan: true,
+        balance: true,
+        createdAt: true,
+        owner: {
+          select: {
+            name: true,
+            email: true
+          }
+        },
+        _count: {
+          select: {
+            orders: true,
+            products: true
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
     return stores;
