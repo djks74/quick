@@ -220,7 +220,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }
 
     message += `\nTotal: *${formatPrice(finalTotal)}*`;
-    message += `\n\nPayment Method: *${method === 'qris' ? 'QRIS' : 'Bank Transfer'}*`;
+    message += `\n\nDone ${method === 'qris' ? 'qris' : 'bank'}`;
     message += `\nPlease process my order. Thank you!`;
 
     // Encode for URL
@@ -627,7 +627,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               </div>
               
               {/* WhatsApp Payment Buttons (Replaces Generic Checkout) */}
-              {/* {(settings?.enableWhatsApp !== false) && (
+              {(settings?.enableWhatsApp !== false) && (
                   <div className="space-y-2">
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
@@ -638,7 +638,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <MessageCircle className="w-5 h-5" />
                         <span>Pay via QRIS</span>
                       </div>
-                      {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('qris'))}</span>}
+                      <div className="text-right">
+                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('qris') : 0))}</span>
+                          {isCustomerPaysFee && calculatePlatformFee('qris') > 0 && (
+                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('qris'))}</span>
+                          )}
+                      </div>
                     </button>
 
                     <button 
@@ -649,10 +654,15 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <MessageCircle className="w-5 h-5" />
                         <span>Pay via Bank Transfer</span>
                       </div>
-                      {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && <span className="text-xs bg-black/10 px-2 py-1 rounded">+{formatPrice(calculatePlatformFee('transfer'))}</span>}
+                      <div className="text-right">
+                          <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('transfer') : 0))}</span>
+                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
+                              <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('transfer'))}</span>
+                          )}
+                      </div>
                     </button>
                   </div>
-              )} */}
+              )}
 
               {/* Midtrans Button (Should be SPLIT into 2 buttons: QRIS and Bank) */}
               {settings?.enableMidtrans && (
@@ -687,9 +697,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       </div>
                       <div className="text-right">
                           <span className="block text-sm font-bold">{formatPrice(totalPrice + (isCustomerPaysFee ? calculatePlatformFee('transfer') : 0))}</span>
-                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 ? (
+                          {isCustomerPaysFee && calculatePlatformFee('transfer') > 0 && (
                               <span className="text-[10px] opacity-80 block">Incl. fee {formatPrice(calculatePlatformFee('transfer'))}</span>
-                          ) : null}
+                          )}
                       </div>
                     </button>
                 </div>
