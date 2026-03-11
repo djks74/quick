@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { 
   ShoppingCart, 
   Minus, 
@@ -19,7 +20,8 @@ import {
   ChevronDown,
   Utensils,
   CupSoda,
-  Package
+  Package,
+  Home
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
@@ -261,12 +263,31 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               </div>
             </div>
           </div>
-          {tableNumber && (
-            <div className="px-3 py-1.5 bg-gray-100 rounded-full flex items-center gap-2 border border-gray-200/50">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Table</span>
-              <span className="text-sm font-black text-gray-900">{tableNumber}</span>
+          <div className="flex items-center gap-4">
+            {tableNumber && (
+              <div className="px-3 py-1.5 bg-gray-100 rounded-full flex items-center gap-2 border border-gray-200/50">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Table</span>
+                <span className="text-sm font-black text-gray-900">{tableNumber}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-4">
+              <Link href="/" className="p-2.5 rounded-2xl bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors border border-gray-100">
+                 <Home className="w-5 h-5" />
+              </Link>
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className="relative p-2.5 rounded-2xl bg-gray-900 text-white shadow-lg shadow-black/10 hover:scale-105 active:scale-95 transition-all"
+                style={{ backgroundColor: themeColor }}
+              >
+                <ShoppingCart className="w-5 h-5" />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in duration-300">
+                    {cart.reduce((acc, item) => acc + item.quantity, 0)}
+                  </span>
+                )}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </header>
 
@@ -284,11 +305,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
         </div>
 
         {/* Category Scroll */}
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6 sticky top-[81px] z-30 bg-[#F8F9FB]/95 backdrop-blur-md py-4">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6 sticky top-[81px] z-30 bg-[#F8F9FB]/95 backdrop-blur-md py-3">
           <button
             onClick={() => setSelectedCategory("All")}
             className={cn(
-              "px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap",
+              "px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
               selectedCategory === "All" 
                 ? "bg-gray-900 text-white shadow-xl shadow-black/10 scale-105" 
                 : "bg-white text-gray-400 border border-gray-100 hover:border-gray-200"
@@ -302,7 +323,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               key={cat.id}
               onClick={() => setSelectedCategory(cat.name)}
               className={cn(
-                "px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                "px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
                 selectedCategory === cat.name
                   ? "bg-gray-900 text-white shadow-xl shadow-black/10 scale-105"
                   : "bg-white text-gray-400 border border-gray-100 hover:border-gray-200"
