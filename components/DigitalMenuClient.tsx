@@ -532,36 +532,36 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
                       disabled={!store.isOpen}
-                      className="py-[18px] bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      className="py-3 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <div className="flex items-center gap-2">
-                          <MessageCircle className="w-5 h-5" />
-                          <span className="text-sm">Pay via QRIS</span>
+                          <MessageCircle className="w-4 h-4" />
+                          <span className="text-xs">Pay via QRIS</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
-                          <span className="text-lg font-black">
+                          <span className="text-base font-black leading-tight">
                              {formatPrice(totalPrice + calculatePlatformFee('qris'))}
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
-                            <span className="text-[11px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
                           )}
                        </div>
                     </button>
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
                       disabled={!store.isOpen}
-                      className="py-[18px] bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-1.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                      className="py-3 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
                     >
                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-5 h-5" />
-                          <span className="text-sm">Bank Transfer</span>
+                          <CreditCard className="w-4 h-4" />
+                          <span className="text-xs">Bank Transfer</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
-                          <span className="text-lg font-black">
+                          <span className="text-base font-black leading-tight">
                              {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
                           </span>
                           {calculatePlatformFee('transfer') > 0 && (
-                            <span className="text-[11px] font-bold uppercase tracking-widest">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
                           )}
                        </div>
                     </button>
