@@ -10,16 +10,20 @@ import {
   DollarSign,
   Activity,
   CreditCard,
-  ShoppingBag
+  ShoppingBag,
+  Power,
+  Clock
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getDashboardStats, getOrders, getStoreBySlug } from "@/lib/api";
+import { getDashboardStats, getOrders, getStoreBySlug, toggleStoreStatus } from "@/lib/api";
 import { useParams } from "next/navigation";
 
 export default function AdminDashboard() {
   const { slug } = useParams();
+  const [store, setStore] = useState<any>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -32,10 +36,11 @@ export default function AdminDashboard() {
     async function loadDashboardData() {
       if (!slug) return;
       
-      const store = await getStoreBySlug(slug as string);
-      if (!store) return;
+      const storeData = await getStoreBySlug(slug as string);
+      if (!storeData) return;
       
-      const storeId = store.id;
+      setStore(storeData);
+      const storeId = storeData.id;
       const [statsData, ordersData] = await Promise.all([
         getDashboardStats(storeId),
         getOrders(storeId)
@@ -46,8 +51,56 @@ export default function AdminDashboard() {
     loadDashboardData();
   }, [slug]);
 
+  const handleToggleStatus = async () => {
+    if (!store || isUpdating) return;
+    
+    setIsUpdating(true);
+    const newStatus = !store.isOpen;
+    const result = await toggleStoreStatus(store.id, newStatus);
+    
+    if (result) {
+      setStore(result);
+    }
+    setIsUpdating(false);
+  };
+
   return (
     <div className="space-y-8">
+      {/* Store Status Toggle */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className={cn(
+            "p-3 rounded-xl transition-colors",
+            store?.isOpen ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+          )}>
+            <Power className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-lg font-black text-gray-900">
+              {store?.isOpen ? "Store is Open" : "Store is Closed"}
+            </h3>
+            <p className="text-xs text-gray-400 font-medium">
+              {store?.isOpen 
+                ? "Customers can currently place orders." 
+                : "The storefront will show 'Closed' and block new orders."}
+            </p>
+          </div>
+        </div>
+        
+        <button
+          onClick={handleToggleStatus}
+          disabled={isUpdating}
+          className={cn(
+            "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50",
+            store?.isOpen 
+              ? "bg-red-600 text-white shadow-red-500/20 hover:bg-red-700" 
+              : "bg-green-600 text-white shadow-green-500/20 hover:bg-green-700"
+          )}
+        >
+          {isUpdating ? "Updating..." : store?.isOpen ? "Close Store" : "Open Store"}
+        </button>
+      </div>
+
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start justify-between">

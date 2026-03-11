@@ -42,6 +42,7 @@ model Store {
   enableXendit            Boolean   @default(false)
   enableManualTransfer    Boolean   @default(false)
   posEnabled              Boolean   @default(false)
+  isOpen                  Boolean   @default(true)
   
   // Advanced Payment Settings
   taxPercent              Float     @default(0.0)

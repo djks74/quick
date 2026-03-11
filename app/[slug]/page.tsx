@@ -53,7 +53,8 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     enableWhatsApp: store.enableWhatsApp,
     enableMidtrans: store.enableMidtrans,
     enableXendit: store.enableXendit,
-    enableManualTransfer: store.enableManualTransfer
+    enableManualTransfer: store.enableManualTransfer,
+    isOpen: store.isOpen
   };
 
   return <DigitalMenuClient products={products} store={storeData} categories={categories} />;

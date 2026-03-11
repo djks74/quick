@@ -202,6 +202,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
   const handleWhatsAppCheckout = (method: 'qris' | 'bank') => {
     if (cart.length === 0) return;
+    if (!store.isOpen) {
+        alert("Sorry, the store is currently closed and not accepting orders.");
+        return;
+    }
     let fee = isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
     const finalTotal = totalPrice + fee;
 
@@ -247,8 +251,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
             <div>
               <h1 className="text-lg font-black tracking-tight leading-none">{store.name}</h1>
               <div className="flex items-center gap-1.5 mt-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Open Now</span>
+                <div className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  store.isOpen ? "bg-green-500 animate-pulse" : "bg-red-500"
+                )} />
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  {store.isOpen ? "Open Now" : "Closed"}
+                </span>
               </div>
             </div>
           </div>
@@ -344,14 +353,16 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       <div className="flex items-center gap-2 bg-gray-50 p-0.5 rounded-xl border border-gray-100">
                         <button 
                           onClick={() => updateQuantity(product.id, -1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors"
+                          disabled={!store.isOpen}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         <span className="font-black text-gray-900 w-4 text-center text-xs">{totalQty}</span>
                         <button 
                           onClick={() => updateQuantity(product.id, 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-green-500 transition-colors"
+                          disabled={!store.isOpen}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm text-gray-400 hover:text-green-500 transition-colors disabled:opacity-50"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -359,10 +370,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     ) : (
                       <button 
                         onClick={() => addToCart(product)}
-                        className="px-4 py-2 rounded-xl bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5"
-                        style={{ backgroundColor: themeColor }}
+                        disabled={!store.isOpen}
+                        className="px-4 py-2 rounded-xl bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5 disabled:opacity-50 disabled:bg-gray-400"
+                        style={store.isOpen ? { backgroundColor: themeColor } : {}}
                       >
-                        {totalQty > 0 ? 'Add More' : 'Add to Cart'}
+                        {store.isOpen ? (totalQty > 0 ? 'Add More' : 'Add to Cart') : 'Closed'}
                       </button>
                     )}
                   </div>
@@ -503,20 +515,27 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button 
                       onClick={() => handleWhatsAppCheckout('qris')}
-                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+                      disabled={!store.isOpen}
+                      className="py-4 bg-[#25D366] text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <MessageCircle className="w-4 h-4" />
                        Pay via QRIS
                     </button>
                     <button 
                       onClick={() => handleWhatsAppCheckout('bank')}
-                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
-                      style={{ backgroundColor: themeColor }}
+                      disabled={!store.isOpen}
+                      className="py-4 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform disabled:opacity-50"
+                      style={store.isOpen ? { backgroundColor: themeColor } : {}}
                     >
                        <CreditCard className="w-4 h-4" />
                        Bank Transfer
                     </button>
                  </div>
+                 {!store.isOpen && (
+                   <p className="text-[10px] text-red-500 font-black text-center uppercase tracking-widest">
+                     The store is currently closed. Checkout is disabled.
+                   </p>
+                 )}
               </div>
            </div>
         </div>

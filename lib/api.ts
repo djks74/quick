@@ -130,6 +130,23 @@ export async function updateStoreSettings(storeId: number, data: any) {
   }
 }
 
+export async function toggleStoreStatus(storeId: number, isOpen: boolean) {
+  try {
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { isOpen }
+    });
+    
+    revalidatePath(`/${updated.slug}`);
+    revalidatePath(`/${updated.slug}/admin`);
+    
+    return updated;
+  } catch (error) {
+    console.error('Error toggling store status:', error);
+    return null;
+  }
+}
+
 export async function updateStoreDomain(storeId: number, domain: string) {
   try {
     return await prisma.store.update({
