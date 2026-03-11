@@ -162,8 +162,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const servicePercent = parseFloat(store.serviceChargePercent?.toString() || "0");
   
   // Calculate Platform Fee (only for display estimation)
-  const qrisFeePercent = parseFloat(store.qrisFeePercent?.toString() || "0");
-  const transferFee = parseFloat(store.manualTransferFee?.toString() || "0");
+  const qrisFeePercent = parseFloat((store.qrisFeePercent ?? 0).toString());
+  const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
   const isCustomerPaysFee = store.feePaidBy === 'CUSTOMER';
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -675,7 +675,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <button 
                       onClick={() => handlePaymentGatewayCheckout('midtrans', 'bank_transfer')}
                       disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg flex justify-between px-6 items-center gap-2 transform active:scale-95 transition-all duration-200 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-5 h-5" />
