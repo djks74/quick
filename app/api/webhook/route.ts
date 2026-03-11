@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
       // So only one store can have a specific ID.
       // Non-enterprise stores should have null whatsappPhoneId in DB if they use shared.
       
-      const store = await prisma.store.findUnique({
+      const store = await prisma.store.findFirst({
         where: { whatsappPhoneId: phoneNumberId }
       });
 
