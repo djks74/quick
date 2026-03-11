@@ -207,30 +207,48 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Floating QR Demo (Desktop only) */}
-      <div className="fixed bottom-8 left-8 z-40 hidden xl:flex flex-col items-center gap-3 animate-fade-in">
-        <div className="bg-white p-4 rounded-[2rem] shadow-2xl border border-gray-100 group hover:scale-105 transition-transform duration-300">
+      {/* Floating QR Demo (Visible on all devices) */}
+      <div className="fixed bottom-6 left-6 sm:bottom-8 sm:left-8 z-40 flex flex-col items-center gap-2 sm:gap-3 animate-fade-in">
+        <div className="bg-white p-3 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl border border-gray-100 group hover:scale-105 transition-transform duration-300">
            <div className="relative">
-              <QRCodeSVG 
-                value="https://quick.mythoz.com/demo" 
-                size={120}
-                level="H"
-                includeMargin={false}
-                imageSettings={{
-                  src: "/favicon.ico",
-                  x: undefined,
-                  y: undefined,
-                  height: 24,
-                  width: 24,
-                  excavate: true,
-                }}
-              />
+              <div className="block sm:hidden">
+                <QRCodeSVG 
+                  value="https://quick.mythoz.com/demo" 
+                  size={80}
+                  level="H"
+                  includeMargin={false}
+                  imageSettings={{
+                    src: "/favicon.ico",
+                    x: undefined,
+                    y: undefined,
+                    height: 16,
+                    width: 16,
+                    excavate: true,
+                  }}
+                />
+              </div>
+              <div className="hidden sm:block">
+                <QRCodeSVG 
+                  value="https://quick.mythoz.com/demo" 
+                  size={120}
+                  level="H"
+                  includeMargin={false}
+                  imageSettings={{
+                    src: "/favicon.ico",
+                    x: undefined,
+                    y: undefined,
+                    height: 24,
+                    width: 24,
+                    excavate: true,
+                  }}
+                />
+              </div>
               <div className="absolute inset-0 flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors rounded-xl"></div>
            </div>
         </div>
-        <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-white flex items-center gap-2">
-           <QrCode className="w-4 h-4 text-blue-600" />
-           <span className="text-xs font-bold text-gray-800 tracking-tight">{t.scan_demo}</span>
+        <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-white flex items-center gap-2">
+           <QrCode className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" />
+           <span className="text-[10px] sm:text-xs font-bold text-gray-800 tracking-tight">{t.scan_demo}</span>
         </div>
       </div>
     </div>
