@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       // Detect User Intent that overrides Merchant Mode
       if (isMerchant) {
           const lower = message.text?.body?.toLowerCase() || "";
-          console.log(`[WHATSAPP] Merchant Check: ${from}, StoreID=${user.stores[0]?.id}`);
+          console.log(`[WHATSAPP] Merchant Check: ${from}, StoreID=${user?.stores[0]?.id}`);
           // 1. Explicit Switch
           if (lower === 'user mode' || lower === 'mode user') {
              // We need to store this state. using WhatsAppSession?
