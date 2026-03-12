@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
                  return NextResponse.json({ success: true });
             }
 
-            const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+            const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
 
             let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
             menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
@@ -436,7 +436,7 @@ export async function POST(req: NextRequest) {
           const stepValue = selectedCategoryName ? `ORDERING:${selectedCategoryName}` : `ORDERING:ALL`;
           await updateSession(from, targetStore.id, { step: stepValue });
 
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
           
           let title = selectedCategoryName ? `${selectedCategoryName}` : `All Menu`;
           let menuText = `🍽️ *${title}* 🍽️\n\n`;
@@ -497,7 +497,7 @@ export async function POST(req: NextRequest) {
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           // Web Menu
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}?table=${session.tableNumber}`;
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${session.tableNumber}`;
           await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`, targetStore.id);
           await updateSession(from, targetStore.id, { step: 'START' }); // Reset
         } else if (textBody === '2') {
@@ -528,7 +528,7 @@ export async function POST(req: NextRequest) {
             orderBy: { name: 'asc' }
           });
           
-          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://quick.mythoz.com'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
+          const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
 
           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
           menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;

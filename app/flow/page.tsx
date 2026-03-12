@@ -162,26 +162,26 @@ export default function FlowShowcase() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#0F1113] transition-colors duration-300">
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-[#0F1113]/80 backdrop-blur-md border-b border-gray-100 dark:border-white/10 transition-colors">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-              <Zap className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-black dark:bg-white rounded-xl flex items-center justify-center transition-colors">
+              <Zap className="w-6 h-6 text-white dark:text-black" />
             </div>
-            <span className="font-black text-xl tracking-tighter">GERCEP</span>
+            <span className="font-black text-xl tracking-tighter dark:text-white">GERCEP</span>
           </Link>
           <div className="flex items-center gap-6">
             <button 
               onClick={() => setLang(lang === 'en' ? 'id' : 'en')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-600 transition-colors border border-gray-100"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 transition-colors border border-gray-100 dark:border-white/10"
             >
               <Globe className="w-4 h-4" />
               {lang === 'en' ? 'ID' : 'EN'}
             </button>
-            <Link href="/login" className="text-sm font-bold text-gray-500 hover:text-black transition-colors">{t.signIn}</Link>
-            <Link href="/register" className="px-6 py-2.5 bg-black text-white rounded-xl text-sm font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10">{t.getStarted}</Link>
+            <Link href="/login" className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">{t.signIn}</Link>
+            <Link href="/register" className="px-6 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-sm font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10">{t.getStarted}</Link>
           </div>
         </div>
       </nav>
@@ -189,22 +189,22 @@ export default function FlowShowcase() {
       {/* Hero Section */}
       <section className="pt-40 pb-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full text-blue-600 text-xs font-black uppercase tracking-widest mb-8 animate-in fade-in slide-in-from-bottom duration-700">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-full text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-widest mb-8 animate-in fade-in slide-in-from-bottom duration-700">
             <Smartphone className="w-4 h-4" />
-            Future of Retail & SME
+            {t.flow_subtitle}
           </div>
-          <h1 className="text-5xl md:text-7xl font-black text-gray-900 tracking-tight leading-[1.1] mb-8 animate-in fade-in slide-in-from-bottom duration-1000">
-            Seamless flow from <br />
-            <span className="text-blue-600">Scan to Payment.</span>
+          <h1 className="text-5xl md:text-7xl font-black text-gray-900 dark:text-white tracking-tight leading-[1.1] mb-8 animate-in fade-in slide-in-from-bottom duration-1000">
+            {t.flow_title_start} <br />
+            <span className="text-blue-600 dark:text-blue-400">{t.flow_title_highlight}</span>
           </h1>
-          <p className="text-xl text-gray-500 font-medium leading-relaxed max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom duration-1000 delay-200">
-            A complete ecosystem designed to help local businesses grow without the complexity of traditional POS systems.
+          <p className="text-xl text-gray-500 dark:text-gray-400 font-medium leading-relaxed max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom duration-1000 delay-200">
+            {t.flow_description}
           </p>
         </div>
       </section>
 
       {/* Interactive Flow */}
-      <section className="py-20 px-6 bg-gray-50/50">
+      <section className="py-20 px-6 bg-gray-50/50 dark:bg-white/5 transition-colors">
         <div className="max-w-6xl mx-auto space-y-32">
           {steps.map((step, idx) => (
             <div key={idx} className={cn(
@@ -214,10 +214,10 @@ export default function FlowShowcase() {
               {/* Visual Side */}
               <div className="flex-1 w-full relative">
                 <div className={cn(
-                  "absolute -inset-4 rounded-[40px] blur-2xl opacity-20",
+                  "absolute -inset-4 rounded-[40px] blur-2xl opacity-20 dark:opacity-10",
                   `bg-${step.color}-500`
                 )} />
-                <div className="relative rounded-[32px] overflow-hidden border-8 border-white shadow-2xl shadow-black/10">
+                <div className="relative rounded-[32px] overflow-hidden border-8 border-white dark:border-gray-800 shadow-2xl shadow-black/10">
                   <img src={step.image} alt={step.title} className="w-full aspect-[4/3] object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-8 left-8 text-white">
@@ -230,27 +230,27 @@ export default function FlowShowcase() {
               {/* Text Side */}
               <div className="flex-1 space-y-8">
                 <div className={cn(
-                  "w-16 h-16 rounded-2xl flex items-center justify-center text-white",
+                  "w-16 h-16 rounded-2xl flex items-center justify-center text-white transition-colors",
                   iconVariants[step.color]
                 )}>
                   <step.icon className="w-8 h-8" />
                 </div>
                 
                 <div>
-                  <h2 className="text-4xl font-black text-gray-900 mb-4">{step.title}</h2>
-                  <p className="text-lg text-gray-500 font-medium">{step.subtitle}</p>
+                  <h2 className="text-4xl font-black text-gray-900 dark:text-white mb-4">{step.title}</h2>
+                  <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">{step.subtitle}</p>
                 </div>
 
                 <div className="space-y-4">
                   {step.features.map((feature, fIdx) => (
                     <div key={fIdx} className="flex items-center gap-3">
                       <div className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center",
+                        "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
                         colorVariants[step.color]
                       )}>
                         <CheckCircle2 className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-gray-700">{feature}</span>
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{feature}</span>
                     </div>
                   ))}
                 </div>
@@ -264,26 +264,26 @@ export default function FlowShowcase() {
       <section className="py-32 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            <div className="p-8 rounded-3xl bg-white border border-gray-100 shadow-xl shadow-black/5 text-center space-y-4">
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="p-8 rounded-3xl bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 shadow-xl shadow-black/5 text-center space-y-4 transition-colors">
+              <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto">
                 <Users className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black">Multi-Store Support</h3>
-              <p className="text-sm text-gray-500 font-medium">Manage multiple branches from a single unified super-admin dashboard.</p>
+              <h3 className="text-xl font-black dark:text-white">{t.multiStore}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t.multiStoreDesc}</p>
             </div>
-            <div className="p-8 rounded-3xl bg-white border border-gray-100 shadow-xl shadow-black/5 text-center space-y-4">
-              <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="p-8 rounded-3xl bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 shadow-xl shadow-black/5 text-center space-y-4 transition-colors">
+              <div className="w-12 h-12 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center mx-auto">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black">Bank-Grade Security</h3>
-              <p className="text-sm text-gray-500 font-medium">Encrypted transactions and secure payment gateways for peace of mind.</p>
+              <h3 className="text-xl font-black dark:text-white">{t.security}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t.securityDesc}</p>
             </div>
-            <div className="p-8 rounded-3xl bg-white border border-gray-100 shadow-xl shadow-black/5 text-center space-y-4">
-              <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="p-8 rounded-3xl bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 shadow-xl shadow-black/5 text-center space-y-4 transition-colors">
+              <div className="w-12 h-12 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-2xl flex items-center justify-center mx-auto">
                 <TrendingUp className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black">Scalable Architecture</h3>
-              <p className="text-sm text-gray-500 font-medium">Built on Next.js 15 and Supabase to handle thousands of orders per second.</p>
+              <h3 className="text-xl font-black dark:text-white">{t.scalable}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t.scalableDesc}</p>
             </div>
           </div>
         </div>
@@ -291,18 +291,18 @@ export default function FlowShowcase() {
 
       {/* CTA Section */}
       <section className="py-20 px-6">
-        <div className="max-w-5xl mx-auto bg-black rounded-[48px] p-12 md:p-24 text-center text-white relative overflow-hidden">
+        <div className="max-w-5xl mx-auto bg-black dark:bg-white rounded-[48px] p-12 md:p-24 text-center text-white dark:text-black relative overflow-hidden transition-colors">
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 blur-[120px] rounded-full" />
           <div className="absolute bottom-0 left-0 w-96 h-96 bg-orange-600/20 blur-[120px] rounded-full" />
           
           <div className="relative z-10">
-            <h2 className="text-4xl md:text-6xl font-black mb-8">Ready to transform <br /> your business?</h2>
-            <p className="text-lg text-white/60 mb-12 max-w-xl mx-auto font-medium">Join hundreds of merchants already using our platform to simplify their operations and increase revenue.</p>
+            <h2 className="text-4xl md:text-6xl font-black mb-8">{t.ready}</h2>
+            <p className="text-lg text-white/60 dark:text-black/60 mb-12 max-w-xl mx-auto font-medium">{t.readyDesc}</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register" className="w-full sm:w-auto px-12 py-5 bg-white text-black rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Get Started Now</Link>
-              <Link href="https://wa.me/yournumber" className="w-full sm:w-auto px-12 py-5 bg-white/10 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center justify-center gap-2">
+              <Link href="/register" className="w-full sm:w-auto px-12 py-5 bg-white dark:bg-black text-black dark:text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">{t.getStarted}</Link>
+              <Link href="https://wa.me/6287768201551" className="w-full sm:w-auto px-12 py-5 bg-white/10 dark:bg-black/10 text-white dark:text-black rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 dark:hover:bg-black/20 transition-all flex items-center justify-center gap-2">
                 <MessageSquare className="w-5 h-5" />
-                Contact Sales
+                {t.contactSales}
               </Link>
             </div>
           </div>
@@ -310,16 +310,16 @@ export default function FlowShowcase() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-gray-100">
+      <footer className="py-12 border-t border-gray-100 dark:border-white/10 transition-colors">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2 opacity-50">
+          <div className="flex items-center gap-2 opacity-50 dark:opacity-80 dark:text-white">
             <Zap className="w-5 h-5" />
             <span className="font-black tracking-tighter">GERCEP</span>
           </div>
-          <p className="text-sm text-gray-400 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
           <div className="flex gap-8">
-            <Link href="#" className="text-sm text-gray-400 hover:text-black font-bold">Privacy</Link>
-            <Link href="#" className="text-sm text-gray-400 hover:text-black font-bold">Terms</Link>
+            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
+            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
           </div>
         </div>
       </footer>

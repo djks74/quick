@@ -428,7 +428,7 @@ export default function Home() {
            <div className="relative">
               <div className="block sm:hidden">
                  <QRCodeSVG 
-                   value="https://quick.mythoz.com/demo?table=toko" 
+                   value="https://gercep.click/demo?table=toko" 
                    size={80}
                    level="H"
                    includeMargin={false}
@@ -444,7 +444,7 @@ export default function Home() {
                </div>
                <div className="hidden sm:block">
                  <QRCodeSVG 
-                   value="https://quick.mythoz.com/demo?table=toko" 
+                   value="https://gercep.click/demo?table=toko" 
                    size={120}
                    level="H"
                    includeMargin={false}
@@ -466,6 +466,21 @@ export default function Home() {
            <span className="text-[10px] sm:text-xs font-bold text-gray-800 dark:text-white tracking-tight">{t.scan_demo}</span>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="py-12 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#0F1113] transition-colors">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center gap-2 opacity-50 dark:opacity-80 dark:text-white">
+            <Zap className="w-5 h-5" />
+            <span className="font-black tracking-tighter uppercase">Gercep</span>
+          </div>
+          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
+          <div className="flex gap-8">
+            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
+            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

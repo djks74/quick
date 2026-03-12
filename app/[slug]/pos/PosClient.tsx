@@ -214,33 +214,41 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
   if (orderSuccess) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center space-y-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+        <div className={cn(
+          "rounded-2xl shadow-2xl w-full max-w-md p-8 text-center space-y-6 transition-colors duration-300 border",
+          isDarkMode ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-900"
+        )}>
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto transition-colors">
+            <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Order Completed!</h2>
-            <p className="text-gray-500">Order #{orderSuccess.id}</p>
+            <h2 className="text-3xl font-black">Order Completed!</h2>
+            <p className={cn("text-sm font-medium mt-1", isDarkMode ? "text-gray-400" : "text-gray-500")}>Order #{orderSuccess.id}</p>
           </div>
           
-          <div className="border-t border-b py-4 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total Amount</span>
-              <span className="font-bold">{formatPrice(orderSuccess.total)}</span>
+          <div className={cn("border-t border-b py-6 space-y-3 transition-colors", isDarkMode ? "border-gray-700" : "border-gray-100")}>
+            <div className="flex justify-between items-center">
+              <span className={cn("text-sm", isDarkMode ? "text-gray-400" : "text-gray-600")}>Total Amount</span>
+              <span className="text-xl font-black text-[#2271b1]">{formatPrice(orderSuccess.total)}</span>
             </div>
             {paymentMethod === 'cash' && (
-              <div className="flex justify-between text-green-600">
-                <span>Change</span>
-                <span className="font-bold">{formatPrice(orderSuccess.change)}</span>
+              <div className="flex justify-between items-center text-green-600 dark:text-green-400">
+                <span className="text-sm">Change</span>
+                <span className="text-xl font-black">{formatPrice(orderSuccess.change)}</span>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4 pt-2">
             <button 
               onClick={() => window.print()} 
-              className="px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+              className={cn(
+                "px-6 py-4 border rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95",
+                isDarkMode 
+                  ? "border-gray-700 bg-gray-700 hover:bg-gray-600 text-white" 
+                  : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+              )}
             >
               Print Receipt
             </button>
@@ -250,7 +258,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                 setCashReceived("");
                 setPaymentMethod("cash");
               }} 
-              className="px-4 py-2 bg-[#2271b1] text-white rounded-lg font-medium hover:bg-[#135e96]"
+              className="px-6 py-4 bg-[#2271b1] hover:bg-[#135e96] text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-blue-500/20"
             >
               New Order
             </button>
