@@ -10,15 +10,16 @@ function generateUniqueCode() {
 export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number, specificType?: string) {
   console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}, Type ${specificType}`);
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
+  const platformSettings = await prisma.platformSettings.findUnique({ where: { key: "default" } });
   
-  // Use env variables as fallback since PlatformSettings might not be synced
+  // Use DB settings with env variables as fallback
   const platform = {
-      midtransServerKey: process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY, // Try both env names
-      midtransClientKey: process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY,
-      xenditSecretKey: process.env.XENDIT_SECRET_KEY,
-      bankName: 'BCA',
-      bankAccountNumber: process.env.PLATFORM_BANK_NUMBER,
-      bankAccountName: process.env.PLATFORM_BANK_NAME
+      midtransServerKey: platformSettings?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY,
+      midtransClientKey: platformSettings?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY,
+      xenditSecretKey: platformSettings?.xenditSecretKey || process.env.XENDIT_SECRET_KEY,
+      bankName: platformSettings?.bankName || 'BCA',
+      bankAccountNumber: platformSettings?.bankAccountNumber || process.env.PLATFORM_BANK_NUMBER,
+      bankAccountName: platformSettings?.bankAccountName || process.env.PLATFORM_BANK_NAME
   };
   
   if (!settings) {

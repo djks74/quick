@@ -59,14 +59,34 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// Global set to prevent double processing of the same message ID (Vercel warm lambda)
+const processedMessageIds = new Set<string>();
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     console.log('WEBHOOK_BODY:', JSON.stringify(body, null, 2));
+    
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
     const message = value?.messages?.[0];
+
+    // Deduplication check
+    if (message?.id) {
+        if (processedMessageIds.has(message.id)) {
+            console.log(`[WHATSAPP] Skipping already processed message: ${message.id}`);
+            return NextResponse.json({ success: true });
+        }
+        processedMessageIds.add(message.id);
+        
+        // Keep the set small (last 500 messages)
+        if (processedMessageIds.size > 500) {
+            const firstKey = processedMessageIds.values().next().value;
+            if (firstKey) processedMessageIds.delete(firstKey);
+        }
+    }
+
     const phoneNumberId = value?.metadata?.phone_number_id;
     const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
     const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
@@ -691,11 +711,9 @@ export async function POST(req: NextRequest) {
               summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           }
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+          summary += `\n\n🔗 *Pay Here*: ${paymentLink}`;
 
-          await sendWhatsAppMessage(from, summary, targetStore.id, { 
-              buttonText: "Pay Now", 
-              buttonUrl: paymentLink 
-          });
+          await sendWhatsAppMessage(from, summary, targetStore.id);
           await updateSession(from, targetStore.id, { step: 'START', cart: [] });
           return NextResponse.json({ success: true });
         }
@@ -862,11 +880,9 @@ export async function POST(req: NextRequest) {
                      summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
                  }
                  summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+                 summary += `\n\n🔗 *Pay Here*: ${paymentLink}`;
 
-                 await sendWhatsAppMessage(from, summary, targetStore.id, {
-                     buttonText: "Pay Now",
-                     buttonUrl: paymentLink
-                 });
+                 await sendWhatsAppMessage(from, summary, targetStore.id);
                  await updateSession(from, targetStore.id, { step: 'START', cart: [] });
                  return NextResponse.json({ success: true });
                  // --- CHECKOUT LOGIC END ---
@@ -915,10 +931,7 @@ export async function POST(req: NextRequest) {
             }
           });
           const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, {
-              buttonText: "Pay Now",
-              buttonUrl: paymentLink
-          });
+          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\n🔗 *Pay Here*: ${paymentLink}`, targetStore.id);
         }
       }
 

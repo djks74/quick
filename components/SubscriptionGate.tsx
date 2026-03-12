@@ -9,16 +9,18 @@ export default function SubscriptionGate({ store }: { store: any }) {
   const handleSubscribe = async () => {
     setLoading(true);
     try {
+      console.log("Generating checkout for store:", store.id);
       const res = await fetch("/api/subscription/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storeId: store.id })
       });
       const data = await res.json();
+      console.log("Checkout response:", data);
       if (data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        alert("Failed to generate payment link. Please contact support.");
+        alert(`Failed to generate payment link: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error("Subscription Error:", err);

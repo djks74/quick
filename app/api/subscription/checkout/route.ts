@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
     const serverKey = platform?.subscriptionServerKey || process.env.SUBSCRIPTION_SERVER_KEY;
     const clientKey = platform?.subscriptionClientKey || process.env.SUBSCRIPTION_CLIENT_KEY;
 
+    console.log(`[Subscription] Store: ${storeId}, Keys Found: Server=${!!serverKey}, Client=${!!clientKey}`);
+
     if (!serverKey || !clientKey) {
       console.error("Subscription keys missing in PlatformSettings. Check Super Admin Settings.");
       return NextResponse.json({ error: 'Subscription payment gateway not configured' }, { status: 500 });
