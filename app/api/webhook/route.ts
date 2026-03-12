@@ -78,18 +78,26 @@ export async function POST(req: NextRequest) {
             });
             console.log(`[WHATSAPP] Processing NEW message: ${message.id} from ${message.from}`);
         } catch (e: any) {
-            // If creation fails, it means the message was already processed or is being processed
-            console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}. Error: ${e.message}`);
-            return NextResponse.json({ success: true });
+            // Check if it's a duplicate (P2002 is Prisma's unique constraint violation)
+            if (e.code === 'P2002') {
+                console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}`);
+                return NextResponse.json({ success: true });
+            }
+            
+            // If the table doesn't exist (P2021) or other error, log it and CONTINUE anyway
+            // We'd rather risk a double reply than no reply at all.
+            console.warn(`[WHATSAPP] Deduplication skipped due to error: ${e.message}. Continuing...`);
         }
         
         // Periodic cleanup: delete messages older than 24 hours (runs on random 1% of requests)
-        if (Math.random() < 0.01) {
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            prisma.processedMessage.deleteMany({
-                where: { createdAt: { lt: oneDayAgo } }
-            }).catch(err => console.error('[WHATSAPP] Cleanup failed:', err));
-        }
+        try {
+            if (Math.random() < 0.01) {
+                const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                prisma.processedMessage.deleteMany({
+                    where: { createdAt: { lt: oneDayAgo } }
+                }).catch(() => {}); // Silent fail
+            }
+        } catch (err) {}
     }
 
     const phoneNumberId = value?.metadata?.phone_number_id;
