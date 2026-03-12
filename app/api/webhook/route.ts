@@ -51,7 +51,12 @@ export async function GET(req: NextRequest) {
     console.log('WEBHOOK_VERIFIED_FAILED: Token mismatch');
     return new NextResponse(null, { status: 403 });
   }
-  return new NextResponse(null, { status: 400 });
+  
+  // Friendly message for direct browser access
+  return NextResponse.json({ 
+    status: "active", 
+    message: "Gercep WhatsApp Webhook is running. Waiting for Meta verification or events." 
+  });
 }
 
 export async function POST(req: NextRequest) {
