@@ -59,9 +59,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Global set to prevent double processing of the same message ID (Vercel warm lambda)
-const processedMessageIds = new Set<string>();
-
+// Persistent deduplication using DB
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -72,18 +70,25 @@ export async function POST(req: NextRequest) {
     const value = changes?.value;
     const message = value?.messages?.[0];
 
-    // Deduplication check
+    // Deduplication check using Prisma
     if (message?.id) {
-        if (processedMessageIds.has(message.id)) {
-            console.log(`[WHATSAPP] Skipping already processed message: ${message.id}`);
+        try {
+            await prisma.processedMessage.create({
+                data: { id: message.id }
+            });
+            console.log(`[WHATSAPP] Processing message: ${message.id}`);
+        } catch (e) {
+            // If creation fails, it means the message was already processed
+            console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}`);
             return NextResponse.json({ success: true });
         }
-        processedMessageIds.add(message.id);
         
-        // Keep the set small (last 500 messages)
-        if (processedMessageIds.size > 500) {
-            const firstKey = processedMessageIds.values().next().value;
-            if (firstKey) processedMessageIds.delete(firstKey);
+        // Periodic cleanup: delete messages older than 1 hour (runs on random 5% of requests)
+        if (Math.random() < 0.05) {
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            prisma.processedMessage.deleteMany({
+                where: { createdAt: { lt: oneHourAgo } }
+            }).catch(err => console.error('[WHATSAPP] Cleanup failed:', err));
         }
     }
 
