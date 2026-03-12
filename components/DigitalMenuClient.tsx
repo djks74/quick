@@ -60,23 +60,23 @@ const CategoryIcon = ({ category, themeColor }: { category?: string, themeColor:
 
   if (isFood) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center bg-orange-50 dark:bg-orange-950/30 rounded-2xl group-hover:bg-orange-100 dark:group-hover:bg-orange-900/40 transition-colors">
-        <Utensils className="w-8 h-8 text-orange-500 animate-bounce duration-2000" style={{ color: themeColor }} />
+      <div className="relative w-full h-full flex items-center justify-center bg-orange-50 dark:bg-orange-500/10 rounded-2xl group-hover:bg-orange-100 dark:group-hover:bg-orange-500/20 transition-colors">
+        <Utensils className="w-8 h-8 text-orange-500 animate-bounce duration-2000" />
       </div>
     );
   }
 
   if (isDrink) {
     return (
-      <div className="relative w-full h-full flex items-center justify-center bg-blue-50 dark:bg-blue-950/30 rounded-2xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-colors">
-        <CupSoda className="w-8 h-8 text-blue-500 animate-pulse duration-1500" style={{ color: themeColor }} />
+      <div className="relative w-full h-full flex items-center justify-center bg-blue-50 dark:bg-blue-500/10 rounded-2xl group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 transition-colors">
+        <CupSoda className="w-8 h-8 text-blue-500 animate-pulse duration-1500" />
       </div>
     );
   }
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-2xl group-hover:bg-gray-100 dark:group-hover:bg-gray-700 transition-colors">
-      <Package className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+      <Package className="w-8 h-8 text-gray-300 dark:text-gray-500" />
     </div>
   );
 };
@@ -377,7 +377,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <button 
                           onClick={() => updateQuantity(product.id, -1)}
                           disabled={!store.isOpen}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-gray-900 shadow-sm text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-gray-700 shadow-sm text-gray-400 dark:text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -385,7 +385,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         <button 
                           onClick={() => updateQuantity(product.id, 1)}
                           disabled={!store.isOpen}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-gray-900 shadow-sm text-gray-400 dark:text-gray-500 hover:text-green-500 transition-colors disabled:opacity-50"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white dark:bg-gray-700 shadow-sm text-gray-400 dark:text-gray-300 hover:text-green-500 transition-colors disabled:opacity-50"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
