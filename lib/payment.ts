@@ -9,8 +9,18 @@ function generateUniqueCode() {
 
 export async function processPayment(orderId: number, amount: number, customerPhone: string, method: string, storeId: number, specificType?: string) {
   console.log(`Processing payment: Order ${orderId}, Amount ${amount}, Method ${method}, Store ${storeId}, Type ${specificType}`);
+  
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
-  const platformSettings = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+  if (!settings) {
+    throw new Error("Store not found");
+  }
+
+  let platformSettings = null;
+  try {
+    platformSettings = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+  } catch (e: any) {
+    console.warn(`[PAYMENT] Could not fetch PlatformSettings (table might be missing): ${e.message}`);
+  }
   
   // Use DB settings with env variables as fallback
   const platform = {
@@ -21,10 +31,6 @@ export async function processPayment(orderId: number, amount: number, customerPh
       bankAccountNumber: platformSettings?.bankAccountNumber || process.env.PLATFORM_BANK_NUMBER,
       bankAccountName: platformSettings?.bankAccountName || process.env.PLATFORM_BANK_NAME
   };
-  
-  if (!settings) {
-    throw new Error("Store not found");
-  }
 
   const canOverridePlatformConfig = settings.slug !== "demo"; // && settings.subscriptionPlan === "ENTERPRISE";
   // Removed strict Enterprise check so PRO stores can also attempt to load keys if present.

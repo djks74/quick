@@ -21,7 +21,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Get Midtrans Keys from Platform Settings specifically for Subscriptions
-    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    let platform = null;
+    try {
+      platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    } catch (e: any) {
+      console.warn(`[SUBSCRIPTION] Could not fetch PlatformSettings (table might be missing): ${e.message}`);
+    }
+    
     const serverKey = platform?.subscriptionServerKey || process.env.SUBSCRIPTION_SERVER_KEY;
     const clientKey = platform?.subscriptionClientKey || process.env.SUBSCRIPTION_CLIENT_KEY;
 
