@@ -167,7 +167,7 @@ export default function AdminSettings() {
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[2px] whitespace-nowrap",
               activeTab === tab 
-                ? "border-[#2271b1] text-[#2271b1] bg-white" 
+                ? "border-[#2271b1] text-[#2271b1] bg-white dark:bg-gray-800" 
                 : "border-transparent text-gray-500 hover:text-[#2271b1]"
             )}
           >
@@ -179,26 +179,26 @@ export default function AdminSettings() {
       <div className="max-w-4xl space-y-8">
         {activeTab === "General" && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Store Identity</h3>
-                <p className="text-xs text-gray-500 mt-1">Global settings for your store.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Store Identity</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Global settings for your store.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Store Name</label>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Store Name</label>
                   <input 
                     type="text" 
-                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                     value={settings.storeName}
                     onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Number</label>
                   <input 
                     type="text" 
-                    className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                     value={settings.whatsapp}
                     onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })}
                     placeholder="628..."
@@ -207,10 +207,10 @@ export default function AdminSettings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Point of Sale</h3>
-                <p className="text-xs text-gray-500 mt-1">Manage POS settings.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Point of Sale</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage POS settings.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                  <div className="flex items-center space-x-2">
@@ -220,10 +220,10 @@ export default function AdminSettings() {
                       onChange={(e) => setSettings({ ...settings, enablePos: e.target.checked })}
                       className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
-                    <label className="text-sm font-medium">Enable POS System</label>
+                    <label className="text-sm font-medium dark:text-gray-300">Enable POS System</label>
                  </div>
                  {settings.enablePos && (
-                    <div className="bg-blue-50 p-3 rounded text-sm text-blue-700">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-sm text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-800 transition-colors">
                         POS is active at <a href={`/${slug}/pos`} target="_blank" className="font-bold hover:underline">/{slug}/pos</a>
                     </div>
                  )}
@@ -232,36 +232,36 @@ export default function AdminSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Integrations</h3>
-                <p className="text-xs text-gray-500 mt-1">Connect third-party services.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Integrations</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Connect third-party services.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 {!isEnterprise && (
-                    <div className="bg-blue-50 text-blue-700 p-3 rounded-md text-sm mb-4 flex items-center">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm mb-4 flex items-center border border-blue-100 dark:border-blue-800 transition-colors">
                         <Lock className="w-4 h-4 mr-2" />
                         Using Platform WhatsApp Config. Upgrade to Enterprise to use your own.
                     </div>
                 )}
                 {isDemoStore && (
-                  <div className="bg-gray-100 text-gray-700 p-3 rounded-md text-sm mb-4">
+                  <div className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 p-3 rounded-md text-sm mb-4 border dark:border-gray-700 transition-colors">
                     Demo store always uses Platform WhatsApp config.
                   </div>
                 )}
                 <div className={cn(!canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
                     <div>
-                    <label className="block text-sm font-medium mb-1">WhatsApp Token (Meta)</label>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Token (Meta)</label>
                     <input 
                         type="password" 
-                        className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                        className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                         value={settings.whatsappToken}
                         onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
                     />
                     </div>
                     <div className="mt-4">
-                    <label className="block text-sm font-medium mb-1">WhatsApp Phone Number ID</label>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Phone Number ID</label>
                     <input 
                         type="text" 
-                        className="w-full md:w-2/3 border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                        className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                         value={settings.whatsappPhoneId}
                         onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
                     />
@@ -276,13 +276,13 @@ export default function AdminSettings() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327]">Payment Methods</h3>
-                <p className="text-xs text-gray-500 mt-1">Enable multiple payment options.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Payment Methods</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable multiple payment options.</p>
               </div>
               <div className="md:col-span-2 space-y-6">
                 
                 {/* Manual Transfer */}
-                <div className="border p-4 rounded-lg bg-white space-y-4">
+                <div className="border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 space-y-4 transition-colors">
                     <div className="flex items-center justify-between">
                          <div className="flex items-center space-x-2">
                             <input 
@@ -291,48 +291,48 @@ export default function AdminSettings() {
                                 onChange={(e) => setSettings({ ...settings, enableManualTransfer: e.target.checked })}
                                 className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                             />
-                            <label className="text-sm font-medium">Enable Manual Transfer</label>
+                            <label className="text-sm font-medium dark:text-gray-300">Enable Manual Transfer</label>
                         </div>
                     </div>
                     
                     {settings.enableManualTransfer && (
-                        <div className="pl-6 pt-2 border-t mt-2">
+                        <div className="pl-6 pt-2 border-t dark:border-gray-700 mt-2">
                              {!isEnterprise && (
-                                <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                                <div className="bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 p-2 text-xs mb-3 rounded border dark:border-gray-800">
                                     Funds will be transferred to Platform Account (BCA 888888888). Upgrade to Enterprise to use your own bank account.
                                 </div>
                              )}
                              {isDemoStore && (
-                                <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                                <div className="bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 p-2 text-xs mb-3 rounded border dark:border-gray-800">
                                     Demo store always uses Platform bank account.
                                 </div>
                              )}
                              <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Bank Name</label>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Bank Name</label>
                                     <input 
                                         type="text" 
-                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
                                         value={bankAccount.bankName}
                                         onChange={(e) => setBankAccount({ ...bankAccount, bankName: e.target.value })}
                                         placeholder="BCA"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Account Number</label>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Account Number</label>
                                     <input 
                                         type="text" 
-                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
                                         value={bankAccount.accountNumber}
                                         onChange={(e) => setBankAccount({ ...bankAccount, accountNumber: e.target.value })}
                                         placeholder="1234567890"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Account Name</label>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Account Name</label>
                                     <input 
                                         type="text" 
-                                        className="w-full border px-3 py-1.5 text-sm" 
+                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
                                         value={bankAccount.accountName}
                                         onChange={(e) => setBankAccount({ ...bankAccount, accountName: e.target.value })}
                                         placeholder="Store Name"
@@ -344,7 +344,7 @@ export default function AdminSettings() {
                 </div>
 
                 {/* Midtrans */}
-                <div className="border p-4 rounded-lg bg-white space-y-4">
+                <div className="border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 space-y-4 transition-colors">
                    <div className="flex items-center space-x-2">
                     <input 
                       type="checkbox" 
@@ -352,25 +352,25 @@ export default function AdminSettings() {
                       onChange={(e) => setSettings({ ...settings, enableMidtrans: e.target.checked })}
                       className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
-                    <label className="text-sm font-medium">Enable Midtrans</label>
+                    <label className="text-sm font-medium dark:text-gray-300">Enable Midtrans</label>
                    </div>
                    {settings.enableMidtrans && (
                      <div className="pl-6 space-y-3">
                        {!isEnterprise && (
-                            <div className="bg-green-50 text-green-700 p-3 rounded-md text-xs mb-3 flex items-center">
+                            <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-3 rounded-md text-xs mb-3 flex items-center border border-green-100 dark:border-green-800 transition-colors">
                                 <Check className="w-4 h-4 mr-2" />
                                 <span>Platform Midtrans Keys Active. Upgrade to Enterprise to use your own keys.</span>
                             </div>
                        )}
                        {isDemoStore && (
-                          <div className="bg-gray-100 text-gray-600 p-2 text-xs mb-3 rounded">
+                          <div className="bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 p-2 text-xs mb-3 rounded border dark:border-gray-800">
                               Demo store always uses Platform Midtrans keys.
                           </div>
                        )}
                        <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-75 pointer-events-none")}>
                             <input 
                                 type="password" 
-                                className="w-full border px-3 py-1.5 text-sm bg-gray-50" 
+                                className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
                                 placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Server Key"}
                                 value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewaySecret}
                                 onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
@@ -378,7 +378,7 @@ export default function AdminSettings() {
                             />
                             <input 
                                 type="text" 
-                                className="w-full border px-3 py-1.5 text-sm bg-gray-50" 
+                                className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
                                 placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Client Key"}
                                 value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewayClientKey}
                                 onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
@@ -390,14 +390,14 @@ export default function AdminSettings() {
                 </div>
 
                 {/* WhatsApp Checkout */}
-                <div className="flex items-center space-x-2 border p-4 rounded-lg bg-white">
+                <div className="flex items-center space-x-2 border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 transition-colors">
                   <input 
                     type="checkbox" 
                     checked={settings.enableWhatsApp}
                     onChange={(e) => setSettings({ ...settings, enableWhatsApp: e.target.checked })}
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-                  <label className="text-sm font-medium">Enable Checkout via WhatsApp</label>
+                  <label className="text-sm font-medium dark:text-gray-300">Enable Checkout via WhatsApp</label>
                 </div>
 
               </div>
@@ -407,29 +407,29 @@ export default function AdminSettings() {
 
         {activeTab === "Tax & Fees" && (
            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
                  <div>
-                   <h3 className="text-sm font-bold text-[#1d2327]">Additional Charges</h3>
-                   <p className="text-xs text-gray-500 mt-1">Configure taxes and service charges.</p>
+                   <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Additional Charges</h3>
+                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure taxes and service charges.</p>
                  </div>
                  <div className="md:col-span-2 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium mb-1">Tax (%)</label>
+                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Tax (%)</label>
                             <input 
                                 type="text"
                                 inputMode="decimal"
-                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                                 value={settings.taxPercent}
                                 onChange={(e) => setSettings({ ...settings, taxPercent: e.target.value })}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Service Charge (%)</label>
+                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Service Charge (%)</label>
                             <input 
                                 type="text"
                                 inputMode="decimal"
-                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                                 value={settings.serviceChargePercent}
                                 onChange={(e) => setSettings({ ...settings, serviceChargePercent: e.target.value })}
                             />
@@ -438,16 +438,16 @@ export default function AdminSettings() {
                  </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
                  <div>
-                   <h3 className="text-sm font-bold text-[#1d2327]">Payment Fees</h3>
-                   <p className="text-xs text-gray-500 mt-1">Configure transaction fees.</p>
+                   <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Payment Fees</h3>
+                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure transaction fees.</p>
                  </div>
                  <div className="md:col-span-2 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Who pays the fees?</label>
+                        <label className="block text-sm font-medium mb-1 dark:text-gray-300">Who pays the fees?</label>
                         <select 
-                            className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none bg-white"
+                            className="w-full border border-[#ccd0d4] dark:border-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none bg-white dark:bg-gray-800 dark:text-white transition-colors"
                             value={settings.feePaidBy}
                             onChange={(e) => setSettings({ ...settings, feePaidBy: e.target.value })}
                         >
@@ -458,24 +458,24 @@ export default function AdminSettings() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium mb-1">QRIS Fee (%)</label>
+                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">QRIS Fee (%)</label>
                             <input 
                                 type="text"
                                 inputMode="decimal"
-                                className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                                 value={settings.qrisFeePercent}
                                 onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
                             />
-                            <p className="text-xs text-gray-500 mt-1">Default is 0.7%</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default is 0.7%</p>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Bank Transfer Fee (Flat)</label>
+                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Bank Transfer Fee (Flat)</label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1.5 text-gray-500 text-sm">Rp</span>
+                                <span className="absolute left-3 top-1.5 text-gray-500 dark:text-gray-400 text-sm">Rp</span>
                                 <input 
                                     type="text"
                                     inputMode="decimal"
-                                    className="w-full border border-[#ccd0d4] pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none" 
+                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                                     value={settings.manualTransferFee}
                                     onChange={(e) => setSettings({ ...settings, manualTransferFee: e.target.value })}
                                 />
@@ -491,11 +491,11 @@ export default function AdminSettings() {
            <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                  <div>
-                   <h3 className="text-sm font-bold text-[#1d2327]">Theme</h3>
+                   <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Theme</h3>
                  </div>
                  <div className="md:col-span-2 space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Theme Color</label>
+                      <label className="block text-sm font-medium mb-1 dark:text-gray-300">Theme Color</label>
                       <div className="flex items-center space-x-2">
                         <input 
                           type="color" 
@@ -505,7 +505,7 @@ export default function AdminSettings() {
                         />
                         <input 
                           type="text" 
-                          className="w-full md:w-1/3 border border-[#ccd0d4] px-3 py-1.5 uppercase" 
+                          className="w-full md:w-1/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 uppercase dark:text-white outline-none focus:border-[#2271b1]" 
                           value={settings.themeColor}
                           onChange={(e) => setSettings({ ...settings, themeColor: e.target.value })}
                         />
@@ -516,13 +516,13 @@ export default function AdminSettings() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                  <div>
-                   <h3 className="text-sm font-bold text-[#1d2327]">Layout</h3>
+                   <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Layout</h3>
                  </div>
                  <div className="md:col-span-2 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">POS Grid Columns</label>
+                        <label className="block text-sm font-medium mb-1 dark:text-gray-300">POS Grid Columns</label>
                         <select 
-                            className="w-full border border-[#ccd0d4] px-3 py-1.5 focus:border-[#2271b1] outline-none bg-white"
+                            className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white transition-colors"
                             value={settings.posGridColumns}
                             onChange={(e) => setSettings({ ...settings, posGridColumns: parseInt(e.target.value) })}
                         >
@@ -537,7 +537,7 @@ export default function AdminSettings() {
            </div>
         )}
 
-        <div className="pt-6 border-t flex items-center space-x-4">
+        <div className="pt-6 border-t dark:border-gray-800 flex items-center space-x-4 transition-colors">
           <button 
             onClick={handleSave}
             disabled={isSaving}
