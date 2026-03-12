@@ -59,29 +59,29 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// Persistent deduplication using DB (Triggering new build)
 // Fast memory cache for deduplication (fallback if DB fails)
 const memoryCache = new Set<string>();
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log('WEBHOOK_BODY:', JSON.stringify(body, null, 2));
     
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
 
-    // 1. FAST EXIT: Ignore status updates (sent, delivered, read)
+    // 1. FAST EXIT: Ignore status updates (sent, delivered, read) to reduce log noise
     if (value?.statuses) {
         return NextResponse.json({ success: true });
     }
 
     const message = value?.messages?.[0];
+    if (!message) return NextResponse.json({ success: true });
 
     // 2. FAST DEDUPLICATION: Memory Check
-    if (message?.id) {
+    if (message.id) {
         if (memoryCache.has(message.id)) {
-            console.log(`[WHATSAPP] Skipping already processed message (Memory): ${message.id}`);
             return NextResponse.json({ success: true });
         }
         memoryCache.add(message.id);
@@ -89,47 +89,29 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. PERSISTENT DEDUPLICATION: DB Check
-    if (message?.id) {
+    if (message.id) {
         try {
             await prisma.processedMessage.create({
                 data: { id: message.id }
             });
             console.log(`[WHATSAPP] Processing NEW message: ${message.id} from ${message.from}`);
         } catch (e: any) {
-            // Check if it's a duplicate (P2002 is Prisma's unique constraint violation)
             if (e.code === 'P2002') {
-                console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}`);
                 return NextResponse.json({ success: true });
             }
-            
-            // If the table doesn't exist (P2021) or other error, log it and CONTINUE anyway
-            // We'd rather risk a double reply than no reply at all.
-            console.warn(`[WHATSAPP] Deduplication skipped due to error: ${e.message}. Continuing...`);
+            // If table missing, we continue because memoryCache already caught local duplicates
         }
-        
-        // Periodic cleanup: delete messages older than 24 hours (runs on random 1% of requests)
-        try {
-            if (Math.random() < 0.01) {
-                const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                prisma.processedMessage.deleteMany({
-                    where: { createdAt: { lt: oneDayAgo } }
-                }).catch(() => {}); // Silent fail
-            }
-        } catch (err) {}
     }
 
     const phoneNumberId = value?.metadata?.phone_number_id;
-    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
     const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
-    console.log(`[WHATSAPP] Webhook Context: PhoneID=${phoneNumberId}, PlatformID=${platformPhoneNumberId}`);
+    const from = message.from;
+    const textBody = message.text?.body?.trim();
+    const lowerText = textBody?.toLowerCase();
 
-    if (message && phoneNumberId) {
-      const from = message.from;
-      const textBody = message.text?.body?.trim();
-      const lowerText = textBody?.toLowerCase();
-
-      console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}`);
+    console.log(`[WHATSAPP] Incoming Message: "${textBody}" from ${from} (Store Context: ${phoneNumberId})`);
 
       // 0. MERCHANT CHECK
       // Check if sender is a registered Merchant
