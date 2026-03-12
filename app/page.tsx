@@ -1,9 +1,99 @@
 "use client";
 
 import Link from "next/link";
-import { MessageCircle, ShoppingBag, Store, ArrowRight, Globe, QrCode } from "lucide-react";
+import { 
+  MessageCircle, 
+  ShoppingBag, 
+  Store, 
+  ArrowRight, 
+  Globe, 
+  QrCode, 
+  Zap, 
+  Smartphone, 
+  CreditCard, 
+  LayoutDashboard, 
+  CheckCircle2, 
+  Users, 
+  ShieldCheck, 
+  TrendingUp,
+  MessageSquare
+} from "lucide-react";
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { cn } from "@/lib/utils";
+
+const steps = [
+  {
+    phase: "Phase 1",
+    title: "Merchant Setup",
+    subtitle: "Launch your digital presence in minutes.",
+    icon: Store,
+    color: "blue",
+    features: [
+      "No-code store creation",
+      "Custom brand colors & logo",
+      "Instant menu/product upload",
+      "Table-specific QR generation"
+    ],
+    image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=800"
+  },
+  {
+    phase: "Phase 2",
+    title: "The Scan Experience",
+    subtitle: "Zero friction for your customers.",
+    icon: QrCode,
+    color: "orange",
+    features: [
+      "No app download required",
+      "Instant access via QR scan",
+      "Interactive digital menu",
+      "Direct WhatsApp ordering"
+    ],
+    image: "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?auto=format&fit=crop&q=80&w=800"
+  },
+  {
+    phase: "Phase 3",
+    title: "Automated Payments",
+    subtitle: "Secure and real-time verification.",
+    icon: CreditCard,
+    color: "green",
+    features: [
+      "Dynamic QRIS generation",
+      "Instant payment callbacks",
+      "Zero manual verification",
+      "Auto-update order status"
+    ],
+    image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&q=80&w=800"
+  },
+  {
+    phase: "Phase 4",
+    title: "Admin Mastery",
+    subtitle: "Control everything from one place.",
+    icon: LayoutDashboard,
+    color: "purple",
+    features: [
+      "Real-time order tracking",
+      "Sales & revenue analytics",
+      "Customer behavior insights",
+      "Withdrawal management"
+    ],
+    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
+  }
+];
+
+const colorVariants: Record<string, string> = {
+  blue: "bg-blue-50 text-blue-600 border-blue-100",
+  orange: "bg-orange-50 text-orange-600 border-orange-100",
+  green: "bg-green-50 text-green-600 border-green-100",
+  purple: "bg-purple-50 text-purple-600 border-purple-100",
+};
+
+const iconVariants: Record<string, string> = {
+  blue: "bg-blue-600 shadow-blue-500/20",
+  orange: "bg-orange-600 shadow-orange-500/20",
+  green: "bg-green-600 shadow-green-500/20",
+  purple: "bg-purple-600 shadow-purple-500/20",
+};
 
 const translations = {
   en: {
@@ -50,10 +140,12 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-50">
       {/* Navbar */}
       <nav className="w-full px-6 py-4 flex justify-between items-center backdrop-blur-sm bg-white/30 sticky top-0 z-50">
-        <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
-          <Store className="w-6 h-6" />
-          <span>QuickMenu</span>
-        </div>
+        <Link href="/" className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
+            <Zap className="w-6 h-6 text-white" />
+          </div>
+          <span className="font-black text-xl tracking-tighter text-black">QUICK</span>
+        </Link>
         
         <div className="flex items-center gap-4">
           <button 
@@ -206,6 +298,63 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Interactive Flow */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-6xl mx-auto space-y-32">
+          {steps.map((step, idx) => (
+            <div key={idx} className={cn(
+              "flex flex-col md:flex-row items-center gap-12 md:gap-20",
+              idx % 2 !== 0 && "md:flex-row-reverse"
+            )}>
+              {/* Visual Side */}
+              <div className="flex-1 w-full relative">
+                <div className={cn(
+                  "absolute -inset-4 rounded-[40px] blur-2xl opacity-20",
+                  `bg-${step.color}-500`
+                )} />
+                <div className="relative rounded-[32px] overflow-hidden border-8 border-white shadow-2xl shadow-black/10">
+                  <img src={step.image} alt={step.title} className="w-full aspect-[4/3] object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute bottom-8 left-8 text-white">
+                    <p className="text-xs font-black uppercase tracking-widest opacity-80 mb-2">{step.phase}</p>
+                    <h3 className="text-2xl font-black">{step.title}</h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* Text Side */}
+              <div className="flex-1 space-y-8">
+                <div className={cn(
+                  "w-16 h-16 rounded-2xl flex items-center justify-center text-white",
+                  iconVariants[step.color]
+                )}>
+                  <step.icon className="w-8 h-8" />
+                </div>
+                
+                <div>
+                  <h2 className="text-4xl font-black text-gray-900 mb-4">{step.title}</h2>
+                  <p className="text-lg text-gray-500 font-medium">{step.subtitle}</p>
+                </div>
+
+                <div className="space-y-4">
+                  {step.features.map((feature, fIdx) => (
+                    <div key={fIdx} className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center",
+                        colorVariants[step.color]
+                      )}>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-gray-700">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Floating QR Demo (Visible on all devices) */}
       <div className="fixed bottom-6 left-6 sm:bottom-8 sm:left-8 z-40 flex flex-col items-center gap-2 sm:gap-3 animate-fade-in">

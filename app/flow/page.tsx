@@ -30,7 +30,7 @@ const steps = [
       "Instant menu/product upload",
       "Table-specific QR generation"
     ],
-    image: "https://images.unsplash.com/photo-1556740734-7f958945130b?auto=format&fit=crop&q=80&w=800"
+    image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=800"
   },
   {
     phase: "Phase 2",
@@ -177,11 +177,6 @@ export default function FlowShowcase() {
                     </div>
                   ))}
                 </div>
-
-                <Link href="/register" className="inline-flex items-center gap-2 text-sm font-black uppercase tracking-widest text-gray-900 group">
-                  See it in action
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
               </div>
             </div>
           ))}
