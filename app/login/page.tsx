@@ -34,9 +34,12 @@ function LoginForm() {
       } else {
         // Fetch session using getSession (more reliable client-side)
         const session = await getSession();
+        const callbackUrl = searchParams.get("callbackUrl");
         
         if (session?.user) {
-           if (session.user.role === 'SUPER_ADMIN') {
+           if (callbackUrl && callbackUrl.startsWith('/')) {
+             router.push(callbackUrl);
+           } else if (session.user.role === 'SUPER_ADMIN') {
              router.push('/super-admin');
            } else if (session.user.storeSlug) {
              router.push(`/${session.user.storeSlug}/admin`);

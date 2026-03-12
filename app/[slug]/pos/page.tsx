@@ -14,7 +14,7 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    redirect(`/${slug}/login?callbackUrl=/${slug}/pos`);
+    redirect(`/login?callbackUrl=/${slug}/pos`);
   }
 
   // Fetch Store

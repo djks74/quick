@@ -453,7 +453,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
             <span className="max-w-[100px] truncate">{user.name || user.email}</span>
           </div>
           <button 
-            onClick={() => signOut({ callbackUrl: `/${store.slug}/login` })}
+            onClick={() => signOut({ callbackUrl: `/login` })}
             className="p-2 text-gray-400 hover:text-red-600 transition-colors"
             title="Logout"
           >
