@@ -364,7 +364,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   </div>
                   
                   <div className="flex justify-between items-end mt-2">
-                    <p className="font-black text-primary dark:text-white text-base" style={themeColor ? { color: themeColor } : {}}>
+                    <p className="font-black text-base text-[var(--theme-color)] dark:text-white">
                       {product.variations && product.variations.length > 0 
                         ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))}`
                         : formatPrice(product.price)
@@ -394,8 +394,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       <button 
                         onClick={() => addToCart(product)}
                         disabled={!store.isOpen}
-                        className="px-4 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5 disabled:opacity-50 disabled:bg-gray-400"
-                        style={store.isOpen && themeColor ? { backgroundColor: themeColor, color: 'white' } : {}}
+                        className="px-4 py-2 rounded-xl bg-[var(--theme-color)] dark:bg-white text-white dark:text-gray-900 text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/5 disabled:opacity-50 disabled:bg-gray-400"
                       >
                         {store.isOpen ? (totalQty > 0 ? 'Add More' : 'Add to Cart') : 'Closed'}
                       </button>
