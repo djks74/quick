@@ -22,7 +22,8 @@ import {
   CupSoda,
   Package,
   Home,
-  Loader2
+  Loader2,
+  CheckCircle2
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
@@ -152,6 +153,15 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
       if (choice === 'whatsapp') {
           setCheckInStep('success');
+          // Trigger WhatsApp redirect
+          const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
+          const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+          window.open(whatsappUrl, '_blank');
+          
+          // Wait a bit then close overlay
+          setTimeout(() => {
+              setShowCheckIn(false);
+          }, 2000);
       } else {
           setShowCheckIn(false);
       }
@@ -642,7 +652,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     )}
                   </button>
                 </>
-              ) : (
+              ) : checkInStep === 'choice' ? (
                 <div className="space-y-6 animate-in zoom-in duration-300">
                    <div className="space-y-2">
                     <h2 className="text-2xl font-black text-gray-900 dark:text-white">One more thing...</h2>
@@ -673,6 +683,16 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           "Directly on Web"
                         )}
                       </button>
+                   </div>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-in zoom-in duration-300">
+                   <div className="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto text-green-600 dark:text-green-400">
+                      <CheckCircle2 className="w-10 h-10" />
+                   </div>
+                   <div className="space-y-2">
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">Success!</h2>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Redirecting you to WhatsApp...</p>
                    </div>
                 </div>
               )}
