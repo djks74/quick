@@ -76,18 +76,18 @@ export async function POST(req: NextRequest) {
             await prisma.processedMessage.create({
                 data: { id: message.id }
             });
-            console.log(`[WHATSAPP] Processing message: ${message.id}`);
-        } catch (e) {
-            // If creation fails, it means the message was already processed
-            console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}`);
+            console.log(`[WHATSAPP] Processing NEW message: ${message.id} from ${message.from}`);
+        } catch (e: any) {
+            // If creation fails, it means the message was already processed or is being processed
+            console.log(`[WHATSAPP] Skipping already processed message (DB): ${message.id}. Error: ${e.message}`);
             return NextResponse.json({ success: true });
         }
         
-        // Periodic cleanup: delete messages older than 1 hour (runs on random 5% of requests)
-        if (Math.random() < 0.05) {
-            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        // Periodic cleanup: delete messages older than 24 hours (runs on random 1% of requests)
+        if (Math.random() < 0.01) {
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
             prisma.processedMessage.deleteMany({
-                where: { createdAt: { lt: oneHourAgo } }
+                where: { createdAt: { lt: oneDayAgo } }
             }).catch(err => console.error('[WHATSAPP] Cleanup failed:', err));
         }
     }
@@ -96,8 +96,14 @@ export async function POST(req: NextRequest) {
     const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
     const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
+    console.log(`[WHATSAPP] Webhook Context: PhoneID=${phoneNumberId}, PlatformID=${platformPhoneNumberId}`);
+
     if (message && phoneNumberId) {
       const from = message.from;
+      const textBody = message.text?.body?.trim();
+      const lowerText = textBody?.toLowerCase();
+
+      console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}`);
 
       // 0. MERCHANT CHECK
       // Check if sender is a registered Merchant
@@ -117,6 +123,7 @@ export async function POST(req: NextRequest) {
       // Detect User Intent that overrides Merchant Mode
       if (isMerchant) {
           const lower = message.text?.body?.toLowerCase() || "";
+          console.log(`[WHATSAPP] Merchant Check: ${from}, StoreID=${user.stores[0]?.id}`);
           // 1. Explicit Switch
           if (lower === 'user mode' || lower === 'mode user') {
              // We need to store this state. using WhatsAppSession?
@@ -220,15 +227,15 @@ export async function POST(req: NextRequest) {
 
       if (store) {
         targetStore = store;
+        console.log(`[WHATSAPP] Found target store by PhoneID: ${targetStore.name}`);
       } 
       
       // Force Shared Number logic if Env var matches or Platform ID matches
       // Also fallback to Shared Logic if NO store is found by ID (meaning it's the shared number)
       if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
          // 2. If matches Platform ID, try to infer context from recent session
-         console.log('Received message on Shared Platform Number');
+         console.log('[WHATSAPP] Received message on Shared Platform Number');
          isSharedNumber = true;
-         const from = message.from;
          
          const recentSession = await prisma.whatsAppSession.findFirst({
             where: { phoneNumber: from },
@@ -238,12 +245,16 @@ export async function POST(req: NextRequest) {
         if (recentSession && recentSession.storeId) {
             // Check if store exists
             const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
-            if (s) targetStore = s;
+            if (s) {
+                targetStore = s;
+                console.log(`[WHATSAPP] Resolved target store from session: ${targetStore.name}`);
+            }
          }
          
          // Fallback to Demo Store if still no context
          if (!targetStore) {
             targetStore = await prisma.store.findFirst({ where: { slug: 'demo' } });
+            console.log(`[WHATSAPP] Fallback to Demo Store: ${targetStore?.name}`);
          }
       }
 
@@ -253,13 +264,11 @@ export async function POST(req: NextRequest) {
       }
 
       if (!targetStore) {
-        console.log(`No store found for Phone ID: ${phoneNumberId}`);
+        console.log(`[WHATSAPP] No store found for Phone ID: ${phoneNumberId}`);
         return NextResponse.json({ success: true });
       }
 
-      console.log('INCOMING_MESSAGE:', message, 'STORE:', targetStore.name);
-      const textBody = message.text?.body?.trim();
-      const lowerText = textBody?.toLowerCase();
+      console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}, STORE: ${targetStore.name}`);
 
       if (!textBody) return NextResponse.json({ success: true });
 
