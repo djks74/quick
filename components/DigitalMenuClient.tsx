@@ -578,6 +578,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span>{formatPrice(tax)}</span>
                        </div>
                     )}
+                    {serviceCharge > 0 && (
+                       <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
+                          <span>Service Charge ({servicePercent}%)</span>
+                          <span>{formatPrice(serviceCharge)}</span>
+                       </div>
+                    )}
                     <div className="flex justify-between items-end pt-4 border-t border-gray-100 dark:border-gray-800">
                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total Amount</span>
                        <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice)}</span>
