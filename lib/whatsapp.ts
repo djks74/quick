@@ -81,10 +81,13 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       // If interactive fails (maybe API version or account restriction), fallback to text
       if (body.type === "interactive") {
           console.log('[WHATSAPP] CTA Button failed, falling back to text...');
-          await sendWhatsAppMessage(to, `${message}\n\n${options?.buttonUrl}`, storeId);
+          return await sendWhatsAppMessage(to, `${message}\n\n${options?.buttonUrl}`, storeId);
       }
+      return false;
     }
+    return true;
   } catch (error) {
     console.error('[WHATSAPP_SEND_ERROR]', error);
+    return false;
   }
 }

@@ -60,15 +60,17 @@ export async function POST(req: Request) {
         message += `You are currently viewing our Digital Menu on the web. Enjoy! 🌐`;
     }
 
+    let sent = false;
     try {
-      await sendWhatsAppMessage(phone, message, storeId);
+      sent = await sendWhatsAppMessage(phone, message, storeId) || false;
     } catch (sendError) {
-      console.error("Failed to send WhatsApp message (likely 24h window issue):", sendError);
-      // We can't do much here if it fails, the client should handle the "success" but maybe show a warning?
-      // But we are returning success: true anyway.
+      console.error("Failed to send WhatsApp message:", sendError);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+        success: true, 
+        messageSent: sent 
+    });
   } catch (error) {
     console.error('Check-in error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

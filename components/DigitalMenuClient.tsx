@@ -136,8 +136,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
       localStorage.setItem('customerPhone', customerPhone);
       setIsCheckingIn(true);
       try {
-          await fetch('/api/check-in', {
+          const res = await fetch('/api/check-in', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   phone: customerPhone,
                   storeId: store.id,
@@ -145,25 +146,38 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   type: choice
               })
           });
+          
+          const data = await res.json();
+
+          if (choice === 'whatsapp') {
+              if (data.messageSent) {
+                  // Server successfully sent the message to phone
+                  setCheckInStep('success');
+                  setTimeout(() => {
+                      setShowCheckIn(false);
+                  }, 2500);
+              } else {
+                  // Server failed to send (likely 24h window), fallback to client-side redirect
+                  const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
+                  const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+                  window.open(whatsappUrl, '_blank');
+                  setShowCheckIn(false);
+              }
+          } else {
+              // Directly on web, just close
+              setShowCheckIn(false);
+          }
       } catch (e) {
           console.error("Check-in trigger failed:", e);
+          // Fallback if API fails
+          if (choice === 'whatsapp') {
+              const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*.`;
+              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+              window.open(whatsappUrl, '_blank');
+          }
+          setShowCheckIn(false);
       } finally {
           setIsCheckingIn(false);
-      }
-
-      if (choice === 'whatsapp') {
-          setCheckInStep('success');
-          // Trigger WhatsApp redirect
-          const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
-          const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
-          window.open(whatsappUrl, '_blank');
-          
-          // Wait a bit then close overlay
-          setTimeout(() => {
-              setShowCheckIn(false);
-          }, 2000);
-      } else {
-          setShowCheckIn(false);
       }
   };
 
@@ -692,7 +706,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    </div>
                    <div className="space-y-2">
                     <h2 className="text-2xl font-black text-gray-900 dark:text-white">Success!</h2>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Redirecting you to WhatsApp...</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Please check your WhatsApp for confirmation.</p>
                    </div>
                 </div>
               )}
