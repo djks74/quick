@@ -12,85 +12,140 @@ import {
   Users, 
   MessageSquare,
   ShieldCheck,
-  TrendingUp
+  TrendingUp,
+  Globe
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const steps = [
-  {
-    phase: "Phase 1",
-    title: "Merchant Setup",
-    subtitle: "Launch your digital presence in minutes.",
-    icon: Store,
-    color: "blue",
-    features: [
-      "No-code store creation",
-      "Custom brand colors & logo",
-      "Instant menu/product upload",
-      "Table-specific QR generation"
-    ],
-    image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=800"
+const translations = {
+  en: {
+    signIn: "Sign In",
+    getStarted: "Get Started",
+    flow_subtitle: "Future of Retail & SME",
+    flow_title_start: "Seamless flow from",
+    flow_title_highlight: "Scan to Payment.",
+    flow_description: "A complete ecosystem designed to help local businesses grow without the complexity of traditional POS systems.",
+    phase1_title: "Merchant Setup",
+    phase1_subtitle: "Launch your digital presence in minutes.",
+    phase1_f1: "No-code store creation",
+    phase1_f2: "Custom brand colors & logo",
+    phase1_f3: "Instant menu/product upload",
+    phase1_f4: "Table-specific QR generation",
+    phase2_title: "The Scan Experience",
+    phase2_subtitle: "Zero friction for your customers.",
+    phase2_f1: "No app download required",
+    phase2_f2: "Instant access via QR scan",
+    phase2_f3: "Interactive digital menu",
+    phase2_f4: "Direct WhatsApp ordering",
+    phase3_title: "Automated Payments",
+    phase3_subtitle: "Secure and real-time verification.",
+    phase3_f1: "Dynamic QRIS generation",
+    phase3_f2: "Instant payment callbacks",
+    phase3_f3: "Zero manual verification",
+    phase3_f4: "Auto-update order status",
+    phase4_title: "Admin Mastery",
+    phase4_subtitle: "Control everything from one place.",
+    phase4_f1: "Real-time order tracking",
+    phase4_f2: "Sales & revenue analytics",
+    phase4_f3: "Customer behavior insights",
+    phase4_f4: "Withdrawal management",
+    multiStore: "Multi-Store Support",
+    multiStoreDesc: "Manage multiple branches from a single unified super-admin dashboard.",
+    security: "Bank-Grade Security",
+    securityDesc: "Encrypted transactions and secure payment gateways for peace of mind.",
+    scalable: "Scalable Architecture",
+    scalableDesc: "Built on Next.js 15 and Supabase to handle thousands of orders per second.",
+    ready: "Ready to transform your business?",
+    readyDesc: "Join hundreds of merchants already using our platform to simplify their operations and increase revenue.",
+    contactSales: "Contact Sales"
   },
-  {
-    phase: "Phase 2",
-    title: "The Scan Experience",
-    subtitle: "Zero friction for your customers.",
-    icon: QrCode,
-    color: "orange",
-    features: [
-      "No app download required",
-      "Instant access via QR scan",
-      "Interactive digital menu",
-      "Direct WhatsApp ordering"
-    ],
-    image: "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?auto=format&fit=crop&q=80&w=800"
-  },
-  {
-    phase: "Phase 3",
-    title: "Automated Payments",
-    subtitle: "Secure and real-time verification.",
-    icon: CreditCard,
-    color: "green",
-    features: [
-      "Dynamic QRIS generation",
-      "Instant payment callbacks",
-      "Zero manual verification",
-      "Auto-update order status"
-    ],
-    image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&q=80&w=800"
-  },
-  {
-    phase: "Phase 4",
-    title: "Admin Mastery",
-    subtitle: "Control everything from one place.",
-    icon: LayoutDashboard,
-    color: "purple",
-    features: [
-      "Real-time order tracking",
-      "Sales & revenue analytics",
-      "Customer behavior insights",
-      "Withdrawal management"
-    ],
-    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
+  id: {
+    signIn: "Masuk",
+    getStarted: "Mulai Sekarang",
+    flow_subtitle: "Masa Depan Ritel & UMKM",
+    flow_title_start: "Alur transaksi mulus dari",
+    flow_title_highlight: "Scan hingga Bayar.",
+    flow_description: "Ekosistem lengkap yang dirancang untuk membantu bisnis lokal tumbuh tanpa kerumitan sistem POS tradisional.",
+    phase1_title: "Setup Merchant",
+    phase1_subtitle: "Luncurkan kehadiran digital Anda dalam hitungan menit.",
+    phase1_f1: "Pembuatan toko tanpa coding",
+    phase1_f2: "Warna brand & logo kustom",
+    phase1_f3: "Upload menu/produk instan",
+    phase1_f4: "Generasi QR per meja",
+    phase2_title: "Pengalaman Scan",
+    phase2_subtitle: "Tanpa hambatan bagi pelanggan Anda.",
+    phase2_f1: "Tidak perlu download aplikasi",
+    phase2_f2: "Akses instan via scan QR",
+    phase2_f3: "Menu digital interaktif",
+    phase2_f4: "Pemesanan langsung via WhatsApp",
+    phase3_title: "Pembayaran Otomatis",
+    phase3_subtitle: "Verifikasi aman dan real-time.",
+    phase3_f1: "Generasi QRIS dinamis",
+    phase3_f2: "Callback pembayaran instan",
+    phase3_f3: "Tanpa verifikasi manual",
+    phase3_f4: "Update status pesanan otomatis",
+    phase4_title: "Kendali Admin",
+    phase4_subtitle: "Kontrol semuanya dari satu tempat.",
+    phase4_f1: "Pelacakan pesanan real-time",
+    phase4_f2: "Analitik penjualan & pendapatan",
+    phase4_f3: "Wawasan perilaku pelanggan",
+    phase4_f4: "Manajemen penarikan dana",
+    multiStore: "Dukungan Multi-Toko",
+    multiStoreDesc: "Kelola banyak cabang dari satu dasbor super-admin yang terpadu.",
+    security: "Keamanan Standar Bank",
+    securityDesc: "Transaksi terenkripsi dan gateway pembayaran aman untuk ketenangan pikiran Anda.",
+    scalable: "Arsitektur Terukur",
+    scalableDesc: "Dibangun dengan Next.js 15 dan Supabase untuk menangani ribuan pesanan per detik.",
+    ready: "Siap mengubah bisnis Anda?",
+    readyDesc: "Bergabunglah dengan ratusan merchant yang telah menggunakan platform kami untuk menyederhanakan operasional dan meningkatkan pendapatan.",
+    contactSales: "Hubungi Penjualan"
   }
-];
-
-const colorVariants: Record<string, string> = {
-  blue: "bg-blue-50 text-blue-600 border-blue-100",
-  orange: "bg-orange-50 text-orange-600 border-orange-100",
-  green: "bg-green-50 text-green-600 border-green-100",
-  purple: "bg-purple-50 text-purple-600 border-purple-100",
-};
-
-const iconVariants: Record<string, string> = {
-  blue: "bg-blue-600 shadow-blue-500/20",
-  orange: "bg-orange-600 shadow-orange-500/20",
-  green: "bg-green-600 shadow-green-500/20",
-  purple: "bg-purple-600 shadow-purple-500/20",
 };
 
 export default function FlowShowcase() {
+  const [lang, setLang] = useState<'en' | 'id'>('en');
+  const t = translations[lang];
+
+  const steps = [
+    {
+      phase: "Phase 1",
+      title: t.phase1_title,
+      subtitle: t.phase1_subtitle,
+      icon: Store,
+      color: "blue",
+      features: [t.phase1_f1, t.phase1_f2, t.phase1_f3, t.phase1_f4],
+      image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=800"
+    },
+    {
+      phase: "Phase 2",
+      title: t.phase2_title,
+      subtitle: t.phase2_subtitle,
+      icon: QrCode,
+      color: "orange",
+      features: [t.phase2_f1, t.phase2_f2, t.phase2_f3, t.phase2_f4],
+      image: "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?auto=format&fit=crop&q=80&w=800"
+    },
+    {
+      phase: "Phase 3",
+      title: t.phase3_title,
+      subtitle: t.phase3_subtitle,
+      icon: CreditCard,
+      color: "green",
+      features: [t.phase3_f1, t.phase3_f2, t.phase3_f3, t.phase3_f4],
+      image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&q=80&w=800"
+    },
+    {
+      phase: "Phase 4",
+      title: t.phase4_title,
+      subtitle: t.phase4_subtitle,
+      icon: LayoutDashboard,
+      color: "purple",
+      features: [t.phase4_f1, t.phase4_f2, t.phase4_f3, t.phase4_f4],
+      image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
+    }
+  ];
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -103,8 +158,15 @@ export default function FlowShowcase() {
             <span className="font-black text-xl tracking-tighter">GERCEP</span>
           </Link>
           <div className="flex items-center gap-6">
-            <Link href="/login" className="text-sm font-bold text-gray-500 hover:text-black transition-colors">Sign In</Link>
-            <Link href="/register" className="px-6 py-2.5 bg-black text-white rounded-xl text-sm font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10">Get Started</Link>
+            <button 
+              onClick={() => setLang(lang === 'en' ? 'id' : 'en')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-600 transition-colors border border-gray-100"
+            >
+              <Globe className="w-4 h-4" />
+              {lang === 'en' ? 'ID' : 'EN'}
+            </button>
+            <Link href="/login" className="text-sm font-bold text-gray-500 hover:text-black transition-colors">{t.signIn}</Link>
+            <Link href="/register" className="px-6 py-2.5 bg-black text-white rounded-xl text-sm font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10">{t.getStarted}</Link>
           </div>
         </div>
       </nav>
