@@ -27,52 +27,52 @@ export default function LedgerTable({ initialLedger }: { initialLedger: any[] })
     <div className="space-y-8">
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+         <div className="bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm transition-colors">
             <div className="flex items-center gap-3 mb-4">
-               <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-green-600">
+               <div className="w-8 h-8 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center text-green-600 dark:text-green-400">
                   <TrendingUp className="w-5 h-5" />
                </div>
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Net Earnings</span>
+               <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Net Earnings</span>
             </div>
-            <h2 className="text-3xl font-black text-gray-900">{formatCurrency(totalEarnings, "IDR")}</h2>
-            <p className="text-[10px] text-gray-400 mt-2 font-medium">Total from all paid orders</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(totalEarnings, "IDR")}</h2>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2 font-medium">Total from all paid orders</p>
          </div>
 
-         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+         <div className="bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm transition-colors">
             <div className="flex items-center gap-3 mb-4">
-               <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center text-orange-600">
+               <div className="w-8 h-8 bg-orange-50 dark:bg-orange-900/20 rounded-lg flex items-center justify-center text-orange-600 dark:text-orange-400">
                   <ArrowUpRight className="w-5 h-5" />
                </div>
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Fees</span>
+               <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Total Fees</span>
             </div>
-            <h2 className="text-3xl font-black text-gray-900">{formatCurrency(totalFees, "IDR")}</h2>
-            <p className="text-[10px] text-gray-400 mt-2 font-medium">QRIS, Bank & Platform Fees</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(totalFees, "IDR")}</h2>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2 font-medium">QRIS, Bank & Platform Fees</p>
          </div>
 
-         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+         <div className="bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm transition-colors">
             <div className="flex items-center gap-3 mb-4">
-               <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+               <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <ArrowDownLeft className="w-5 h-5" />
                </div>
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Orders</span>
+               <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Orders</span>
             </div>
-            <h2 className="text-3xl font-black text-gray-900">{initialLedger.length}</h2>
-            <p className="text-[10px] text-gray-400 mt-2 font-medium">Total paid transactions</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white">{initialLedger.length}</h2>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2 font-medium">Total paid transactions</p>
          </div>
       </div>
 
       {/* Ledger Table */}
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-         <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h2 className="text-xl font-black text-gray-900">Transaction History</h2>
+      <div className="bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden transition-colors">
+         <div className="p-6 border-b border-gray-50 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">Transaction History</h2>
             
             <div className="flex gap-2 w-full sm:w-auto">
                <div className="relative flex-1 sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <input 
                     type="text"
                     placeholder="Search Order ID..."
-                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 dark:focus:border-blue-500 transition-all dark:text-white"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -83,21 +83,21 @@ export default function LedgerTable({ initialLedger }: { initialLedger: any[] })
          <div className="overflow-x-auto">
             <table className="w-full text-left">
                <thead>
-                  <tr className="bg-gray-50/50">
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Order ID</th>
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</th>
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Fees</th>
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Net</th>
-                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Status</th>
+                  <tr className="bg-gray-50/50 dark:bg-gray-800/30 transition-colors">
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Order ID</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Fees</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Net</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Status</th>
                   </tr>
                </thead>
-               <tbody className="divide-y divide-gray-50">
+               <tbody className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
                   {filteredLedger.length === 0 ? (
                     <tr>
                        <td colSpan={6} className="px-6 py-12 text-center">
-                          <AlertCircle className="w-12 h-12 text-gray-100 mx-auto mb-4" />
-                          <p className="text-sm text-gray-400 italic font-medium">No transactions found</p>
+                          <AlertCircle className="w-12 h-12 text-gray-100 dark:text-gray-800 mx-auto mb-4" />
+                          <p className="text-sm text-gray-400 dark:text-gray-500 italic font-medium">No transactions found</p>
                        </td>
                     </tr>
                   ) : (
@@ -105,28 +105,28 @@ export default function LedgerTable({ initialLedger }: { initialLedger: any[] })
                        const fees = (item.paymentFee || 0) + (item.transactionFee || 0);
                        const net = item.totalAmount - fees;
                        return (
-                        <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                        <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                            <td className="px-6 py-4">
-                              <span className="font-bold text-gray-900 text-sm">#{item.id}</span>
-                              <p className="text-[10px] text-gray-400 font-medium">{item.customerPhone}</p>
+                              <span className="font-bold text-gray-900 dark:text-white text-sm">#{item.id}</span>
+                              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">{item.customerPhone}</p>
                            </td>
-                           <td className="px-6 py-4 text-xs text-gray-500 font-medium">
+                           <td className="px-6 py-4 text-xs text-gray-500 dark:text-gray-400 font-medium">
                               {new Date(item.updatedAt).toLocaleDateString()}
                            </td>
-                           <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                           <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">
                               {formatCurrency(item.totalAmount, "IDR")}
                            </td>
                            <td className="px-6 py-4">
-                              <span className="text-xs font-bold text-orange-600">{formatCurrency(fees, "IDR")}</span>
+                              <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{formatCurrency(fees, "IDR")}</span>
                               {item.paymentMethod && (
-                                 <p className="text-[9px] text-gray-400 font-black uppercase tracking-tight mt-0.5">{item.paymentMethod}</p>
+                                 <p className="text-[9px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-tight mt-0.5">{item.paymentMethod}</p>
                               )}
                            </td>
-                           <td className="px-6 py-4 text-sm font-black text-green-600">
+                           <td className="px-6 py-4 text-sm font-black text-green-600 dark:text-green-400">
                               {formatCurrency(net, "IDR")}
                            </td>
                            <td className="px-6 py-4 text-right">
-                              <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-full text-[9px] font-black uppercase tracking-widest">
+                              <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-[9px] font-black uppercase tracking-widest">
                                  {item.status}
                               </span>
                            </td>

@@ -68,26 +68,26 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
 
   return (
     <div className="space-y-10">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">WhatsApp Cloud API</h3>
-          <p className="text-xs text-gray-500 mt-1">Used by Pro and default Enterprise.</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">WhatsApp Cloud API</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used by Pro and default Enterprise.</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">WhatsApp Token (Meta)</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Token (Meta)</label>
             <input
               type="password"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.whatsappToken}
               onChange={(e) => setForm({ ...form, whatsappToken: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">WhatsApp Phone Number ID</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Phone Number ID</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.whatsappPhoneId}
               onChange={(e) => setForm({ ...form, whatsappPhoneId: e.target.value })}
             />
@@ -95,26 +95,26 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Midtrans</h3>
-          <p className="text-xs text-gray-500 mt-1">Used when a store enables Midtrans.</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Midtrans</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used when a store enables Midtrans.</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Server Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Server Key</label>
             <input
               type="password"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.midtransServerKey}
               onChange={(e) => setForm({ ...form, midtransServerKey: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Client Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Client Key</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.midtransClientKey}
               onChange={(e) => setForm({ ...form, midtransClientKey: e.target.value })}
             />
@@ -122,17 +122,17 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Xendit</h3>
-          <p className="text-xs text-gray-500 mt-1">Used when a store enables Xendit.</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Xendit</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used when a store enables Xendit.</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Secret Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Secret Key</label>
             <input
               type="password"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.xenditSecretKey}
               onChange={(e) => setForm({ ...form, xenditSecretKey: e.target.value })}
             />
@@ -140,26 +140,26 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b pb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Subscription (Midtrans)</h3>
-          <p className="text-xs text-gray-500 mt-1">Keys used for Monthly Subscription (Rp 299.000).</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Subscription (Midtrans)</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Keys used for Monthly Subscription (Rp 299.000).</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Subscription Server Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Subscription Server Key</label>
             <input
               type="password"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.subscriptionServerKey}
               onChange={(e) => setForm({ ...form, subscriptionServerKey: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Subscription Client Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Subscription Client Key</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.subscriptionClientKey}
               onChange={(e) => setForm({ ...form, subscriptionClientKey: e.target.value })}
             />
@@ -169,33 +169,33 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         <div>
-          <h3 className="text-sm font-bold text-gray-900">Manual Transfer</h3>
-          <p className="text-xs text-gray-500 mt-1">Default bank account for non-Enterprise.</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Manual Transfer</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default bank account for non-Enterprise.</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Bank Name</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Bank Name</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.bankName}
               onChange={(e) => setForm({ ...form, bankName: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Account Number</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Account Number</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.bankAccountNumber}
               onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Account Name</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Account Name</label>
             <input
               type="text"
-              className="w-full border border-gray-300 px-3 py-2 rounded-lg"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.bankAccountName}
               onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
             />
@@ -203,7 +203,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
         </div>
       </div>
 
-      <div className="pt-6 border-t flex items-center space-x-4">
+      <div className="pt-6 border-t dark:border-gray-800 flex items-center space-x-4 transition-colors">
         <button
           onClick={handleSave}
           disabled={isSaving}

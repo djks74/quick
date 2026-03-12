@@ -32,42 +32,42 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start justify-between">
+        <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-start justify-between transition-colors">
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Revenue</p>
-            <h3 className="text-2xl font-black text-gray-900">{formatCurrency(stats.totalRevenue, "IDR")}</h3>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Total Revenue</p>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-white">{formatCurrency(stats.totalRevenue, "IDR")}</h3>
           </div>
-          <div className="p-3 bg-green-50 rounded-xl text-green-600">
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl text-green-600 dark:text-green-400">
             <DollarSign className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start justify-between">
+        <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-start justify-between transition-colors">
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Orders</p>
-            <h3 className="text-2xl font-black text-gray-900">{stats.totalOrders}</h3>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Total Orders</p>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-white">{stats.totalOrders}</h3>
           </div>
-          <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400">
             <ShoppingCart className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start justify-between">
+        <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-start justify-between transition-colors">
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Active Customers</p>
-            <h3 className="text-2xl font-black text-gray-900">{stats.activeCustomers}</h3>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Active Customers</p>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-white">{stats.activeCustomers}</h3>
           </div>
-          <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600 dark:text-purple-400">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-start justify-between">
+        <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-start justify-between transition-colors">
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Products Sold</p>
-            <h3 className="text-2xl font-black text-gray-900">{stats.productsSold}</h3>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Products Sold</p>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-white">{stats.productsSold}</h3>
           </div>
-          <div className="p-3 bg-orange-50 rounded-xl text-orange-600">
+          <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-orange-600 dark:text-orange-400">
             <Package className="w-6 h-6" />
           </div>
         </div>
@@ -75,46 +75,46 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Orders */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-900">Recent Orders</h3>
-            <Link href={`/${slug}/admin/orders`} className="text-xs font-bold text-primary hover:text-orange-700 uppercase tracking-wider">View All</Link>
+        <div className="lg:col-span-2 bg-white dark:bg-[#1A1D21] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
+          <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+            <h3 className="font-bold text-gray-900 dark:text-white">Recent Orders</h3>
+            <Link href={`/${slug}/admin/orders`} className="text-xs font-bold text-primary dark:text-blue-400 hover:text-orange-700 dark:hover:text-blue-300 uppercase tracking-wider">View All</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Order ID</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Customer</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Date</th>
+                <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Order ID</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Customer</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Total</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                 {recentOrders.length > 0 ? (
                   recentOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-gray-900 text-sm">#{order.id}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{order.customerPhone}</td>
+                    <tr key={order.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-gray-900 dark:text-white text-sm">#{order.id}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{order.customerPhone}</td>
                       <td className="px-6 py-4">
                         <span className={cn(
                           "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
-                          order.status === "completed" ? "bg-green-100 text-green-800" :
-                          order.status === "processing" ? "bg-blue-100 text-blue-800" :
-                          order.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                          "bg-red-100 text-red-800"
+                          order.status === "completed" ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400" :
+                          order.status === "processing" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400" :
+                          order.status === "pending" ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400" :
+                          "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400"
                         )}>
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-bold text-gray-900 text-sm">{formatCurrency(order.total, "IDR")}</td>
-                      <td className="px-6 py-4 text-right text-xs text-gray-400">{new Date(order.date).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900 dark:text-white text-sm">{formatCurrency(order.total, "IDR")}</td>
+                      <td className="px-6 py-4 text-right text-xs text-gray-400 dark:text-gray-500">{new Date(order.date).toLocaleDateString()}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400 italic">
                       No recent orders found.
                     </td>
                   </tr>
