@@ -59,7 +59,6 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Persistent deduplication using DB (Triggering new build)
 // Fast memory cache for deduplication (fallback if DB fails)
 const memoryCache = new Set<string>();
 
@@ -113,6 +112,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`[WHATSAPP] Incoming Message: "${textBody}" from ${from} (Store Context: ${phoneNumberId})`);
 
+    if (message && phoneNumberId) {
       // 0. MERCHANT CHECK
       // Check if sender is a registered Merchant
       let user = await prisma.user.findUnique({
@@ -121,10 +121,6 @@ export async function POST(req: NextRequest) {
       });
 
       // Check if Merchant is in "User Mode"
-      // We can use a special session flag or just check if they are explicitly asking for User actions
-      // Simpler approach: If they type "User Mode", we ignore merchant handler for this session?
-      // Or we can check if they are scanning a QR code (Table ...) -> Force User Mode
-      
       const isMerchant = user && (user.role === 'MERCHANT' || user.role === 'SUPER_ADMIN');
       let forceUserMode = false;
 
@@ -132,29 +128,12 @@ export async function POST(req: NextRequest) {
       if (isMerchant) {
           const lower = message.text?.body?.toLowerCase() || "";
           console.log(`[WHATSAPP] Merchant Check: ${from}, StoreID=${user?.stores[0]?.id}`);
-          // 1. Explicit Switch
-          if (lower === 'user mode' || lower === 'mode user') {
-             // We need to store this state. using WhatsAppSession?
-             // Let's use a special storeId=0 session to store global user prefs?
-             // Or just let them fall through for this message?
-             // Better: If they type "User Mode", we send them a message "You are now in User Mode. Type 'Admin Mode' to switch back."
-             // And we need to persist this.
-             // For now, let's just allow specific commands to bypass.
-          }
           
-          // 2. Scanning QR (Table ...)
+          // Scanning QR (Table ...)
           if (lower.startsWith('table') || lower.startsWith('meja')) {
              forceUserMode = true;
           }
-          
-          // 3. Explicit "Buy" or "Order" command? 
-          // Merchant might want to "Add Product", so "Add" is ambiguous.
-          // "Menu" is ambiguous (Merchant Menu vs Store Menu).
-          
-          // Let's check session. If they have an active "User Session" recently updated?
-          // This is complex because Merchant Handler doesn't use WhatsAppSession table much yet.
       }
-
 
       // Fallback: Check if this number is listed as a Store WhatsApp Number
       if (!user) {
@@ -164,7 +143,6 @@ export async function POST(req: NextRequest) {
           });
           
           if (storeByPhone) {
-              // Found a store with this number. The owner is the merchant.
               user = await prisma.user.findUnique({
                   where: { id: storeByPhone.ownerId },
                   include: { stores: true }
@@ -175,7 +153,6 @@ export async function POST(req: NextRequest) {
       // Use a special session for Merchant Mode Toggle
       let merchantSession = null;
       if (isMerchant) {
-        // Use storeId 0 for "Platform/User Context" session
         merchantSession = await prisma.whatsAppSession.findFirst({
           where: { phoneNumber: from, storeId: 0 }
         });
@@ -222,13 +199,7 @@ export async function POST(req: NextRequest) {
       let targetStore = null;
       let isSharedNumber = false;
 
-      // 1. Try finding store by Phone ID (Enterprise or Single Setup)
-      // Note: If multiple stores share the same ID in DB, findUnique will fail if unique constraint exists.
-      // Assuming non-enterprise stores DO NOT have whatsappPhoneId set in DB, or it's nullable/unique?
-      // Schema says: whatsappPhoneId String? @unique
-      // So only one store can have a specific ID.
-      // Non-enterprise stores should have null whatsappPhoneId in DB if they use shared.
-      
+      // 1. Try finding store by Phone ID
       const store = await prisma.store.findFirst({
         where: { whatsappPhoneId: phoneNumberId }
       });
@@ -238,10 +209,8 @@ export async function POST(req: NextRequest) {
         console.log(`[WHATSAPP] Found target store by PhoneID: ${targetStore.name}`);
       } 
       
-      // Force Shared Number logic if Env var matches or Platform ID matches
-      // Also fallback to Shared Logic if NO store is found by ID (meaning it's the shared number)
+      // Force Shared Number logic
       if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
-         // 2. If matches Platform ID, try to infer context from recent session
          console.log('[WHATSAPP] Received message on Shared Platform Number');
          isSharedNumber = true;
          
@@ -251,7 +220,6 @@ export async function POST(req: NextRequest) {
          });
          
         if (recentSession && recentSession.storeId) {
-            // Check if store exists
             const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
             if (s) {
                 targetStore = s;
@@ -259,7 +227,6 @@ export async function POST(req: NextRequest) {
             }
          }
          
-         // Fallback to Demo Store if still no context
          if (!targetStore) {
             targetStore = await prisma.store.findFirst({ where: { slug: 'demo' } });
             console.log(`[WHATSAPP] Fallback to Demo Store: ${targetStore?.name}`);
@@ -283,16 +250,11 @@ export async function POST(req: NextRequest) {
       // Get or create session
       const session = await getSession(from, targetStore.id);
       
-      // 1. GLOBAL COMMANDS (Reset state)
-      
-      // Handle "Check-in Table X" or "Table X" -> Enforce QR Scan / Welcome
-      // Regex to match "Check-in Table [Number]" or "Table [Number]" or "Meja [Number]"
+      // 1. GLOBAL COMMANDS
       const checkInMatch = textBody.match(/(?:check-in|table|meja)\s*(?:table|meja)?\s*(.+)/i);
       
       if (checkInMatch) {
-        const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim(); // Clean up if double words
-        
-        // Update session with table number
+        const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
         await updateSession(from, targetStore.id, { tableNumber: tableNum, step: 'MENU_SELECTION' });
 
         await sendWhatsAppMessage(from, 
@@ -306,15 +268,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // Handle "Pay" / "Payment" -> Jump to Payment
       if (lowerText === 'pay' || lowerText === 'payment' || lowerText === 'bayar') {
         await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
         await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
         return NextResponse.json({ success: true });
       }
 
-      // Handle "Stores" -> Switch Store (Shared Number Only)
-       if (lowerText === 'stores' && isSharedNumber) {
+      if (lowerText === 'stores' && isSharedNumber) {
          const stores = await prisma.store.findMany({
            take: 10,
            orderBy: { name: 'asc' }
@@ -331,17 +291,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // Handle "Menu" -> Jump to Ordering or Category Selection
       if (lowerText === 'menu') {
-        console.log('DEBUG: Menu command received for store', targetStore.name);
         try {
             const categories = await prisma.category.findMany({
                 where: { storeId: targetStore.id },
                 orderBy: { name: 'asc' }
             });
-            console.log('DEBUG: Categories found', categories.length);
 
-            // If store has categories, ask user to select one
             if (categories.length > 0) {
                 let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
                 catText += `Select a category:\n`;
@@ -356,14 +312,12 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ success: true });
             }
 
-            // If NO categories, show all items (Default Behavior)
             await updateSession(from, targetStore.id, { step: 'ORDERING' });
             const products = await prisma.product.findMany({ 
               where: { storeId: targetStore.id },
               take: 10,
               orderBy: { name: 'asc' }
             });
-            console.log('DEBUG: Products found', products.length);
 
             if (products.length === 0) {
                  await sendWhatsAppMessage(from, `Sorry, this store has no products yet.`, targetStore.id);
@@ -371,7 +325,6 @@ export async function POST(req: NextRequest) {
             }
 
             const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-
             let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
             menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
             menuText += `👇 *Or Order via Text*:\n`;
@@ -395,23 +348,17 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. STATE BASED HANDLING
-
-      // Step: CATEGORY_SELECTION
       if (session.step === 'CATEGORY_SELECTION') {
-          const index = parseInt(textBody) - 1; // User input 1-based
-          
+          const index = parseInt(textBody) - 1;
           if (isNaN(index)) {
              await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
              return NextResponse.json({ success: true });
           }
 
           let selectedCategoryName = null;
-          
           if (index === 0) {
-              // "1. All Menu"
-              selectedCategoryName = null; // Show all
+              selectedCategoryName = null;
           } else {
-              // Specific Category
               const categories = await prisma.category.findMany({
                   where: { storeId: targetStore.id },
                   orderBy: { name: 'asc' }
@@ -425,14 +372,9 @@ export async function POST(req: NextRequest) {
               }
           }
 
-          // Fetch Products based on Category
           const whereClause: any = { storeId: targetStore.id };
           if (selectedCategoryName) {
-              // Case-insensitive filtering
-              whereClause.category = {
-                  equals: selectedCategoryName,
-                  mode: 'insensitive'
-              };
+              whereClause.category = { equals: selectedCategoryName, mode: 'insensitive' };
           }
 
           const products = await prisma.product.findMany({ 
@@ -443,43 +385,13 @@ export async function POST(req: NextRequest) {
 
           if (products.length === 0) {
              await sendWhatsAppMessage(from, `No items found in this category.`, targetStore.id);
-             // Stay in CATEGORY_SELECTION? Or go back?
              return NextResponse.json({ success: true });
           }
 
-          // Save selected products to session? No, just list them and switch to ORDERING
-          // Wait, if we switch to ORDERING, how do we know which products correspond to "1", "2"?
-          // The current ORDERING logic assumes we fetched "take: 10" and ordered by name asc.
-          // If the user selects a category, the "index" 1 might correspond to a different product than if they selected "All".
-          // We need to store the CONTEXT of the menu shown.
-          // For MVP, we can just rely on the fact that if they reply "1 2" immediately after seeing the list, 
-          // we should re-fetch the SAME list to resolve the ID.
-          // BUT `ORDERING` step logic does a fresh fetch:
-          /*
-            const products = await prisma.product.findMany({ 
-                where: { storeId: targetStore.id },
-                take: 10,
-                orderBy: { name: 'asc' }
-            });
-          */
-          // This is a BUG in my previous design if we add filtering!
-          // We must store the filter in the session or re-apply it.
-          // Let's add `filterCategory` to the session metadata (using `cart` field or `step` encoded?)
-          // Schema: `cart Json?`. We can store `{ items: [], category: "Food" }`.
-
-          // Let's update session with the category filter context
-          // Note: `cart` field is currently used as an Array of items.
-          // I should ideally migrate `cart` to be an Object `{ items: [], filter: ... }` but that breaks existing code.
-          // Hack: Store filter in `tableNumber`? No.
-          // Hack: Store filter in a temporary cache? No.
-          // Solution: Use `cart` field but be careful.
-          // Or just use `step` like `ORDERING:Food`.
-          
           const stepValue = selectedCategoryName ? `ORDERING:${selectedCategoryName}` : `ORDERING:ALL`;
           await updateSession(from, targetStore.id, { step: stepValue });
 
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-          
           let title = selectedCategoryName ? `${selectedCategoryName}` : `All Menu`;
           let menuText = `🍽️ *${title}* 🍽️\n\n`;
           menuText += `📱 *Web*: ${menuUrl}\n\n`;
@@ -495,22 +407,13 @@ export async function POST(req: NextRequest) {
           await sendWhatsAppMessage(from, menuText, targetStore.id);
           return NextResponse.json({ success: true });
       }
+
       if (session.step === 'STORE_SELECTION') {
         const index = parseInt(textBody) - 1;
-        const stores = await prisma.store.findMany({
-          take: 10,
-          orderBy: { name: 'asc' }
-        });
+        const stores = await prisma.store.findMany({ take: 10, orderBy: { name: 'asc' } });
 
         if (index >= 0 && index < stores.length) {
           const selectedStore = stores[index];
-          // Create/Update session for this store
-          // Actually, we need to update the session to point to this NEW storeId
-          // BUT `getSession` uses `phoneNumber_storeId` composite key.
-          // So we are creating a NEW session for the new store, or switching context?
-          // The `recentSession` logic in `POST` looks for *any* session by phone number, ordered by `updatedAt`.
-          // So if we create/update a session for the new store, it will become the "recent" one.
-          
           let newSession = await prisma.whatsAppSession.findUnique({
              where: { phoneNumber_storeId: { phoneNumber: from, storeId: selectedStore.id } }
           });
@@ -522,10 +425,9 @@ export async function POST(req: NextRequest) {
           } else {
              await prisma.whatsAppSession.update({
                where: { id: newSession.id },
-               data: { updatedAt: new Date(), step: 'START' } // Bump timestamp
+               data: { updatedAt: new Date(), step: 'START' }
              });
           }
-
           await sendWhatsAppMessage(from, `✅ Switched to *${selectedStore.name}*.\nReply 'Menu' to order.`, selectedStore.id);
         } else {
           await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
@@ -533,60 +435,34 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // 2. STATE BASED HANDLING
-
-      // Step: MENU_SELECTION (After scanning table)
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
-          // Web Menu
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${session.tableNumber}`;
           await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`, targetStore.id);
-          await updateSession(from, targetStore.id, { step: 'START' }); // Reset
+          await updateSession(from, targetStore.id, { step: 'START' });
         } else if (textBody === '2') {
-          // WhatsApp Menu
-          const categories = await prisma.category.findMany({
-            where: { storeId: targetStore.id },
-            orderBy: { name: 'asc' }
-          });
-
+          const categories = await prisma.category.findMany({ where: { storeId: targetStore.id }, orderBy: { name: 'asc' } });
           if (categories.length > 0) {
-            let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
-            catText += `Select a category:\n`;
-            catText += `1. All Menu\n`;
-            categories.forEach((c, idx) => {
-                catText += `${idx + 2}. ${c.name}\n`;
-            });
+            let catText = `🍽️ *${targetStore.name} Menu*\n\nSelect a category:\n1. All Menu\n`;
+            categories.forEach((c, idx) => { catText += `${idx + 2}. ${c.name}\n`; });
             catText += `\nReply with number to view items.`;
-            
             await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
             await sendWhatsAppMessage(from, catText, targetStore.id);
             return NextResponse.json({ success: true });
           }
-
           await updateSession(from, targetStore.id, { step: 'ORDERING' });
-          const products = await prisma.product.findMany({ 
-            where: { storeId: targetStore.id },
-            take: 10,
-            orderBy: { name: 'asc' }
-          });
-          
+          const products = await prisma.product.findMany({ where: { storeId: targetStore.id }, take: 10, orderBy: { name: 'asc' } });
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-
-          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
-          menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
-          menuText += `👇 *Or Order via Text*:\n`;
-
+          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n📱 *Recommended*: Order via Web\n${menuUrl}\n\n👇 *Or Order via Text*:\n`;
           products.forEach((p, index) => {
             const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
               ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
               : new Intl.NumberFormat('id-ID').format(p.price);
-
             menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
           });
           menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
           await sendWhatsAppMessage(from, menuText, targetStore.id);
         } else if (textBody === '3') {
-          // Quick Pay
           await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
           await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
         } else {
@@ -595,35 +471,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // Step: PAYMENT_AMOUNT (Manual Input)
       if (session.step === 'PAYMENT_AMOUNT') {
-        console.log('DEBUG: Processing PAYMENT_AMOUNT', textBody);
-        // Try parsing number
-        const cleanAmount = textBody.replace(/[^\d]/g, ''); // Remove non-digits
+        const cleanAmount = textBody.replace(/[^\d]/g, '');
         const amount = parseInt(cleanAmount);
-        console.log('DEBUG: Parsed Amount', amount);
-        
         if (!isNaN(amount) && amount > 0) {
-          // Create Pending Order
           try {
             const order = await prisma.order.create({
-              data: {
-                storeId: targetStore.id,
-                customerPhone: from,
-                totalAmount: amount,
-                status: 'PENDING'
-              }
+              data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING' }
             });
-            console.log('DEBUG: Order Created', order.id);
-
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-            console.log('DEBUG: Payment Link', paymentLink);
-            
             await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPay here: ${paymentLink}`, targetStore.id);
-            
-            await updateSession(from, targetStore.id, { step: 'START' }); // Reset
+            await updateSession(from, targetStore.id, { step: 'START' });
           } catch (e) {
-            console.error('DEBUG: Error creating order/payment', e);
             await sendWhatsAppMessage(from, `Error creating order. Please try again.`, targetStore.id);
           }
         } else {
@@ -632,13 +491,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // Step: ORDERING (Adding items)
       if (session.step && session.step.startsWith('ORDERING')) {
         const stepParts = session.step.split(':');
         const currentCategory = stepParts.length > 1 && stepParts[1] !== 'ALL' ? stepParts[1] : null;
 
         if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank') {
-          // Checkout logic
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
             await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
@@ -646,273 +503,118 @@ export async function POST(req: NextRequest) {
           }
 
           const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-          
-          // Determine method from command if it's a simple "done [method]"
-          let method = undefined;
-          if (lowerText.includes('qris')) method = 'qris';
-          else if (lowerText.includes('bank')) method = 'bank_transfer';
+          let method = lowerText.includes('qris') ? 'qris' : lowerText.includes('bank') ? 'bank_transfer' : undefined;
 
-          // Calculate Tax and Service Charge
           const taxAmount = total * (targetStore.taxPercent / 100);
           const serviceCharge = total * (targetStore.serviceChargePercent / 100);
           const subtotalWithTaxService = total + taxAmount + serviceCharge;
 
-          // Calculate specific fee for this method (Server-side)
           let fee = 0;
           if (targetStore.feePaidBy === 'CUSTOMER') {
-              if (method === 'qris' && targetStore.qrisFeePercent) {
-                  fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
-              } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
-                  fee = Number(targetStore.manualTransferFee);
-              }
+              if (method === 'qris' && targetStore.qrisFeePercent) fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
+              else if (method === 'bank_transfer' && targetStore.manualTransferFee) fee = Number(targetStore.manualTransferFee);
           }
           
           const finalTotal = subtotalWithTaxService + fee;
-
-          // Create Order with items
           const order = await prisma.order.create({
             data: {
               storeId: targetStore.id,
               customerPhone: from,
-              totalAmount: finalTotal, // Use final total including fees
+              totalAmount: finalTotal,
               taxAmount: taxAmount,
               serviceCharge: serviceCharge,
               paymentFee: fee,
               status: 'PENDING',
               tableNumber: session.tableNumber,
-              items: {
-                create: cart.map(item => ({
-                  productId: item.productId,
-                  quantity: item.qty,
-                  price: item.price
-                }))
-              }
+              items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
             }
           });
 
-          // NOTIFY MERCHANT
-          let merchantPhone = targetStore.whatsapp;
-          if (!merchantPhone) {
-              const owner = await prisma.user.findUnique({ where: { id: targetStore.ownerId } });
-              if (owner) merchantPhone = owner.phoneNumber;
-          }
-
-          if (merchantPhone) {
-              let merchantMsg = `🔔 *New Order #${order.id}*\n`;
-              if (session.tableNumber) merchantMsg += `📍 Table: *${session.tableNumber}*\n`;
-              merchantMsg += `👤 Customer: ${from}\n\n`;
-              cart.forEach(item => {
-                merchantMsg += `${item.qty}x ${item.name}\n`;
-              });
-              
-              merchantMsg += `\n------------------\n`;
-              merchantMsg += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
-              if (taxAmount > 0) merchantMsg += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
-              if (serviceCharge > 0) merchantMsg += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-              if (fee > 0) {
-                  merchantMsg += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-              }
-              merchantMsg += `\n💰 *Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*\n`;
-              merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
-              
-              await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
-          }
-
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
-          
           let summary = "🧾 *Order Summary*\n";
-          cart.forEach(item => {
-            summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
-          });
-          
-          summary += `\n------------------\n`;
-          summary += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+          cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
+          summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
           if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
           if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-          if (fee > 0) {
-              summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-          }
+          if (fee > 0) summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
 
-          await sendWhatsAppMessage(from, summary, targetStore.id, { 
-              buttonText: "Pay Now", 
-              buttonUrl: paymentLink 
-          });
+          await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
           await updateSession(from, targetStore.id, { step: 'START', cart: [] });
           return NextResponse.json({ success: true });
         }
 
-        // Parse "ItemIndex Quantity" (e.g. "1 2" or "1 2, 2 1")
-        // Support comma separated orders: "1 2, 2 1"
-        // Support quick checkout: "1 1 done qris" or "1 1 done bank"
         const orderParts = textBody.split(',').map((p: string) => p.trim());
         const validOrders: { index: number, qty: number }[] = [];
         let quickCheckoutMethod: string | undefined = undefined;
 
         for (const part of orderParts) {
-            // Regex to match "ItemNumber Quantity" with optional "done method"
             const itemMatch = part.match(/^(\d+)\s+(\d+)(?:\s+done\s+(\w+))?$/i);
-            
             if (itemMatch) {
-                validOrders.push({
-                    index: parseInt(itemMatch[1]) - 1, // 1-based to 0-based
-                    qty: parseInt(itemMatch[2])
-                });
-                // If this part has the checkout method, capture it
-                if (itemMatch[3]) {
-                    quickCheckoutMethod = itemMatch[3].toLowerCase();
-                }
+                validOrders.push({ index: parseInt(itemMatch[1]) - 1, qty: parseInt(itemMatch[2]) });
+                if (itemMatch[3]) quickCheckoutMethod = itemMatch[3].toLowerCase();
             }
         }
         
         const isCheckoutCommand = lowerText.includes('done') || lowerText.includes('checkout');
-        // Extract method from the whole text if not captured in parts
         if (isCheckoutCommand && !quickCheckoutMethod) {
             if (lowerText.includes('qris')) quickCheckoutMethod = 'qris';
             else if (lowerText.includes('bank')) quickCheckoutMethod = 'bank_transfer';
         }
-        
-        // Normalize method names for createPaymentLink
         if (quickCheckoutMethod === 'bank') quickCheckoutMethod = 'bank_transfer';
 
         if (validOrders.length > 0) {
-          // Fetch products with SAME filter
           const whereClause: any = { storeId: targetStore.id };
-          if (currentCategory) {
-              // Case-insensitive filtering
-              whereClause.category = {
-                  equals: currentCategory,
-                  mode: 'insensitive'
-              };
-          }
-
-          const products = await prisma.product.findMany({ 
-            where: whereClause,
-            take: 10,
-            orderBy: { name: 'asc' }
-          });
-
+          if (currentCategory) whereClause.category = { equals: currentCategory, mode: 'insensitive' };
+          const products = await prisma.product.findMany({ where: whereClause, take: 10, orderBy: { name: 'asc' } });
           const currentCart = (session.cart as any[]) || [];
           let addedItemsMsg = "";
 
           for (const order of validOrders) {
              if (order.index >= 0 && order.index < products.length && order.qty > 0) {
                 const product = products[order.index];
-                
-                // Add to cart
-                currentCart.push({
-                  productId: product.id,
-                  name: product.name,
-                  price: product.price,
-                  qty: order.qty
-                });
-                
+                currentCart.push({ productId: product.id, name: product.name, price: product.price, qty: order.qty });
                 addedItemsMsg += `- ${order.qty}x ${product.name}\n`;
              }
           }
 
           if (addedItemsMsg) {
              await updateSession(from, targetStore.id, { cart: currentCart });
-             
              if (isCheckoutCommand) {
-                 // Trigger Checkout Logic immediately
-                 // --- CHECKOUT LOGIC START ---
-                 const cart = currentCart; // Use updated cart
-                 const total = cart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
-          
-                 // Determine method from command if it's a simple "done [method]"
-                 let method = quickCheckoutMethod;
-                 
-                 // Calculate Tax and Service Charge
+                 const total = currentCart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
                  const taxAmount = total * (targetStore.taxPercent / 100);
                  const serviceCharge = total * (targetStore.serviceChargePercent / 100);
                  const subtotalWithTaxService = total + taxAmount + serviceCharge;
-
-                 // Calculate specific fee for this method (Server-side)
                  let fee = 0;
                  if (targetStore.feePaidBy === 'CUSTOMER') {
-                     if (method === 'qris' && targetStore.qrisFeePercent) {
-                         fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
-                     } else if (method === 'bank_transfer' && targetStore.manualTransferFee) {
-                         fee = Number(targetStore.manualTransferFee);
-                     }
+                     if (quickCheckoutMethod === 'qris' && targetStore.qrisFeePercent) fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
+                     else if (quickCheckoutMethod === 'bank_transfer' && targetStore.manualTransferFee) fee = Number(targetStore.manualTransferFee);
                  }
-                 
                  const finalTotal = subtotalWithTaxService + fee;
-
-                 // Create Order with items
                  const order = await prisma.order.create({
                     data: {
                       storeId: targetStore.id,
                       customerPhone: from,
-                      totalAmount: finalTotal, // Use final total including fees
+                      totalAmount: finalTotal,
                       taxAmount: taxAmount,
                       serviceCharge: serviceCharge,
                       paymentFee: fee,
                       status: 'PENDING',
                       tableNumber: session.tableNumber,
-                      items: {
-                        create: cart.map((item: any) => ({
-                          productId: item.productId,
-                          quantity: item.qty,
-                          price: item.price
-                        }))
-                      }
+                      items: { create: currentCart.map((item: any) => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
                     }
                  });
-
-                 // NOTIFY MERCHANT
-                 let merchantPhone = targetStore.whatsapp;
-                 if (!merchantPhone) {
-                    const owner = await prisma.user.findUnique({ where: { id: targetStore.ownerId } });
-                    if (owner) merchantPhone = owner.phoneNumber;
-                 }
-
-                 if (merchantPhone) {
-                    let merchantMsg = `🔔 *New Order #${order.id}*\n`;
-                    if (session.tableNumber) merchantMsg += `📍 Table: *${session.tableNumber}*\n`;
-                    merchantMsg += `👤 Customer: ${from}\n\n`;
-                    cart.forEach((item: any) => {
-                        merchantMsg += `${item.qty}x ${item.name}\n`;
-                    });
-                    
-                    merchantMsg += `\n------------------\n`;
-                    merchantMsg += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
-                    if (taxAmount > 0) merchantMsg += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
-                    if (serviceCharge > 0) merchantMsg += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-                    if (fee > 0) {
-                        merchantMsg += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-                    }
-                    merchantMsg += `\n💰 *Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*\n`;
-                    merchantMsg += `⚠️ Status: *PENDING PAYMENT*`;
-                    
-                    await sendWhatsAppMessage(merchantPhone, merchantMsg, targetStore.id);
-                 }
-
-                 const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
-                 
+                 const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, quickCheckoutMethod);
                  let summary = "🧾 *Order Summary*\n";
-                 cart.forEach((item: any) => {
-                    summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`;
-                 });
-                 
-                 summary += `\n------------------\n`;
-                 summary += `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+                 currentCart.forEach((item: any) => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
+                 summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
                  if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
                  if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-                 if (fee > 0) {
-                     summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-                 }
+                 if (fee > 0) summary += `Fee (${quickCheckoutMethod === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
                  summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
-
-                 await sendWhatsAppMessage(from, summary, targetStore.id, {
-                     buttonText: "Pay Now",
-                     buttonUrl: paymentLink
-                 });
+                 await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
                  await updateSession(from, targetStore.id, { step: 'START', cart: [] });
                  return NextResponse.json({ success: true });
-                 // --- CHECKOUT LOGIC END ---
-
              } else {
                  await sendWhatsAppMessage(from, `Added to cart:\n${addedItemsMsg}\nReply with more items, or "Done Qris/Bank" to checkout.\nReply 'Menu' to go back.`, targetStore.id);
              }
@@ -920,41 +622,24 @@ export async function POST(req: NextRequest) {
              await sendWhatsAppMessage(from, `Invalid item number(s). Please check the menu.`, targetStore.id);
           }
         } else if (isCheckoutCommand) {
-            // User just typed "Done" (handled at top) OR "something, done" where something was invalid
              const cart = (session.cart as any[]) || [];
              if (cart.length === 0) {
                 await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
                 return NextResponse.json({ success: true });
              }
-             // Proceed to normal checkout (handled by top block if strict "done", but here for mixed cases)
-             // Actually, the top block `if (lowerText === 'done' ...)` handles exact match.
-             // If user typed "invalid, done", we might want to checkout existing cart?
-             // Let's rely on top block for simple "done". 
-             // If we are here, it means regex didn't match orders, so maybe it's just garbage text?
              await sendWhatsAppMessage(from, `I didn't understand. Reply '1 2' to order Item #1 Quantity 2, or 'Done' to finish.`, targetStore.id);
         } else {
-          // Maybe user typed text, try to fuzzy match or just ignore
-          // Check if it's "Table X" or "Pay" to break out? (Handled at top)
           await sendWhatsAppMessage(from, `I didn't understand. Reply '1 2' to order Item #1 Quantity 2, or 'Done' to finish.`, targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
 
-      // 3. LEGACY / FALLBACK (If no session step matched)
-      
-      // If user sends order summary from Web (Legacy flow)
       if (textBody?.toLowerCase().includes("would like to order")) {
         const totalMatch = textBody.match(/Total:\s*\*?Rp\s*([\d.]+)/i);
         if (totalMatch) {
            const amount = parseInt(totalMatch[1].replace(/\./g, ''));
            const order = await prisma.order.create({
-            data: {
-              storeId: targetStore.id,
-              customerPhone: from,
-              totalAmount: amount,
-              status: 'PENDING',
-              items: { create: [] } 
-            }
+            data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING', items: { create: [] } }
           });
           const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
           await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, {
@@ -963,9 +648,7 @@ export async function POST(req: NextRequest) {
           });
         }
       }
-
     }
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error processing webhook:', error);
