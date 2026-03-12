@@ -21,7 +21,8 @@ import {
   Utensils,
   CupSoda,
   Package,
-  Home
+  Home,
+  Loader2
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
@@ -105,6 +106,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [customerPhone, setCustomerPhone] = useState("");
   const [checkInStep, setCheckInStep] = useState<'input' | 'choice' | 'success'>('input');
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
     setMounted(true);
@@ -121,11 +124,16 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
   const handleCheckIn = () => {
     if (!customerPhone) return;
-    setCheckInStep('choice');
+    setIsSubmitting(true);
+    setTimeout(() => {
+        setCheckInStep('choice');
+        setIsSubmitting(false);
+    }, 600);
   };
 
   const handleChoice = async (choice: 'whatsapp' | 'web') => {
       localStorage.setItem('customerPhone', customerPhone);
+      setIsCheckingIn(true);
       try {
           await fetch('/api/check-in', {
               method: 'POST',
@@ -138,6 +146,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           });
       } catch (e) {
           console.error("Check-in trigger failed:", e);
+      } finally {
+          setIsCheckingIn(false);
       }
 
       if (choice === 'whatsapp') {
@@ -621,22 +631,48 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   />
                   <button 
                     onClick={handleCheckIn}
-                    disabled={!customerPhone}
-                    className="w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl disabled:opacity-30 transition-all active:scale-95 text-white dark:text-white"
+                    disabled={!customerPhone || isSubmitting}
+                    className="w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl disabled:opacity-30 transition-all active:scale-95 text-white dark:text-white flex items-center justify-center gap-2"
                     style={{ backgroundColor: themeColor }}
                   >
-                    Submit
+                    {isSubmitting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                        "Submit"
+                    )}
                   </button>
                 </>
               ) : (
                 <div className="space-y-6 animate-in zoom-in duration-300">
                    <div className="space-y-2">
                     <h2 className="text-2xl font-black text-gray-900 dark:text-white">One more thing...</h2>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">How would you like to receive order updates?</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">How would you like to order?</p>
                    </div>
                    <div className="grid gap-3">
-                      <button onClick={() => handleChoice('whatsapp')} className="w-full py-5 bg-[#25D366] text-white rounded-[24px] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2"><MessageCircle className="w-5 h-5" /> Via WhatsApp</button>
-                      <button onClick={() => handleChoice('web')} className="w-full py-5 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-[24px] font-black text-sm uppercase tracking-widest border border-gray-100 dark:border-gray-700">Directly on Web</button>
+                      <button 
+                        onClick={() => handleChoice('whatsapp')} 
+                        disabled={isCheckingIn}
+                        className="w-full py-5 bg-[#25D366] text-white rounded-[24px] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2"
+                      >
+                        {isCheckingIn ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <MessageCircle className="w-5 h-5" /> Via WhatsApp
+                          </>
+                        )}
+                      </button>
+                      <button 
+                        onClick={() => handleChoice('web')} 
+                        disabled={isCheckingIn}
+                        className="w-full py-5 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-[24px] font-black text-sm uppercase tracking-widest border border-gray-100 dark:border-gray-700 flex items-center justify-center gap-2"
+                      >
+                        {isCheckingIn ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          "Directly on Web"
+                        )}
+                      </button>
                    </div>
                 </div>
               )}
