@@ -622,10 +622,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   <button 
                     onClick={handleCheckIn}
                     disabled={!customerPhone}
-                    className="w-full py-5 bg-gray-900 dark:bg-white dark:text-gray-900 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl disabled:opacity-30 transition-all active:scale-95"
+                    className="w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl disabled:opacity-30 transition-all active:scale-95 text-white dark:text-white"
                     style={{ backgroundColor: themeColor }}
                   >
-                    Enter Store
+                    Submit
                   </button>
                 </>
               ) : (
