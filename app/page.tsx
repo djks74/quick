@@ -53,6 +53,7 @@ const translations = {
     new_order: "New Order",
     whatsapp_features: "Manage products, update pricing, and fulfill orders—all directly within WhatsApp.",
     scan_demo: "Scan to try Demo",
+    contact_demo: "Contact us for demo activation",
     flow_subtitle: "Future of Retail & SME",
     flow_title_start: "Seamless flow from",
     flow_title_highlight: "Scan to Payment.",
@@ -98,6 +99,7 @@ const translations = {
     new_order: "Pesanan Baru",
     whatsapp_features: "Kelola produk, perbarui harga, dan penuhi pesanan—semuanya langsung di dalam WhatsApp.",
     scan_demo: "Scan untuk coba Demo",
+    contact_demo: "Hubungi kami untuk aktivasi demo",
     flow_subtitle: "Masa Depan Ritel & UMKM",
     flow_title_start: "Alur transaksi mulus dari",
     flow_title_highlight: "Scan hingga Bayar.",
@@ -234,6 +236,17 @@ export default function Home() {
               className="px-8 py-4 bg-white text-gray-800 border-2 border-gray-100 rounded-2xl font-bold hover:bg-gray-50 hover:border-gray-200 transition-all shadow-sm hover:shadow-md flex items-center justify-center"
             >
               {t.create_store}
+            </Link>
+          </div>
+
+          <div className="flex justify-center lg:justify-start">
+            <Link 
+              href="https://wa.me/6287768201551?text=Halo%20Gercep,%20saya%20tertarik%20untuk%20aktivasi%20demo."
+              target="_blank"
+              className="text-sm font-bold text-blue-600 hover:text-blue-700 underline underline-offset-4 flex items-center gap-2 transition-all"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {t.contact_demo}
             </Link>
           </div>
           
