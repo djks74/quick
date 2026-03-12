@@ -733,9 +733,11 @@ export async function POST(req: NextRequest) {
               summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           }
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
-          summary += `\n\n🔗 *Pay Here*: ${paymentLink}`;
 
-          await sendWhatsAppMessage(from, summary, targetStore.id);
+          await sendWhatsAppMessage(from, summary, targetStore.id, { 
+              buttonText: "Pay Now", 
+              buttonUrl: paymentLink 
+          });
           await updateSession(from, targetStore.id, { step: 'START', cart: [] });
           return NextResponse.json({ success: true });
         }
@@ -902,9 +904,11 @@ export async function POST(req: NextRequest) {
                      summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
                  }
                  summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
-                 summary += `\n\n🔗 *Pay Here*: ${paymentLink}`;
 
-                 await sendWhatsAppMessage(from, summary, targetStore.id);
+                 await sendWhatsAppMessage(from, summary, targetStore.id, {
+                     buttonText: "Pay Now",
+                     buttonUrl: paymentLink
+                 });
                  await updateSession(from, targetStore.id, { step: 'START', cart: [] });
                  return NextResponse.json({ success: true });
                  // --- CHECKOUT LOGIC END ---
@@ -953,7 +957,10 @@ export async function POST(req: NextRequest) {
             }
           });
           const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\n🔗 *Pay Here*: ${paymentLink}`, targetStore.id);
+          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, {
+              buttonText: "Pay Now",
+              buttonUrl: paymentLink
+          });
         }
       }
 
