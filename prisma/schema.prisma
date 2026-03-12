@@ -166,6 +166,11 @@ model WhatsAppSession {
   @@unique([phoneNumber, storeId]) // Session per user per store
 }
 
+model ProcessedMessage {
+  id        String   @id // Message ID from WhatsApp
+  createdAt DateTime @default(now())
+}
+
 model Table {
   id        Int      @id @default(autoincrement())
   storeId   Int
