@@ -59,7 +59,9 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Persistent deduplication using DB (Triggering new build)
+// Fast memory cache for deduplication (fallback if DB fails)
+const memoryCache = new Set<string>();
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -68,9 +70,25 @@ export async function POST(req: NextRequest) {
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
+
+    // 1. FAST EXIT: Ignore status updates (sent, delivered, read)
+    if (value?.statuses) {
+        return NextResponse.json({ success: true });
+    }
+
     const message = value?.messages?.[0];
 
-    // Deduplication check using Prisma
+    // 2. FAST DEDUPLICATION: Memory Check
+    if (message?.id) {
+        if (memoryCache.has(message.id)) {
+            console.log(`[WHATSAPP] Skipping already processed message (Memory): ${message.id}`);
+            return NextResponse.json({ success: true });
+        }
+        memoryCache.add(message.id);
+        if (memoryCache.size > 1000) memoryCache.clear();
+    }
+
+    // 3. PERSISTENT DEDUPLICATION: DB Check
     if (message?.id) {
         try {
             await prisma.processedMessage.create({
