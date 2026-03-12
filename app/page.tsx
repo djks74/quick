@@ -144,7 +144,7 @@ export default function Home() {
           <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
             <Zap className="w-6 h-6 text-white" />
           </div>
-          <span className="font-black text-xl tracking-tighter text-black">QUICK</span>
+          <span className="font-black text-xl tracking-tighter text-black">GERCEP</span>
         </Link>
         
         <div className="flex items-center gap-4">

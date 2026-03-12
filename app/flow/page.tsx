@@ -100,7 +100,7 @@ export default function FlowShowcase() {
             <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <span className="font-black text-xl tracking-tighter">QUICK</span>
+            <span className="font-black text-xl tracking-tighter">GERCEP</span>
           </Link>
           <div className="flex items-center gap-6">
             <Link href="/login" className="text-sm font-bold text-gray-500 hover:text-black transition-colors">Sign In</Link>
@@ -237,9 +237,9 @@ export default function FlowShowcase() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2 opacity-50">
             <Zap className="w-5 h-5" />
-            <span className="font-black tracking-tighter">QUICK</span>
+            <span className="font-black tracking-tighter">GERCEP</span>
           </div>
-          <p className="text-sm text-gray-400 font-medium">© 2024 Quick Ecosystem. All rights reserved.</p>
+          <p className="text-sm text-gray-400 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
           <div className="flex gap-8">
             <Link href="#" className="text-sm text-gray-400 hover:text-black font-bold">Privacy</Link>
             <Link href="#" className="text-sm text-gray-400 hover:text-black font-bold">Terms</Link>
