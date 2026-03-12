@@ -90,6 +90,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [preCartNote, setPreCartNote] = useState("");
   const [noteText, setNoteText] = useState("");
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -212,6 +213,144 @@ export default function PosClient({ store, products, categories, user }: PosClie
     }).format(price);
   };
 
+  const CartContent = ({ isMobile, onClose }: { isMobile?: boolean, onClose?: () => void }) => (
+    <div className="flex flex-col h-full">
+      <div className={cn("p-4 border-b flex items-center justify-between", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
+        <h2 className={cn("font-bold text-lg flex items-center", isDarkMode ? "text-white" : "text-gray-900")}>
+          <ShoppingCart className="w-5 h-5 mr-2 text-[#2271b1]" />
+          Current Order
+        </h2>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setCart([])}
+            disabled={cart.length === 0}
+            className="text-red-500 hover:text-red-700 text-xs font-bold disabled:opacity-50 uppercase tracking-tight"
+          >
+            Clear
+          </button>
+          {isMobile && (
+            <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {cart.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-3">
+            <ShoppingCart className="w-12 h-12 opacity-10" />
+            <p className="text-sm font-medium">Your cart is empty</p>
+          </div>
+        ) : (
+          cart.map(item => (
+            <div key={item.id} className={cn("p-3 rounded-2xl border group transition-all", isDarkMode ? "bg-gray-700/50 border-gray-600" : "bg-white border-gray-100 shadow-sm")}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex-1 min-w-0 pr-2">
+                    <h4 className={cn("font-bold text-sm truncate", isDarkMode ? "text-white" : "text-gray-900")}>{item.name}</h4>
+                    <p className="text-[#2271b1] font-black text-sm">{formatPrice(item.price * item.quantity)}</p>
+                </div>
+                <div className={cn("flex items-center space-x-2 rounded-xl border p-1", isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-50 border-gray-200")}>
+                    <button 
+                    onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
+                    className={cn("p-1 rounded-lg", isDarkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-white text-gray-600 shadow-sm")}
+                    >
+                    <Minus className="w-3 h-3" />
+                    </button>
+                    <span className={cn("w-6 text-center font-black text-sm", isDarkMode ? "text-white" : "text-gray-900")}>{item.quantity}</span>
+                    <button 
+                    onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}
+                    className={cn("p-1 rounded-lg", isDarkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-white text-gray-600 shadow-sm")}
+                    >
+                    <Plus className="w-3 h-3" />
+                    </button>
+                </div>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }}
+                    className="ml-2 p-2 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="mt-2">
+                {editingNoteId === item.id ? (
+                    <div className="flex items-center space-x-2">
+                        <input 
+                            type="text" 
+                            className={cn(
+                                "flex-1 text-xs px-3 py-1.5 rounded-lg border outline-none",
+                                isDarkMode ? "bg-gray-800 border-gray-600 text-white" : "bg-gray-50 border-gray-200 text-gray-900"
+                            )}
+                            placeholder="Add note..."
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            autoFocus
+                            onBlur={() => updateItemNote(item.id, noteText)}
+                            onKeyDown={(e) => e.key === 'Enter' && updateItemNote(item.id, noteText)}
+                        />
+                    </div>
+                ) : (
+                    <div 
+                        onClick={() => { setEditingNoteId(item.id); setNoteText(item.note || ""); }}
+                        className={cn(
+                            "text-[10px] flex items-center cursor-pointer hover:underline font-bold uppercase tracking-widest",
+                            item.note ? "text-orange-500" : "text-gray-400"
+                        )}
+                    >
+                        <MessageSquare className="w-3 h-3 mr-1.5" />
+                        {item.note || "Add Note"}
+                    </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className={cn("p-6 border-t space-y-4", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
+        <div className={cn("space-y-2 text-xs font-bold", isDarkMode ? "text-gray-400" : "text-gray-500")}>
+          <div className="flex justify-between">
+            <span className="uppercase tracking-widest">Subtotal</span>
+            <span className="text-gray-900 dark:text-white">{formatPrice(subtotal)}</span>
+          </div>
+          {taxPercent > 0 && (
+              <div className="flex justify-between">
+                <span className="uppercase tracking-widest">Tax ({taxPercent}%)</span>
+                <span className="text-gray-900 dark:text-white">{formatPrice(tax)}</span>
+              </div>
+          )}
+          {servicePercent > 0 && (
+              <div className="flex justify-between">
+                <span className="uppercase tracking-widest">Service ({servicePercent}%)</span>
+                <span className="text-gray-900 dark:text-white">{formatPrice(serviceCharge)}</span>
+              </div>
+          )}
+          {tip > 0 && (
+              <div className="flex justify-between text-blue-600 dark:text-blue-400">
+                <span className="uppercase tracking-widest">Tip</span>
+                <span>{formatPrice(tip)}</span>
+              </div>
+          )}
+        </div>
+        <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+          <span className="font-black text-sm uppercase tracking-widest">Total</span>
+          <span className="font-black text-3xl text-[#2271b1]">{formatPrice(total)}</span>
+        </div>
+        <button 
+          onClick={() => {
+            setIsCheckoutOpen(true);
+            if (isMobile && onClose) onClose();
+          }}
+          disabled={cart.length === 0}
+          className="w-full py-5 bg-[#2271b1] text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-[#135e96] transition-all active:scale-[0.98] disabled:opacity-50 disabled:shadow-none flex items-center justify-center space-x-2 text-sm uppercase tracking-widest"
+        >
+          <span>Charge {formatPrice(total)}</span>
+        </button>
+      </div>
+    </div>
+  );
+
   if (orderSuccess) {
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
@@ -271,24 +410,24 @@ export default function PosClient({ store, products, categories, user }: PosClie
   return (
     <div className={cn("h-screen flex flex-col overflow-hidden transition-colors duration-300", isDarkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900")}>
       {/* Header */}
-      <header className={cn("border-b h-16 flex items-center justify-between px-6 shadow-sm z-10 transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
-        <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-[#2271b1] rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-900/20">
+      <header className={cn("border-b h-16 md:h-20 flex items-center justify-between px-4 md:px-6 shadow-sm z-10 transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
+        <div className="flex items-center space-x-3 md:space-x-4">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-[#2271b1] rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/20">
             {store.name.charAt(0)}
           </div>
-          <div>
-            <h1 className={cn("font-bold text-lg leading-tight", isDarkMode ? "text-white" : "text-gray-900")}>{store.name}</h1>
-            <p className={cn("text-xs", isDarkMode ? "text-gray-400" : "text-gray-500")}>POS System • {user.role === 'CASHIER' ? 'Cashier' : 'Admin'}</p>
+          <div className="hidden sm:block">
+            <h1 className={cn("font-bold text-sm md:text-lg leading-tight", isDarkMode ? "text-white" : "text-gray-900")}>{store.name}</h1>
+            <p className={cn("text-[10px] md:text-xs", isDarkMode ? "text-gray-400" : "text-gray-500")}>POS System • {user.role === 'CASHIER' ? 'Cashier' : 'Admin'}</p>
           </div>
         </div>
         
-        <div className="flex items-center space-x-4 w-1/3">
+        <div className="flex-1 max-w-md mx-4">
           <div className="relative w-full">
             <input 
               type="text" 
-              placeholder="Search products (barcode or name)..." 
+              placeholder="Search..." 
               className={cn(
-                "w-full pl-10 pr-4 py-2 border-transparent rounded-lg transition-all outline-none",
+                "w-full pl-9 pr-4 py-2 border-transparent rounded-lg transition-all outline-none text-sm",
                 isDarkMode 
                   ? "bg-gray-700 text-white placeholder-gray-400 focus:bg-gray-600 focus:border-[#2271b1]" 
                   : "bg-gray-100 text-gray-900 placeholder-gray-500 focus:bg-white focus:border-[#2271b1]"
@@ -297,41 +436,41 @@ export default function PosClient({ store, products, categories, user }: PosClie
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
             />
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-4">
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={cn("p-2 rounded-full transition-colors", isDarkMode ? "hover:bg-gray-700 text-yellow-400" : "hover:bg-gray-100 text-gray-600")}
           >
-            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {isDarkMode ? <Sun className="w-4 h-4 md:w-5 md:h-5" /> : <Moon className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
           
-          <div className={cn("flex items-center space-x-2 text-sm font-medium px-3 py-1.5 rounded-full", isDarkMode ? "bg-gray-700 text-gray-200" : "bg-gray-50 text-gray-700")}>
+          <div className={cn("hidden md:flex items-center space-x-2 text-sm font-medium px-3 py-1.5 rounded-full", isDarkMode ? "bg-gray-700 text-gray-200" : "bg-gray-50 text-gray-700")}>
             <User className="w-4 h-4" />
-            <span>{user.name || user.email}</span>
+            <span className="max-w-[100px] truncate">{user.name || user.email}</span>
           </div>
           <button 
             onClick={() => signOut({ callbackUrl: `/${store.slug}/login` })}
             className="p-2 text-gray-400 hover:text-red-600 transition-colors"
             title="Logout"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Products */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Categories */}
-          <div className={cn("border-b px-6 py-3 flex space-x-2 overflow-x-auto transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
+          <div className={cn("border-b px-4 md:px-6 py-3 flex space-x-2 overflow-x-auto transition-colors duration-300 scrollbar-hide", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
             <button 
               onClick={() => setSelectedCategory("all")}
               className={cn(
-                "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                "px-4 py-1.5 rounded-full text-xs md:text-sm font-medium whitespace-nowrap transition-colors",
                 selectedCategory === "all" 
                   ? "bg-[#2271b1] text-white shadow-md shadow-blue-500/20" 
                   : isDarkMode 
@@ -346,7 +485,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.slug)}
                 className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                  "px-4 py-1.5 rounded-full text-xs md:text-sm font-medium whitespace-nowrap transition-colors",
                   selectedCategory === cat.slug 
                     ? "bg-[#2271b1] text-white shadow-md shadow-blue-500/20" 
                     : isDarkMode 
@@ -360,9 +499,9 @@ export default function PosClient({ store, products, categories, user }: PosClie
           </div>
 
           {/* Action Bar (Selection & Note) */}
-          <div className={cn("px-6 py-4 border-b transition-colors duration-300 flex items-center gap-4", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
-             <div className="flex-1 flex items-center gap-4">
-                <div className={cn("flex-1 h-12 rounded-xl border-2 flex items-center px-4 transition-colors", 
+          <div className={cn("px-4 md:px-6 py-3 border-b transition-colors duration-300 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-4", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
+             <div className="flex-1 flex items-center gap-2 md:gap-4">
+                <div className={cn("flex-1 h-10 md:h-12 rounded-xl border-2 flex items-center px-3 md:px-4 transition-colors text-xs md:text-sm", 
                     selectedProduct 
                         ? isDarkMode ? "bg-gray-700 border-[#2271b1]" : "bg-white border-[#2271b1]"
                         : isDarkMode ? "bg-gray-800 border-gray-600" : "bg-gray-100 border-gray-200"
@@ -370,14 +509,14 @@ export default function PosClient({ store, products, categories, user }: PosClie
                     {selectedProduct ? (
                         <span className={cn("font-bold truncate", isDarkMode ? "text-white" : "text-gray-900")}>{selectedProduct.name}</span>
                     ) : (
-                        <span className="text-gray-400 italic">Select a product below...</span>
+                        <span className="text-gray-400 italic">Select item...</span>
                     )}
                 </div>
                 
                 <div className="relative flex-[1.5]">
                     <input 
                         type="text" 
-                        placeholder="Add info / note..." 
+                        placeholder="Add info..." 
                         disabled={!selectedProduct}
                         value={preCartNote}
                         onChange={(e) => setPreCartNote(e.target.value)}
@@ -387,38 +526,35 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             }
                         }}
                         className={cn(
-                            "w-full h-12 pl-10 pr-4 rounded-xl border-2 outline-none transition-all",
+                            "w-full h-10 md:h-12 pl-9 md:pl-10 pr-4 rounded-xl border-2 outline-none transition-all text-xs md:text-sm",
                             isDarkMode 
                                 ? "bg-gray-700 border-gray-600 text-white focus:border-[#2271b1] disabled:opacity-50" 
                                 : "bg-white border-gray-200 text-gray-900 focus:border-[#2271b1] disabled:bg-gray-50"
                         )}
                     />
-                    <MessageSquare className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
+                    <MessageSquare className="w-4 h-4 text-gray-400 absolute left-3 top-3 md:top-4" />
                 </div>
 
                 <button 
                     onClick={() => selectedProduct && addToCart(selectedProduct, preCartNote)}
                     disabled={!selectedProduct}
-                    className="h-12 px-8 bg-[#2271b1] hover:bg-[#135e96] text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95 flex items-center gap-2"
+                    className="h-10 md:h-12 px-4 md:px-8 bg-[#2271b1] hover:bg-[#135e96] text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95 flex items-center gap-1 md:gap-2 text-xs md:text-sm"
                 >
-                    <Plus className="w-6 h-6" />
+                    <Plus className="w-4 h-4 md:w-6 md:h-6" />
                     <span>ADD</span>
                 </button>
              </div>
           </div>
 
           {/* Product Grid */}
-          <div className="flex-1 overflow-y-auto p-6">
-            <div 
-                className="grid gap-4"
-                style={{ gridTemplateColumns: `repeat(${store.posGridColumns || 4}, minmax(0, 1fr))` }}
-            >
+          <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
               {filteredProducts.map(product => (
                 <div 
                   key={product.id}
                   onClick={() => setSelectedProduct(product)}
                   className={cn(
-                    "rounded-xl shadow-sm border cursor-pointer transition-all group active:scale-95 duration-100 flex flex-col justify-between min-h-[120px] overflow-hidden relative",
+                    "rounded-xl shadow-sm border cursor-pointer transition-all group active:scale-95 duration-100 flex flex-col justify-between min-h-[100px] md:min-h-[120px] overflow-hidden relative p-3 md:p-5",
                     selectedProduct?.id === product.id
                         ? "ring-2 ring-[#2271b1] ring-offset-2 scale-[0.98]"
                         : isDarkMode 
@@ -426,166 +562,59 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             : "bg-white border-gray-200 hover:border-[#2271b1]/30 hover:shadow-md"
                   )}
                 >
-                  <div className="p-5 flex-1 flex flex-col justify-center">
-                    <h3 className={cn("font-bold text-lg mb-2 leading-snug line-clamp-2", isDarkMode ? "text-gray-100" : "text-gray-900")}>{product.name}</h3>
-                    <p className="text-[#2271b1] font-black text-2xl">{formatPrice(product.price)}</p>
+                  <div className="flex-1 flex flex-col justify-center">
+                    <h3 className={cn("font-bold text-xs md:text-base mb-1 md:mb-2 leading-tight line-clamp-2", isDarkMode ? "text-gray-100" : "text-gray-900")}>{product.name}</h3>
+                    <p className="text-[#2271b1] font-black text-sm md:text-xl">{formatPrice(product.price)}</p>
                     {product.stock <= 0 && (
-                        <span className="text-red-500 text-xs font-bold mt-1">Out of Stock</span>
+                        <span className="text-red-500 text-[10px] font-bold mt-1">Out of Stock</span>
                     )}
                   </div>
                   {/* Selection Indicator */}
                   {selectedProduct?.id === product.id && (
-                      <div className="absolute top-2 right-2 w-6 h-6 bg-[#2271b1] rounded-full flex items-center justify-center text-white shadow-lg">
-                          <CheckCircle className="w-4 h-4" />
+                      <div className="absolute top-1 right-1 md:top-2 md:right-2 w-5 h-5 md:w-6 md:h-6 bg-[#2271b1] rounded-full flex items-center justify-center text-white shadow-lg">
+                          <CheckCircle className="w-3 h-3 md:w-4 md:h-4" />
                       </div>
                   )}
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Floating Mobile Cart Button */}
+          {cart.length > 0 && (
+            <div className="md:hidden fixed bottom-6 right-6 z-40">
+              <button
+                onClick={() => setIsMobileCartOpen(true)}
+                className="w-16 h-16 bg-[#2271b1] text-white rounded-full shadow-2xl flex items-center justify-center relative animate-in zoom-in duration-300"
+              >
+                <ShoppingCart className="w-8 h-8" />
+                <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-gray-900">
+                  {cart.reduce((acc, item) => acc + item.quantity, 0)}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right: Cart */}
-        <div className={cn("w-96 border-l shadow-xl flex flex-col z-20 transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
-          <div className={cn("p-4 border-b flex items-center justify-between", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
-            <h2 className={cn("font-bold text-lg flex items-center", isDarkMode ? "text-white" : "text-gray-900")}>
-              <ShoppingCart className="w-5 h-5 mr-2" />
-              Current Order
-            </h2>
-            <button 
-              onClick={() => setCart([])}
-              disabled={cart.length === 0}
-              className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50"
-            >
-              Clear All
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-3">
-                <ShoppingCart className="w-12 h-12 opacity-20" />
-                <p>Cart is empty</p>
-                <p className="text-xs text-center max-w-[200px]">Select items from the left to add to order</p>
-              </div>
-            ) : (
-              cart.map(item => (
-                <div key={item.id} className={cn("p-3 rounded-lg border group", isDarkMode ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-100")}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex-1 min-w-0 pr-3">
-                        <h4 className={cn("font-medium text-sm truncate", isDarkMode ? "text-white" : "text-gray-900")}>{item.name}</h4>
-                        <p className="text-[#2271b1] font-bold text-sm">{formatPrice(item.price * item.quantity)}</p>
-                    </div>
-                    <div className={cn("flex items-center space-x-2 rounded-lg border p-1 shadow-sm", isDarkMode ? "bg-gray-800 border-gray-600" : "bg-white border-gray-200")}>
-                        <button 
-                        onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
-                        className={cn("p-1 rounded", isDarkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-100 text-gray-600")}
-                        >
-                        <Minus className="w-3 h-3" />
-                        </button>
-                        <span className={cn("w-6 text-center font-bold text-sm", isDarkMode ? "text-white" : "text-gray-900")}>{item.quantity}</span>
-                        <button 
-                        onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}
-                        className={cn("p-1 rounded", isDarkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-100 text-gray-600")}
-                        >
-                        <Plus className="w-3 h-3" />
-                        </button>
-                    </div>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }}
-                        className="ml-2 p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  {/* Note Input */}
-                  <div className="mt-2">
-                    {editingNoteId === item.id ? (
-                        <div className="flex items-center space-x-2">
-                            <input 
-                                type="text" 
-                                className={cn(
-                                    "flex-1 text-xs px-2 py-1 rounded border outline-none",
-                                    isDarkMode ? "bg-gray-800 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900"
-                                )}
-                                placeholder="Add note..."
-                                value={noteText}
-                                onChange={(e) => setNoteText(e.target.value)}
-                                autoFocus
-                                onBlur={() => updateItemNote(item.id, noteText)}
-                                onKeyDown={(e) => e.key === 'Enter' && updateItemNote(item.id, noteText)}
-                            />
-                            <button 
-                                onClick={() => updateItemNote(item.id, noteText)}
-                                className="text-[#2271b1] text-xs font-bold"
-                            >
-                                Save
-                            </button>
-                        </div>
-                    ) : (
-                        <div 
-                            onClick={() => { setEditingNoteId(item.id); setNoteText(item.note || ""); }}
-                            className={cn(
-                                "text-xs flex items-center cursor-pointer hover:underline",
-                                item.note ? "text-orange-500 font-medium" : "text-gray-400 italic"
-                            )}
-                        >
-                            <MessageSquare className="w-3 h-3 mr-1" />
-                            {item.note || "Add note..."}
-                        </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className={cn("p-4 border-t space-y-3", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200")}>
-            <div className={cn("space-y-1 text-sm", isDarkMode ? "text-gray-400" : "text-gray-600")}>
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>{formatPrice(subtotal)}</span>
-              </div>
-              {taxPercent > 0 && (
-                  <div className="flex justify-between">
-                    <span>Tax ({taxPercent}%)</span>
-                    <span>{formatPrice(tax)}</span>
-                  </div>
-              )}
-              {servicePercent > 0 && (
-                  <div className="flex justify-between">
-                    <span>Service ({servicePercent}%)</span>
-                    <span>{formatPrice(serviceCharge)}</span>
-                  </div>
-              )}
-              {/* {paymentFee > 0 && (
-                  <div className="flex justify-between text-orange-600">
-                    <span>Platform Fee</span>
-                    <span>{formatPrice(paymentFee)}</span>
-                  </div>
-              )} */}
-              {tip > 0 && (
-                  <div className="flex justify-between text-blue-600">
-                    <span>Tip</span>
-                    <span>{formatPrice(tip)}</span>
-                  </div>
-              )}
-            </div>
-            <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-              <span className="font-bold text-lg">Total</span>
-              <span className="font-bold text-2xl text-[#2271b1]">{formatPrice(total)}</span>
-            </div>
-            <button 
-              onClick={() => setIsCheckoutOpen(true)}
-              disabled={cart.length === 0}
-              className="w-full py-4 bg-[#2271b1] text-white font-bold rounded-xl shadow-lg hover:bg-[#135e96] transition-all active:scale-[0.98] disabled:opacity-50 disabled:shadow-none flex items-center justify-center space-x-2"
-            >
-              <span>Charge {formatPrice(total)}</span>
-            </button>
-          </div>
+        {/* Right: Cart (Desktop Sidebar) */}
+        <div className={cn("hidden md:flex w-80 lg:w-96 border-l shadow-xl flex-col z-20 transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
+          <CartContent />
         </div>
       </div>
+
+      {/* Mobile Cart Sheet */}
+      {isMobileCartOpen && (
+        <div className="md:hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-300">
+          <div className={cn("w-full h-[85vh] rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom duration-500", isDarkMode ? "bg-gray-800" : "bg-white")}>
+            <div className="flex items-center justify-center py-4">
+              <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
+               <CartContent isMobile onClose={() => setIsMobileCartOpen(false)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Checkout Modal */}
       {isCheckoutOpen && (
