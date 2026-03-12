@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Quick",
-  description: "Quick - Digital Menu & Store",
+  title: "Gercep",
+  description: "Gercep - Digital Menu & Store",
 };
 
 export default function RootLayout({
