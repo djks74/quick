@@ -26,6 +26,7 @@ import {
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: number;
