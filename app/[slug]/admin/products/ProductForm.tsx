@@ -386,46 +386,58 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
             </div>
 
             <div className="space-y-3">
-              {ingredientFields.map((field, index) => (
-                <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                  <div className="flex-1 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ingredient</label>
-                      <select
-                        {...register(`ingredients.${index}.inventoryItemId` as const, { valueAsNumber: true })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
-                      >
-                        <option value="0">Select Item...</option>
-                        {inventoryItems.map(item => (
-                          <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Quantity</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          {...register(`ingredients.${index}.quantity` as const, { valueAsNumber: true })}
+              {ingredientFields.map((field, index) => {
+                const selectedItem = inventoryItems.find(i => i.id === Number(watch(`ingredients.${index}.inventoryItemId`)));
+                const quantity = watch(`ingredients.${index}.quantity`) || 0;
+                const subtotal = selectedItem ? selectedItem.costPrice * quantity : 0;
+
+                return (
+                  <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ingredient</label>
+                        <select
+                          {...register(`ingredients.${index}.inventoryItemId` as const, { valueAsNumber: true })}
                           className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
-                          placeholder="0"
-                        />
-                        <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest min-w-[40px]">
-                          {inventoryItems.find(i => i.id === Number(watch(`ingredients.${index}.inventoryItemId`)))?.unit || ""}
-                        </span>
+                        >
+                          <option value="0">Select Item...</option>
+                          {inventoryItems.map(item => (
+                            <option key={item.id} value={item.id}>{item.name} ({formatCurrency(item.costPrice, "IDR")}/{item.unit})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Quantity</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(`ingredients.${index}.quantity` as const, { valueAsNumber: true })}
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                            placeholder="0"
+                          />
+                          <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest min-w-[40px]">
+                            {selectedItem?.unit || ""}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Cost Subtotal</label>
+                        <div className="px-3 py-2 bg-gray-100/50 dark:bg-gray-900/50 rounded-lg text-sm font-bold text-primary">
+                          {formatCurrency(subtotal, "IDR")}
+                        </div>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(index)}
+                      className="mt-6 p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeIngredient(index)}
-                    className="mt-6 p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
               {ingredientFields.length === 0 && (
                 <div className="text-center py-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl text-gray-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest">
                   No ingredients added. This product will not reduce raw stock.
