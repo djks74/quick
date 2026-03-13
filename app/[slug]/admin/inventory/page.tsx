@@ -112,6 +112,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
             <tr className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Item Name</th>
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Barcode</th>
+              <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Cost Price</th>
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Stock Level</th>
               <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Actions</th>
             </tr>
@@ -125,6 +126,12 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">
                   {item.barcode || "—"}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="font-black text-gray-900 dark:text-white text-sm">
+                    {formatCurrency(item.costPrice, "IDR")}
+                  </div>
+                  <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">per {item.unit}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
@@ -216,6 +223,10 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unit</label>
                    <input name="unit" defaultValue={editingItem?.unit || 'pcs'} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="kg, gr, pcs" />
                  </div>
+               </div>
+               <div>
+                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Cost Price (per unit)</label>
+                 <input name="costPrice" type="number" step="100" defaultValue={editingItem?.costPrice || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="0" />
                </div>
                <div className="grid grid-cols-2 gap-4">
                  <div>
