@@ -63,7 +63,7 @@ model Store {
   subscriptionPlan        String    @default("FREE") // FREE, PRO
   transactionFeePercent   Float     @default(0.0)
   balance                 Float     @default(0.0)
-  waBalance               Float     @default(0.0)
+  waBalance               Float     @default(50000.0)
   waPricePerMessage       Float     @default(350.0)
   waLowCreditAlertSentAt  DateTime?
   

@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 
 export const WA_LOW_CREDIT_THRESHOLD = 10000;
 export const WA_BUNDLE_PLATFORM_FEE = 150000;
-export const WA_BUNDLE_INCLUDED_CREDIT = 149000;
+export const WA_DEFAULT_WELCOME_CREDIT = 50000;
+export const WA_BUNDLE_INCLUDED_CREDIT = WA_DEFAULT_WELCOME_CREDIT;
 
 let ensuredWaCreditSchema: Promise<void> | null = null;
 
@@ -11,7 +12,11 @@ export async function ensureWaCreditSchema() {
     ensuredWaCreditSchema = (async () => {
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 0;
+        ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ALTER COLUMN "waBalance" SET DEFAULT 50000;
       `);
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
@@ -49,6 +54,39 @@ export async function ensureWaCreditSchema() {
         CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx"
         ON "WaUsageLog" ("messageId");
       `);
+
+      const eligibleStores = await prisma.store.findMany({
+        where: {
+          waBalance: { lte: 0 },
+          waUsageLogs: {
+            none: {}
+          }
+        },
+        select: {
+          id: true
+        }
+      }).catch(() => []);
+
+      for (const store of eligibleStores) {
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.store.update({
+            where: { id: store.id },
+            data: { waBalance: WA_DEFAULT_WELCOME_CREDIT },
+            select: { waBalance: true }
+          });
+
+          await tx.waUsageLog.create({
+            data: {
+              storeId: store.id,
+              type: "WELCOME_CREDIT",
+              amount: WA_DEFAULT_WELCOME_CREDIT,
+              description: "Default WhatsApp credit",
+              balanceAfter: Number((updated.waBalance || 0).toFixed(2)),
+              externalRef: `WELCOME-${store.id}`
+            }
+          });
+        }).catch(() => null);
+      }
     })().catch(() => {});
   }
   await ensuredWaCreditSchema;
@@ -264,6 +302,7 @@ export async function getWaUsageDashboard(storeId: number) {
     balance,
     pricePerMessage,
     remainingMessages,
+    defaultIncludedCredit: WA_DEFAULT_WELCOME_CREDIT,
     lowCreditThreshold: WA_LOW_CREDIT_THRESHOLD,
     recentLogs
   };

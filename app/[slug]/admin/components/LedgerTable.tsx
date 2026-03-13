@@ -26,8 +26,9 @@ export default function LedgerTable({ initialLedger, storeId, waDashboard }: { i
   const waBalance = Number(waDashboard?.balance || 0);
   const waMessagePrice = Number(waDashboard?.pricePerMessage || 350);
   const waRemainingMessages = Number(waDashboard?.remainingMessages || 0);
+  const defaultIncludedCredit = Number(waDashboard?.defaultIncludedCredit || 50000);
   const lowCreditThreshold = Number(waDashboard?.lowCreditThreshold || 10000);
-  const gaugePercent = Math.min(100, Math.round((waBalance / 149000) * 100));
+  const gaugePercent = Math.min(100, Math.round((waBalance / Math.max(1, defaultIncludedCredit)) * 100));
 
   const requestTopup = async (amount: number) => {
     setTopupLoadingAmount(amount);
