@@ -4,6 +4,7 @@ import { prisma } from './prisma';
 import { Product, Category } from './types';
 import bcrypt from 'bcryptjs';
 import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/order-notifications";
+import { ensureWaCreditSchema } from "@/lib/wa-credit";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
@@ -78,6 +79,7 @@ async function ensureRecipeSchema() {
 
 export async function getStoreBySlug(slug: string) {
   try {
+    await ensureWaCreditSchema();
     const store = await prisma.store.findUnique({
       where: { slug }
     });
@@ -90,6 +92,7 @@ export async function getStoreBySlug(slug: string) {
 
 export async function getStoreSettings(storeId: number | string) {
   try {
+    await ensureWaCreditSchema();
     const where = typeof storeId === 'string' ? { slug: storeId } : { id: storeId };
     const settings = await prisma.store.findUnique({
       where: where as any
