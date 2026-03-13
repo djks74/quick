@@ -15,7 +15,7 @@ const variationSchema = z.object({
 });
 
 const ingredientSchema = z.object({
-  inventoryItemId: z.number().min(1, "Ingredient required"),
+  inventoryItemId: z.number().min(0),
   quantity: z.number().min(0, "Quantity must be positive"),
 });
 
@@ -412,7 +412,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
               </div>
               <button
                 type="button"
-                onClick={() => appendIngredient({ inventoryItemId: 0, quantity: 1 })}
+                onClick={() => appendIngredient({ inventoryItemId: inventoryItems?.[0]?.id || 0, quantity: 1 })}
                 className="text-sm bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all font-bold uppercase tracking-wider"
               >
                 <Plus className="w-4 h-4" />
