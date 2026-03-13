@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
+type IngredientUOM = 'gram' | 'kg' | 'pcs';
+
+const normalizeUOM = (value?: string): IngredientUOM => {
+  const v = (value || '').toLowerCase();
+  if (v === 'gram' || v === 'gr' || v === 'g') return 'gram';
+  if (v === 'kg' || v === 'kilogram') return 'kg';
+  return 'pcs';
+};
+
+const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit: IngredientUOM, conversionFactor: number) => {
+  const gramsPerPcs = Math.max(0.000001, Number.isFinite(conversionFactor) ? conversionFactor : 1);
+  const qty = Number.isFinite(quantity) ? quantity : 0;
+  const grams = quantityUnit === 'gram' ? qty : quantityUnit === 'kg' ? qty * 1000 : qty * gramsPerPcs;
+  const baseQty = baseUnit === 'gram' ? grams : baseUnit === 'kg' ? grams / 1000 : grams / gramsPerPcs;
+  return Number(baseQty.toFixed(6));
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -97,9 +114,14 @@ export async function POST(req: NextRequest) {
               // 2. Reduce raw ingredients stock if recipe exists
               if (item.product.ingredients && item.product.ingredients.length > 0) {
                   for (const ingredient of item.product.ingredients) {
+                      const baseUnit = normalizeUOM((ingredient as any).baseUnit);
+                      const quantityUnit = normalizeUOM((ingredient as any).quantityUnit || baseUnit);
+                      const conversionFactor = Math.max(0.000001, Number((ingredient as any).conversionFactor) || 1);
+                      const recipeBaseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
+                      const decrementAmount = Number((recipeBaseQty * item.quantity).toFixed(6));
                       await prisma.inventoryItem.update({
                           where: { id: ingredient.inventoryItemId },
-                          data: { stock: { decrement: ingredient.quantity * item.quantity } }
+                          data: { stock: { decrement: decrementAmount } }
                       });
                   }
               }

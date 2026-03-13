@@ -41,9 +41,27 @@ async function ensureRecipeSchema() {
           "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "inventoryItemId" INTEGER NOT NULL REFERENCES "InventoryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "quantity" DOUBLE PRECISION NOT NULL,
+          "quantityUnit" TEXT NOT NULL DEFAULT 'pcs',
+          "baseUnit" TEXT NOT NULL DEFAULT 'pcs',
+          "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs';
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs';
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1;
       `);
 
       await prisma.$executeRawUnsafe(`
@@ -595,6 +613,9 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
         productId: i.productId,
         inventoryItemId: i.inventoryItemId,
         quantity: i.quantity,
+        quantityUnit: i.quantityUnit || "pcs",
+        baseUnit: i.baseUnit || "pcs",
+        conversionFactor: i.conversionFactor ?? 1,
         inventoryItem: i.inventoryItem
       })) || []
     }));
@@ -633,7 +654,10 @@ export async function createProduct(storeId: number, data: any) {
           ingredients: {
             create: data.ingredients?.map((i: any) => ({
               inventoryItemId: Number(i.inventoryItemId),
-              quantity: parseFloat(i.quantity) || 0
+              quantity: parseFloat(i.quantity) || 0,
+              quantityUnit: i.quantityUnit || "pcs",
+              baseUnit: i.baseUnit || "pcs",
+              conversionFactor: Math.max(0.000001, parseFloat(i.conversionFactor) || 1)
             }))
           }
         },
@@ -704,7 +728,10 @@ export async function updateProduct(id: number, data: any) {
             ingredients: {
               create: data.ingredients?.map((i: any) => ({
                 inventoryItemId: Number(i.inventoryItemId),
-                quantity: parseFloat(i.quantity) || 0
+                quantity: parseFloat(i.quantity) || 0,
+                quantityUnit: i.quantityUnit || "pcs",
+                baseUnit: i.baseUnit || "pcs",
+                conversionFactor: Math.max(0.000001, parseFloat(i.conversionFactor) || 1)
               }))
             }
           },

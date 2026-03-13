@@ -17,6 +17,9 @@ const variationSchema = z.object({
 const ingredientSchema = z.object({
   inventoryItemId: z.number().min(0),
   quantity: z.number().min(0, "Quantity must be positive"),
+  quantityUnit: z.enum(["gram", "kg", "pcs"]),
+  baseUnit: z.enum(["gram", "kg", "pcs"]),
+  conversionFactor: z.number().min(0.000001, "Conversion factor must be positive"),
 });
 
 const productSchema = z.object({
@@ -36,6 +39,41 @@ const productSchema = z.object({
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
+
+type IngredientUOM = "gram" | "kg" | "pcs";
+
+const normalizeUOM = (value?: string): IngredientUOM => {
+  const v = (value || "").toLowerCase();
+  if (v === "gram" || v === "gr" || v === "g") return "gram";
+  if (v === "kg" || v === "kilogram") return "kg";
+  return "pcs";
+};
+
+const safeNumber = (value: any, fallback = 0) => {
+  const num = typeof value === "number" ? value : parseFloat((value ?? "").toString().replace(",", "."));
+  if (!Number.isFinite(num)) return fallback;
+  return num;
+};
+
+const round = (value: number, digits = 6) => Number(value.toFixed(digits));
+
+const toGrams = (quantity: number, unit: IngredientUOM, gramsPerPcs: number) => {
+  if (unit === "gram") return quantity;
+  if (unit === "kg") return quantity * 1000;
+  return quantity * gramsPerPcs;
+};
+
+const gramsToUnit = (grams: number, unit: IngredientUOM, gramsPerPcs: number) => {
+  if (unit === "gram") return grams;
+  if (unit === "kg") return grams / 1000;
+  return grams / gramsPerPcs;
+};
+
+const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit: IngredientUOM, conversionFactor: number) => {
+  const gramsPerPcs = Math.max(0.000001, safeNumber(conversionFactor, 1));
+  const grams = toGrams(safeNumber(quantity, 0), quantityUnit, gramsPerPcs);
+  return round(gramsToUnit(grams, baseUnit, gramsPerPcs));
+};
 
 interface ProductFormProps {
   product?: Product | null;
@@ -78,7 +116,10 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
       variations: product?.variations || [],
       ingredients: product?.ingredients?.map(i => ({
         inventoryItemId: i.inventoryItemId,
-        quantity: i.quantity
+        quantity: i.quantity,
+        quantityUnit: i.quantityUnit || i.baseUnit || normalizeUOM(i.inventoryItem?.unit),
+        baseUnit: i.baseUnit || normalizeUOM(i.inventoryItem?.unit),
+        conversionFactor: safeNumber(i.conversionFactor, 1)
       })) || [],
     },
   });
@@ -101,7 +142,10 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
   const cogs = watchIngredients.reduce((total, field) => {
     const item = inventoryItems.find(i => i.id === Number(field.inventoryItemId));
     if (item) {
-      return total + (item.costPrice * field.quantity);
+      const baseUnit = normalizeUOM(field.baseUnit || item.unit);
+      const quantityUnit = normalizeUOM(field.quantityUnit || baseUnit);
+      const baseQuantity = toBaseQuantity(field.quantity || 0, quantityUnit, baseUnit, field.conversionFactor || 1);
+      return round(total + (safeNumber(item.costPrice, 0) * baseQuantity));
     }
     return total;
   }, 0);
@@ -169,15 +213,28 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
     if (finalData.ingredients && finalData.ingredients.length > 0) {
       const merged = finalData.ingredients
         .filter(i => i.inventoryItemId > 0)
+        .map((i) => {
+          const item = inventoryItems.find((x) => x.id === Number(i.inventoryItemId));
+          const baseUnit = normalizeUOM(i.baseUnit || item?.unit);
+          const quantityUnit = normalizeUOM(i.quantityUnit || baseUnit);
+          return {
+            ...i,
+            quantity: safeNumber(i.quantity, 0),
+            quantityUnit,
+            baseUnit,
+            conversionFactor: Math.max(0.000001, safeNumber(i.conversionFactor, 1))
+          };
+        })
         .reduce((acc, i) => {
-          const existing = acc.find(x => x.inventoryItemId === i.inventoryItemId);
+          const key = `${i.inventoryItemId}-${i.quantityUnit}-${i.baseUnit}-${safeNumber(i.conversionFactor, 1)}`;
+          const existing = acc.find(x => `${x.inventoryItemId}-${x.quantityUnit}-${x.baseUnit}-${safeNumber(x.conversionFactor, 1)}` === key);
           if (existing) {
             existing.quantity = (existing.quantity || 0) + (i.quantity || 0);
           } else {
             acc.push({ ...i });
           }
           return acc;
-        }, [] as { inventoryItemId: number; quantity: number }[])
+        }, [] as { inventoryItemId: number; quantity: number; quantityUnit: IngredientUOM; baseUnit: IngredientUOM; conversionFactor: number }[])
         .filter(i => (i.quantity || 0) > 0);
 
       finalData.ingredients = merged;
@@ -423,7 +480,17 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
               </div>
               <button
                 type="button"
-                onClick={() => appendIngredient({ inventoryItemId: inventoryItems?.[0]?.id || 0, quantity: 1 })}
+                onClick={() => {
+                  const firstItem = inventoryItems?.[0];
+                  const firstBaseUnit = normalizeUOM(firstItem?.unit);
+                  appendIngredient({
+                    inventoryItemId: firstItem?.id || 0,
+                    quantity: 1,
+                    quantityUnit: firstBaseUnit,
+                    baseUnit: firstBaseUnit,
+                    conversionFactor: 1
+                  });
+                }}
                 className="text-sm bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all font-bold uppercase tracking-wider"
               >
                 <Plus className="w-4 h-4" />
@@ -435,7 +502,13 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
               {ingredientFields.map((field, index) => {
                 const selectedItem = inventoryItems.find(i => i.id === Number(watch(`ingredients.${index}.inventoryItemId`)));
                 const quantity = watch(`ingredients.${index}.quantity`) || 0;
-                const subtotal = selectedItem ? selectedItem.costPrice * quantity : 0;
+                const quantityUnit = normalizeUOM(watch(`ingredients.${index}.quantityUnit`) || selectedItem?.unit);
+                const baseUnit = normalizeUOM(watch(`ingredients.${index}.baseUnit`) || selectedItem?.unit);
+                const conversionFactor = Math.max(0.000001, safeNumber(watch(`ingredients.${index}.conversionFactor`), 1));
+                const subtotal = selectedItem
+                  ? round(safeNumber(selectedItem.costPrice, 0) * toBaseQuantity(quantity, quantityUnit, baseUnit, conversionFactor))
+                  : 0;
+                const ingredientIdField = register(`ingredients.${index}.inventoryItemId` as const, { valueAsNumber: true });
 
                 return (
                   <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -443,7 +516,18 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                       <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ingredient</label>
                         <select
-                          {...register(`ingredients.${index}.inventoryItemId` as const, { valueAsNumber: true })}
+                          {...ingredientIdField}
+                          onChange={(e) => {
+                            ingredientIdField.onChange(e);
+                            const selected = inventoryItems.find((item) => item.id === Number(e.target.value));
+                            if (selected) {
+                              setValue(`ingredients.${index}.baseUnit`, normalizeUOM(selected.unit), { shouldDirty: true });
+                              setValue(`ingredients.${index}.quantityUnit`, normalizeUOM(selected.unit), { shouldDirty: true });
+                              if (normalizeUOM(selected.unit) !== "pcs") {
+                                setValue(`ingredients.${index}.conversionFactor`, normalizeUOM(selected.unit) === "kg" ? 1000 : 1, { shouldDirty: true });
+                              }
+                            }
+                          }}
                           className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
                         >
                           <option value="0">Select Item...</option>
@@ -469,9 +553,35 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                             className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
                             placeholder="0"
                           />
-                          <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest min-w-[40px]">
-                            {selectedItem?.unit || ""}
-                          </span>
+                          <select
+                            {...register(`ingredients.${index}.quantityUnit` as const)}
+                            className="px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-black uppercase tracking-widest dark:text-white outline-none"
+                          >
+                            <option value="gram">Gram</option>
+                            <option value="kg">Kg</option>
+                            <option value="pcs">Pcs</option>
+                          </select>
+                        </div>
+                        <input type="hidden" {...register(`ingredients.${index}.baseUnit` as const)} />
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                            Base Unit: {baseUnit}
+                          </p>
+                          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                            Grams per Pcs
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(`ingredients.${index}.conversionFactor` as const, {
+                              setValueAs: (v) => {
+                                const num = safeNumber(v, 1);
+                                return num > 0 ? num : 1;
+                              }
+                            })}
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                            placeholder="1000"
+                          />
                         </div>
                       </div>
                       <div>

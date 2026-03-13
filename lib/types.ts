@@ -22,6 +22,9 @@ export interface ProductIngredient {
   productId: number;
   inventoryItemId: number;
   quantity: number;
+  quantityUnit?: "gram" | "kg" | "pcs";
+  baseUnit?: "gram" | "kg" | "pcs";
+  conversionFactor?: number;
   inventoryItem?: {
     id: number;
     name: string;

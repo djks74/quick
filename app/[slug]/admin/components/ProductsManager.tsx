@@ -15,6 +15,23 @@ import CategoryForm from "@/app/[slug]/admin/products/CategoryForm";
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, updateCategory, deleteCategory } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+type IngredientUOM = "gram" | "kg" | "pcs";
+
+const normalizeUOM = (value?: string): IngredientUOM => {
+  const v = (value || "").toLowerCase();
+  if (v === "gram" || v === "gr" || v === "g") return "gram";
+  if (v === "kg" || v === "kilogram") return "kg";
+  return "pcs";
+};
+
+const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit: IngredientUOM, conversionFactor: number) => {
+  const gramsPerPcs = Math.max(0.000001, Number.isFinite(conversionFactor) ? conversionFactor : 1);
+  const qty = Number.isFinite(quantity) ? quantity : 0;
+  const grams = quantityUnit === "gram" ? qty : quantityUnit === "kg" ? qty * 1000 : qty * gramsPerPcs;
+  const baseQty = baseUnit === "gram" ? grams : baseUnit === "kg" ? grams / 1000 : grams / gramsPerPcs;
+  return Number(baseQty.toFixed(6));
+};
+
 export default function ProductsManager({ 
   initialProducts, 
   initialCategories, 
@@ -188,7 +205,12 @@ export default function ProductsManager({
                     {filteredProducts.map((product) => {
                         const productCost = product.ingredients?.reduce((total: number, ing: any) => {
                             const inventoryItem = inventoryItems.find(i => i.id === ing.inventoryItemId);
-                            return total + (inventoryItem ? inventoryItem.costPrice * ing.quantity : 0);
+                            if (!inventoryItem) return total;
+                            const baseUnit = normalizeUOM(ing.baseUnit || inventoryItem.unit);
+                            const quantityUnit = normalizeUOM(ing.quantityUnit || baseUnit);
+                            const conversionFactor = Math.max(0.000001, Number(ing.conversionFactor) || 1);
+                            const baseQuantity = toBaseQuantity(Number(ing.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
+                            return total + (inventoryItem.costPrice * baseQuantity);
                         }, 0) || 0;
                         const margin = product.price > 0 ? ((product.price - productCost) / product.price) * 100 : 0;
 

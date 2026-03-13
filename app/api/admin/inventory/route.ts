@@ -49,9 +49,27 @@ async function ensureInventorySchema() {
           "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "inventoryItemId" INTEGER NOT NULL REFERENCES "InventoryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "quantity" DOUBLE PRECISION NOT NULL,
+          "quantityUnit" TEXT NOT NULL DEFAULT 'pcs',
+          "baseUnit" TEXT NOT NULL DEFAULT 'pcs',
+          "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs';
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs';
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ProductIngredient"
+        ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1;
       `);
 
       await prisma.$executeRawUnsafe(`
