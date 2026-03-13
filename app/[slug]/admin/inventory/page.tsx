@@ -187,15 +187,21 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
              <form onSubmit={async (e) => {
                e.preventDefault();
                const formData = new FormData(e.currentTarget);
+               const parseNumber = (val: any) => {
+                 if (!val) return 0;
+                 const cleaned = val.toString().replace(',', '.');
+                 return parseFloat(cleaned) || 0;
+               };
+
                const data = {
                  slug: slug,
                  id: editingItem?.id,
                  name: formData.get('name'),
                  barcode: formData.get('barcode'),
-                 stock: parseFloat(formData.get('stock') as string) || 0,
-                 minStock: parseFloat(formData.get('minStock') as string) || 0,
+                 stock: parseNumber(formData.get('stock')),
+                 minStock: parseNumber(formData.get('minStock')),
                  unit: formData.get('unit'),
-                 costPrice: parseFloat(formData.get('costPrice') as string) || 0,
+                 costPrice: parseNumber(formData.get('costPrice')),
                };
 
                const method = editingItem ? 'PUT' : 'POST';
@@ -231,11 +237,11 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stock</label>
-                   <input name="stock" type="number" step="1" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="stock" type="number" step="0.01" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Min Stock Alert</label>
-                   <input name="minStock" type="number" step="1" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="minStock" type="number" step="0.01" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                </div>
                <div className="flex gap-2 pt-4">

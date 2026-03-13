@@ -56,11 +56,17 @@ export async function POST(req: NextRequest) {
 
     // Handle Stock Update (Scanning)
     if (action === "update_stock") {
-      const { itemId, amount } = body;
+      const itemId = Number(body.itemId);
+      const amount = Number(body.amount);
+      
+      if (isNaN(itemId) || isNaN(amount)) {
+        return NextResponse.json({ error: "Invalid item ID or amount" }, { status: 400 });
+      }
+
       console.log("[INVENTORY_POST] Updating stock for item:", itemId, "amount:", amount);
       const item = await prisma.inventoryItem.update({
-        where: { id: Number(itemId), storeId: store.id },
-        data: { stock: { increment: Number(amount) } }
+        where: { id: itemId, storeId: store.id },
+        data: { stock: { increment: amount } }
       });
       return NextResponse.json(item);
     }
@@ -74,16 +80,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    const stock = Number(data.stock);
+    const minStock = Number(data.minStock);
+    const costPrice = Number(data.costPrice);
+
+    if (isNaN(stock) || isNaN(minStock) || isNaN(costPrice)) {
+      return NextResponse.json({ error: "Invalid number format for stock or price" }, { status: 400 });
+    }
+
     // Handle Create New Item
     console.log("[INVENTORY_POST] Creating new item for store:", store.id);
     const newItem = await prisma.inventoryItem.create({
       data: {
         name: name,
         barcode,
-        stock: Number(data.stock) || 0,
+        stock: stock || 0,
         unit: data.unit?.toString() || "pcs",
-        minStock: Number(data.minStock) || 0,
-        costPrice: Number(data.costPrice) || 0,
+        minStock: minStock || 0,
+        costPrice: costPrice || 0,
         storeId: store.id,
       }
     });
@@ -121,15 +135,24 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    const updatedId = Number(id);
+    const stock = Number(data.stock);
+    const minStock = Number(data.minStock);
+    const costPrice = Number(data.costPrice);
+
+    if (isNaN(updatedId) || isNaN(stock) || isNaN(minStock) || isNaN(costPrice)) {
+      return NextResponse.json({ error: "Invalid number format" }, { status: 400 });
+    }
+
     const updated = await prisma.inventoryItem.update({
-      where: { id: Number(id), storeId: store.id },
+      where: { id: updatedId, storeId: store.id },
       data: {
         name: name,
         barcode,
-        stock: Number(data.stock) || 0,
+        stock: stock || 0,
         unit: data.unit?.toString() || "pcs",
-        minStock: Number(data.minStock) || 0,
-        costPrice: Number(data.costPrice) || 0,
+        minStock: minStock || 0,
+        costPrice: costPrice || 0,
       }
     });
     console.log("[INVENTORY_PUT] Item updated successfully:", updated.id);
