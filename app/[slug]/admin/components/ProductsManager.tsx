@@ -18,11 +18,13 @@ import { cn } from "@/lib/utils";
 export default function ProductsManager({ 
   initialProducts, 
   initialCategories, 
+  inventoryItems = [],
   storeId, 
   isSuperAdmin 
 }: { 
   initialProducts: any[], 
   initialCategories: any[], 
+  inventoryItems?: any[],
   storeId: number,
   isSuperAdmin: boolean
 }) {
@@ -292,6 +294,7 @@ export default function ProductsManager({
         <ProductForm 
           product={editingProduct} 
           categories={categories}
+          inventoryItems={inventoryItems}
           onClose={() => setIsFormOpen(false)}
           onSave={async (updatedProduct: any) => {
             let savedProduct;

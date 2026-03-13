@@ -89,26 +89,40 @@ model Withdrawal {
 }
 
 model Product {
-  id               Int         @id @default(autoincrement())
+  id               Int                 @id @default(autoincrement())
   storeId          Int
-  store            Store       @relation(fields: [storeId], references: [id])
+  store            Store               @relation(fields: [storeId], references: [id])
   name             String
   price            Float
   image            String?
-  gallery          String[]    @default([])
+  gallery          String[]            @default([])
   category         String?
   subCategory      String?
   description      String?
   shortDescription String?
-  type             String      @default("simple")
-  rating           Float       @default(0)
+  type             String              @default("simple")
+  rating           Float               @default(0)
   variations       Json?
-  unit             String      @default("pcs")
-  stock            Int         @default(0)
-  barcode          String?     // Barcode/SKU for scanning
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  unit             String              @default("pcs")
+  stock            Int                 @default(0)
+  barcode          String?             // Barcode/SKU for scanning
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   orderItems       OrderItem[]
+  ingredients      ProductIngredient[]
+}
+
+model ProductIngredient {
+  id              Int           @id @default(autoincrement())
+  productId       Int
+  inventoryItemId Int
+  quantity        Float         // How much of the ingredient is used
+  product         Product       @relation(fields: [productId], references: [id])
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([productId, inventoryItemId])
 }
 
 model Category {
@@ -180,6 +194,7 @@ model InventoryItem {
   costPrice   Float    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  productIngredients ProductIngredient[]
 
   @@unique([storeId, barcode])
 }

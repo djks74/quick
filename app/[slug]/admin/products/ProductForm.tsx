@@ -3,14 +3,20 @@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { X, Plus, Trash2, Image as ImageIcon, Upload } from "lucide-react";
+import { X, Plus, Trash2, Image as ImageIcon, Upload, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Product, Variation, Category } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
 
 const variationSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1, "Variation name required"),
   price: z.number().min(0, "Price must be positive"),
+});
+
+const ingredientSchema = z.object({
+  inventoryItemId: z.number().min(1, "Ingredient required"),
+  quantity: z.number().min(0, "Quantity must be positive"),
 });
 
 const productSchema = z.object({
@@ -26,6 +32,7 @@ const productSchema = z.object({
   stock: z.number().min(0).optional(),
   barcode: z.string().optional(),
   variations: z.array(variationSchema).optional(),
+  ingredients: z.array(ingredientSchema).optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -33,11 +40,12 @@ type ProductFormData = z.infer<typeof productSchema>;
 interface ProductFormProps {
   product?: Product | null;
   categories: Category[];
+  inventoryItems?: any[];
   onClose: () => void;
   onSave: (product: any) => void;
 }
 
-export default function ProductForm({ product, categories, onClose, onSave }: ProductFormProps) {
+export default function ProductForm({ product, categories, inventoryItems = [], onClose, onSave }: ProductFormProps) {
   const [galleryInput, setGalleryInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   
@@ -62,13 +70,35 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
       stock: product?.stock || 0,
       barcode: product?.barcode || "",
       variations: product?.variations || [],
+      ingredients: product?.ingredients?.map(i => ({
+        inventoryItemId: i.inventoryItemId,
+        quantity: i.quantity
+      })) || [],
     },
+  });
+
+  const { fields: variationFields, append: appendVariation, remove: removeVariation } = useFieldArray({
+    control,
+    name: "variations",
+  });
+
+  const { fields: ingredientFields, append: appendIngredient, remove: removeIngredient } = useFieldArray({
+    control,
+    name: "ingredients",
   });
 
   const gallery = watch("gallery") || [];
   const mainImage = watch("image");
+  const watchIngredients = watch("ingredients") || [];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'main' | 'gallery') => {
+  // Calculate COGS (Cost of Goods Sold)
+  const cogs = watchIngredients.reduce((total, field) => {
+    const item = inventoryItems.find(i => i.id === Number(field.inventoryItemId));
+    if (item) {
+      return total + (item.costPrice * field.quantity);
+    }
+    return total;
+  }, 0);
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -115,11 +145,6 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
     setValue("gallery", gallery.filter(item => item !== url));
   };
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "variations",
-  });
-
   const selectedCategorySlug = watch("category");
   const productType = watch("type");
   const selectedCategory = categories.find(c => c.slug === selectedCategorySlug);
@@ -131,7 +156,7 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
       const minPrice = Math.min(...data.variations.map(v => v.price));
       finalData.price = minPrice;
     }
-    onSave({ ...finalData, id: product?.id || Date.now() });
+    onSave({ ...finalData, id: product?.id });
   };
 
   return (
@@ -336,6 +361,77 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
             </div>
           </div>
 
+          {/* Ingredients Section (Recipe) */}
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-primary" />
+                  Recipe / Ingredients
+                </h3>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                  Total Production Cost: <span className="text-primary">{formatCurrency(cogs, "IDR")}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => appendIngredient({ inventoryItemId: 0, quantity: 1 })}
+                className="text-sm bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all font-bold uppercase tracking-wider"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Ingredient</span>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {ingredientFields.map((field, index) => (
+                <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                  <div className="flex-1 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ingredient</label>
+                      <select
+                        {...register(`ingredients.${index}.inventoryItemId` as const, { valueAsNumber: true })}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                      >
+                        <option value="0">Select Item...</option>
+                        {inventoryItems.map(item => (
+                          <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Quantity</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          {...register(`ingredients.${index}.quantity` as const, { valueAsNumber: true })}
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest min-w-[40px]">
+                          {inventoryItems.find(i => i.id === Number(watch(`ingredients.${index}.inventoryItemId`)))?.unit || ""}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeIngredient(index)}
+                    className="mt-6 p-2 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {ingredientFields.length === 0 && (
+                <div className="text-center py-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl text-gray-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest">
+                  No ingredients added. This product will not reduce raw stock.
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Variations Section */}
           {productType === "variable" && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-6">
@@ -343,7 +439,7 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Product Variations</h3>
                 <button
                   type="button"
-                  onClick={() => append({ name: "", price: 0 })}
+                  onClick={() => appendVariation({ name: "", price: 0 })}
                   className="text-sm bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all"
                 >
                   <Plus className="w-4 h-4" />
@@ -352,7 +448,7 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
               </div>
               
               <div className="space-y-3">
-                {fields.map((field, index) => (
+                {variationFields.map((field, index) => (
                   <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800 group">
                     <div className="flex-1 grid grid-cols-2 gap-4">
                       <div>
@@ -376,14 +472,14 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
                     </div>
                     <button
                       type="button"
-                      onClick={() => remove(index)}
+                      onClick={() => removeVariation(index)}
                       className="mt-6 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
-                {fields.length === 0 && (
+                {variationFields.length === 0 && (
                   <div className="text-center py-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl text-gray-400 dark:text-gray-600 text-sm">
                     No variations added yet.
                   </div>

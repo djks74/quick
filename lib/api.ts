@@ -335,7 +335,21 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
 
     const products = await prisma.product.findMany({
       where,
-      orderBy: { id: 'desc' }
+      orderBy: { id: 'desc' },
+      include: {
+        ingredients: {
+          include: {
+            inventoryItem: {
+              select: {
+                id: true,
+                name: true,
+                unit: true,
+                costPrice: true
+              }
+            }
+          }
+        }
+      }
     });
 
     return products.map(p => ({
@@ -349,7 +363,14 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
       subCategory: p.subCategory || '',
       type: (p.type as "simple" | "variable") || 'simple',
       variations: p.variations ? JSON.parse(JSON.stringify(p.variations)) : [],
-      stock: p.stock
+      stock: p.stock,
+      ingredients: p.ingredients.map(i => ({
+        id: i.id,
+        productId: i.productId,
+        inventoryItemId: i.inventoryItemId,
+        quantity: i.quantity,
+        inventoryItem: i.inventoryItem
+      }))
     }));
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -374,7 +395,20 @@ export async function createProduct(storeId: number, data: any) {
         type: data.type,
         rating: parseFloat(data.rating?.toString() || '0'),
         variations: data.variations ? data.variations : undefined,
-        stock: parseInt(data.stock?.toString() || '0')
+        stock: parseInt(data.stock?.toString() || '0'),
+        ingredients: {
+          create: data.ingredients?.map((i: any) => ({
+            inventoryItemId: i.inventoryItemId,
+            quantity: parseFloat(i.quantity)
+          }))
+        }
+      },
+      include: {
+        ingredients: {
+          include: {
+            inventoryItem: true
+          }
+        }
       }
     });
     console.log("SERVER: Product created", product.id);
@@ -388,25 +422,50 @@ export async function createProduct(storeId: number, data: any) {
 export async function updateProduct(id: number, data: any) {
   try {
     console.log("SERVER: Updating product", id, JSON.stringify(data));
-    const product = await prisma.product.update({
-      where: { id },
-      data: {
-        name: data.name,
-        price: parseFloat(data.price),
-        image: data.image,
-        gallery: data.gallery,
-        category: data.category,
-        subCategory: data.subCategory,
-        description: data.description,
-        shortDescription: data.shortDescription,
-        type: data.type,
-        rating: parseFloat(data.rating?.toString() || '0'),
-        variations: data.variations ? data.variations : undefined,
-        stock: parseInt(data.stock?.toString() || '0') // stock might be undefined in update if not passed? No, form passes it.
-      }
+    
+    // Use a transaction to update product and its ingredients
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Delete existing ingredients
+      await tx.productIngredient.deleteMany({
+        where: { productId: id }
+      });
+
+      // 2. Update product
+      const product = await tx.product.update({
+        where: { id },
+        data: {
+          name: data.name,
+          price: parseFloat(data.price),
+          image: data.image,
+          gallery: data.gallery,
+          category: data.category,
+          subCategory: data.subCategory,
+          description: data.description,
+          shortDescription: data.shortDescription,
+          type: data.type,
+          rating: parseFloat(data.rating?.toString() || '0'),
+          variations: data.variations ? data.variations : undefined,
+          stock: parseInt(data.stock?.toString() || '0'),
+          ingredients: {
+            create: data.ingredients?.map((i: any) => ({
+              inventoryItemId: i.inventoryItemId,
+              quantity: parseFloat(i.quantity)
+            }))
+          }
+        },
+        include: {
+          ingredients: {
+            include: {
+              inventoryItem: true
+            }
+          }
+        }
+      });
+      return product;
     });
-    console.log("SERVER: Product updated", product.id);
-    return product;
+
+    console.log("SERVER: Product updated", result.id);
+    return result;
   } catch (error) {
     console.error('SERVER: Error updating product:', error);
     return null;
@@ -523,6 +582,20 @@ export async function deleteCategory(id: number) {
   } catch (error) {
     console.error('Error deleting category:', error);
     return false;
+  }
+}
+
+// --- Inventory ---
+
+export async function getInventoryItems(storeId: number) {
+  try {
+    return await prisma.inventoryItem.findMany({
+      where: { storeId },
+      orderBy: { name: 'asc' }
+    });
+  } catch (error) {
+    console.error('Error fetching inventory items:', error);
+    return [];
   }
 }
 

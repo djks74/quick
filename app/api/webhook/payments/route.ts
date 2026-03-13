@@ -75,16 +75,33 @@ export async function POST(req: NextRequest) {
 
           const items = await prisma.orderItem.findMany({
               where: { orderId: order.id },
-              include: { product: true }
+              include: { 
+                product: {
+                  include: {
+                    ingredients: true
+                  }
+                }
+              }
           });
 
           // Reduce Inventory for each item
           for (const item of items) {
+              // 1. Reduce finished product stock if managed
               if (item.product.stock > 0) {
                   await prisma.product.update({
                       where: { id: item.productId },
                       data: { stock: { decrement: item.quantity } }
                   });
+              }
+
+              // 2. Reduce raw ingredients stock if recipe exists
+              if (item.product.ingredients && item.product.ingredients.length > 0) {
+                  for (const ingredient of item.product.ingredients) {
+                      await prisma.inventoryItem.update({
+                          where: { id: ingredient.inventoryItemId },
+                          data: { stock: { decrement: ingredient.quantity * item.quantity } }
+                      });
+                  }
               }
           }
 

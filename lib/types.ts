@@ -17,6 +17,19 @@ export interface Category {
   subCategories: SubCategory[];
 }
 
+export interface ProductIngredient {
+  id: number;
+  productId: number;
+  inventoryItemId: number;
+  quantity: number;
+  inventoryItem?: {
+    id: number;
+    name: string;
+    unit: string;
+    costPrice: number;
+  };
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -30,6 +43,7 @@ export interface Product {
   subCategory?: string; // Sub-category slug
   type: "simple" | "variable";
   variations?: Variation[];
+  ingredients?: ProductIngredient[];
 }
 
 export interface Widget {
