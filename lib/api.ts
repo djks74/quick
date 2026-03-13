@@ -3,6 +3,7 @@
 import { prisma } from './prisma';
 import { Product, Category } from './types';
 import bcrypt from 'bcryptjs';
+import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/order-notifications";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
@@ -293,6 +294,7 @@ export async function getStoreCashiers(storeId: number) {
 
 export async function createPosOrder(storeId: number, data: any) {
   try {
+    await ensureOrderNotificationsSchema();
     const { 
         items, 
         total, 
@@ -338,6 +340,18 @@ export async function createPosOrder(storeId: number, data: any) {
         }
     }
 
+    await createOrderNotification({
+      storeId,
+      orderId: order.id,
+      source: "POS",
+      title: `New POS order #${order.id}`,
+      body: `${customerPhone || "POS-CUSTOMER"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
+      metadata: {
+        paymentMethod,
+        totalAmount: total
+      }
+    });
+
     return { success: true, orderId: order.id };
   } catch (error) {
     console.error('Error creating POS order:', error);
@@ -371,6 +385,63 @@ export async function createStoreCashier(storeId: number, data: any) {
   } catch (error) {
     console.error('Error creating cashier:', error);
     return { error: "Failed to create cashier" };
+  }
+}
+
+export async function getOrderNotifications(storeId: number, limit = 20) {
+  try {
+    await ensureOrderNotificationsSchema();
+    const rows = await prisma.orderNotification.findMany({
+      where: { storeId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        orderId: true,
+        source: true,
+        title: true,
+        body: true,
+        readAt: true,
+        createdAt: true,
+        metadata: true
+      }
+    });
+    return rows.map(r => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      readAt: r.readAt ? r.readAt.toISOString() : null
+    }));
+  } catch (error) {
+    console.error("Error fetching order notifications:", error);
+    return [];
+  }
+}
+
+export async function markOrderNotificationRead(id: number) {
+  try {
+    await ensureOrderNotificationsSchema();
+    await prisma.orderNotification.update({
+      where: { id },
+      data: { readAt: new Date() }
+    });
+    return true;
+  } catch (error) {
+    console.error("Error marking notification read:", error);
+    return false;
+  }
+}
+
+export async function markAllOrderNotificationsRead(storeId: number) {
+  try {
+    await ensureOrderNotificationsSchema();
+    await prisma.orderNotification.updateMany({
+      where: { storeId, readAt: null },
+      data: { readAt: new Date() }
+    });
+    return true;
+  } catch (error) {
+    console.error("Error marking all notifications read:", error);
+    return false;
   }
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processPayment } from '@/lib/payment';
+import { createOrderNotification } from '@/lib/order-notifications';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +27,19 @@ export async function POST(req: NextRequest) {
             price: item.price
           }))
         }
+      }
+    });
+
+    await createOrderNotification({
+      storeId: parseInt(storeId),
+      orderId: order.id,
+      source: "STOREFRONT",
+      title: `New order #${order.id}`,
+      body: `${customerInfo?.phone || "GUEST"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
+      metadata: {
+        paymentMethod,
+        totalAmount: total,
+        tableNumber: customerInfo?.tableNumber || null
       }
     });
 

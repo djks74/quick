@@ -103,28 +103,25 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const [paymentSettings, setPaymentSettingsState] = useState<PaymentSettings>(initialPaymentSettings);
   const [cart, setCart] = useState<CartItem[]>([]);
 
+  const parseStored = <T,>(key: string, fallback: T): T => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const normalized = raw.trim();
+    if (!normalized || normalized === "undefined" || normalized === "null") return fallback;
+    try {
+      return JSON.parse(normalized) as T;
+    } catch {
+      localStorage.removeItem(key);
+      return fallback;
+    }
+  };
+
   // Load from LocalStorage
   useEffect(() => {
-    try {
-        const savedSlides = localStorage.getItem("shop_slides");
-        if (savedSlides && savedSlides !== "undefined") setSlidesState(JSON.parse(savedSlides));
-
-        const savedHeader = localStorage.getItem("shop_header");
-        if (savedHeader && savedHeader !== "undefined") setHeaderSettingsState(JSON.parse(savedHeader));
-
-        const savedPayment = localStorage.getItem("shop_payment");
-        if (savedPayment && savedPayment !== "undefined") setPaymentSettingsState(JSON.parse(savedPayment));
-
-        const savedCart = localStorage.getItem("shop_cart");
-        if (savedCart && savedCart !== "undefined") setCart(JSON.parse(savedCart));
-    } catch (e) {
-        console.error("Failed to parse localStorage data", e);
-        // Clear corrupted data
-        localStorage.removeItem("shop_slides");
-        localStorage.removeItem("shop_header");
-        localStorage.removeItem("shop_payment");
-        localStorage.removeItem("shop_cart");
-    }
+    setSlidesState(parseStored<Slide[]>("shop_slides", initialSlides));
+    setHeaderSettingsState(parseStored<HeaderSettings>("shop_header", initialHeaderSettings));
+    setPaymentSettingsState(parseStored<PaymentSettings>("shop_payment", initialPaymentSettings));
+    setCart(parseStored<CartItem[]>("shop_cart", []));
   }, []);
 
   // Save to LocalStorage helpers

@@ -28,6 +28,7 @@ model Store {
   ownerId                 Int
   owner                   User      @relation("StoreOwner", fields: [ownerId], references: [id])
   cashiers                User[]    @relation("StoreCashier")
+  orderNotifications      OrderNotification[]
   
   // Settings
   whatsapp                String?
@@ -158,6 +159,7 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]
+  notifications OrderNotification[]
 }
 
 model OrderItem {
@@ -168,6 +170,25 @@ model OrderItem {
   price     Float
   order     Order   @relation(fields: [orderId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
+}
+
+model OrderNotification {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  orderId   Int
+  source    String
+  title     String
+  body      String
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([storeId, readAt])
+  @@index([orderId])
 }
 
 model WhatsAppSession {

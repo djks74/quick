@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
-import { getDashboardStats, getOrders, getStoreBySlug } from "@/lib/api";
+import { getDashboardStats, getOrders, getOrderNotifications, getStoreBySlug } from "@/lib/api";
 import StoreStatusToggle from "./components/StoreStatusToggle";
+import OrderNotificationsPanel from "./components/OrderNotificationsPanel";
 
 export default async function AdminDashboard({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -18,9 +19,10 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
   if (!storeData) return null;
   
   const storeId = storeData.id;
-  const [stats, ordersData] = await Promise.all([
+  const [stats, ordersData, notifications] = await Promise.all([
     getDashboardStats(storeId),
-    getOrders(storeId)
+    getOrders(storeId),
+    getOrderNotifications(storeId, 25)
   ]);
   
   const recentOrders = ordersData && Array.isArray(ordersData) ? ordersData.slice(0, 5) : [];
@@ -122,6 +124,9 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
               </tbody>
             </table>
           </div>
+        </div>
+        <div className="lg:col-span-1">
+          <OrderNotificationsPanel storeId={storeId} initialNotifications={notifications as any} />
         </div>
       </div>
     </div>

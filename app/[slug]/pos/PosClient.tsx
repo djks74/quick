@@ -17,12 +17,14 @@ import {
   CheckCircle,
   Moon,
   Sun,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { createPosOrder } from "@/lib/api";
+import { createPosOrder, getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
 // import useSound from 'use-sound'; // Removed to fix build error, using native Audio API instead
 
 // Simple sound player
@@ -91,6 +93,39 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [preCartNote, setPreCartNote] = useState("");
   const [noteText, setNoteText] = useState("");
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [lastSeenCreatedAt, setLastSeenCreatedAt] = useState<string | null>(null);
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+
+  const refreshNotifications = async (silent = false) => {
+    const rows = await getOrderNotifications(store.id, 25);
+    const newestCreatedAt = rows?.[0]?.createdAt || null;
+    if (!silent && lastSeenCreatedAt && newestCreatedAt) {
+      const hasNewUnread = rows.some((r: any) => !r.readAt && r.createdAt > lastSeenCreatedAt);
+      if (hasNewUnread) playBeep();
+    }
+    if (!lastSeenCreatedAt && newestCreatedAt) setLastSeenCreatedAt(newestCreatedAt);
+    if (lastSeenCreatedAt && newestCreatedAt) setLastSeenCreatedAt(newestCreatedAt);
+    setNotifications(rows as any);
+  };
+
+  useEffect(() => {
+    refreshNotifications(true);
+    const t = setInterval(() => refreshNotifications(false), 10000);
+    return () => clearInterval(t);
+  }, [store.id, lastSeenCreatedAt]);
+
+  const markNotifRead = async (id: number) => {
+    const ok = await markOrderNotificationRead(id);
+    if (ok) setNotifications((prev) => prev.map((p: any) => (p.id === id ? { ...p, readAt: new Date().toISOString() } : p)));
+  };
+
+  const markAllNotifRead = async () => {
+    const ok = await markAllOrderNotificationsRead(store.id);
+    if (ok) setNotifications((prev) => prev.map((p: any) => ({ ...p, readAt: p.readAt || new Date().toISOString() })));
+  };
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -447,6 +482,81 @@ export default function PosClient({ store, products, categories, user }: PosClie
           >
             {isDarkMode ? <Sun className="w-4 h-4 md:w-5 md:h-5" /> : <Moon className="w-4 h-4 md:w-5 md:h-5" />}
           </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setNotificationsOpen((v) => !v)}
+              className={cn(
+                "p-2 rounded-full transition-colors relative",
+                isDarkMode ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
+              )}
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4 md:w-5 md:h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-black rounded-full px-1.5 py-0.5">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {notificationsOpen && (
+              <div className={cn(
+                "absolute right-0 top-12 w-80 md:w-96 rounded-2xl shadow-2xl border overflow-hidden z-50",
+                isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+              )}>
+                <div className={cn("p-4 flex items-center justify-between border-b", isDarkMode ? "border-gray-700" : "border-gray-100")}>
+                  <div>
+                    <div className={cn("font-black text-sm", isDarkMode ? "text-white" : "text-gray-900")}>Notifications</div>
+                    <div className={cn("text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-gray-400" : "text-gray-400")}>
+                      {unreadCount ? `${unreadCount} unread` : "All caught up"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={markAllNotifRead}
+                    disabled={!unreadCount}
+                    className={cn("text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-blue-400 disabled:text-gray-600" : "text-[#2271b1] disabled:text-gray-300")}
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div className="max-h-[420px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className={cn("p-4 text-sm italic", isDarkMode ? "text-gray-400" : "text-gray-500")}>No notifications yet.</div>
+                  ) : (
+                    <div className={cn("divide-y", isDarkMode ? "divide-gray-700" : "divide-gray-100")}>
+                      {notifications.map((n: any) => (
+                        <div key={n.id} className={cn("p-4", !n.readAt ? (isDarkMode ? "bg-orange-900/10" : "bg-orange-50/60") : "")}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className={cn("text-sm font-bold", isDarkMode ? "text-white" : "text-gray-900")}>{n.title}</div>
+                            <div className={cn("text-[10px] font-black uppercase tracking-widest shrink-0", isDarkMode ? "text-gray-400" : "text-gray-400")}>
+                              {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                          </div>
+                          <div className={cn("text-xs mt-1", isDarkMode ? "text-gray-300" : "text-gray-600")}>{n.body}</div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <div className={cn("text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-gray-400" : "text-gray-400")}>
+                              {n.source} • Order #{n.orderId}
+                            </div>
+                            {!n.readAt && (
+                              <button
+                                type="button"
+                                onClick={() => markNotifRead(n.id)}
+                                className={cn("inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-blue-400" : "text-[#2271b1]")}
+                              >
+                                <Check className="w-3 h-3" />
+                                Read
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className={cn("hidden md:flex items-center space-x-2 text-sm font-medium px-3 py-1.5 rounded-full", isDarkMode ? "bg-gray-700 text-gray-200" : "bg-gray-50 text-gray-700")}>
             <User className="w-4 h-4" />

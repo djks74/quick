@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createPaymentLink } from '@/lib/payment';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
+import { createOrderNotification } from '@/lib/order-notifications';
 
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
@@ -476,6 +477,16 @@ export async function POST(req: NextRequest) {
             const order = await prisma.order.create({
               data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING' }
             });
+            await createOrderNotification({
+              storeId: targetStore.id,
+              orderId: order.id,
+              source: "WHATSAPP",
+              title: `New WhatsApp order #${order.id}`,
+              body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
+              metadata: {
+                totalAmount: amount
+              }
+            });
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
             await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
             await updateSession(from, targetStore.id, { step: 'START' });
@@ -524,6 +535,21 @@ export async function POST(req: NextRequest) {
               status: 'PENDING',
               tableNumber: session.tableNumber,
               items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
+            }
+          });
+          await createOrderNotification({
+            storeId: targetStore.id,
+            orderId: order.id,
+            source: "WHATSAPP",
+            title: `New WhatsApp order #${order.id}`,
+            body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+            metadata: {
+              totalAmount: finalTotal,
+              taxAmount,
+              serviceCharge,
+              paymentFee: fee,
+              tableNumber: session.tableNumber || null,
+              items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
             }
           });
 
@@ -601,6 +627,21 @@ export async function POST(req: NextRequest) {
                       items: { create: currentCart.map((item: any) => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
                     }
                  });
+                 await createOrderNotification({
+                   storeId: targetStore.id,
+                   orderId: order.id,
+                   source: "WHATSAPP",
+                   title: `New WhatsApp order #${order.id}`,
+                   body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+                   metadata: {
+                     totalAmount: finalTotal,
+                     taxAmount,
+                     serviceCharge,
+                     paymentFee: fee,
+                     tableNumber: session.tableNumber || null,
+                     items: currentCart.map((item: any) => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
+                   }
+                 });
                  const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, quickCheckoutMethod);
                  let summary = "🧾 *Order Summary*\n";
                  currentCart.forEach((item: any) => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
@@ -637,6 +678,16 @@ export async function POST(req: NextRequest) {
            const amount = parseInt(totalMatch[1].replace(/\./g, ''));
            const order = await prisma.order.create({
             data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING', items: { create: [] } }
+          });
+          await createOrderNotification({
+            storeId: targetStore.id,
+            orderId: order.id,
+            source: "WHATSAPP",
+            title: `New WhatsApp order #${order.id}`,
+            body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
+            metadata: {
+              totalAmount: amount
+            }
           });
           const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
           await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, {
