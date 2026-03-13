@@ -393,13 +393,13 @@ export async function createProduct(storeId: number, data: any) {
         description: data.description,
         shortDescription: data.shortDescription,
         type: data.type,
-        rating: parseFloat(data.rating?.toString() || '0'),
+        rating: parseFloat(data.rating?.toString() || '0') || 0,
         variations: data.variations ? data.variations : undefined,
-        stock: parseInt(data.stock?.toString() || '0'),
+        stock: parseInt(data.stock?.toString() || '0') || 0,
         ingredients: {
           create: data.ingredients?.map((i: any) => ({
-            inventoryItemId: i.inventoryItemId,
-            quantity: parseFloat(i.quantity)
+            inventoryItemId: Number(i.inventoryItemId),
+            quantity: parseFloat(i.quantity) || 0
           }))
         }
       },
@@ -443,13 +443,13 @@ export async function updateProduct(id: number, data: any) {
           description: data.description,
           shortDescription: data.shortDescription,
           type: data.type,
-          rating: parseFloat(data.rating?.toString() || '0'),
+          rating: parseFloat(data.rating?.toString() || '0') || 0,
           variations: data.variations ? data.variations : undefined,
-          stock: parseInt(data.stock?.toString() || '0'),
+          stock: parseInt(data.stock?.toString() || '0') || 0,
           ingredients: {
             create: data.ingredients?.map((i: any) => ({
-              inventoryItemId: i.inventoryItemId,
-              quantity: parseFloat(i.quantity)
+              inventoryItemId: Number(i.inventoryItemId),
+              quantity: parseFloat(i.quantity) || 0
             }))
           }
         },
@@ -474,6 +474,11 @@ export async function updateProduct(id: number, data: any) {
 
 export async function deleteProduct(id: number) {
   try {
+    // Delete ingredients first due to foreign key constraints
+    await prisma.productIngredient.deleteMany({
+      where: { productId: id }
+    });
+    
     await prisma.product.delete({
       where: { id }
     });
