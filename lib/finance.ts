@@ -99,3 +99,47 @@ export async function getStoreLedger(storeId: number) {
     return [];
   }
 }
+
+export async function getStoreAvailableBalance(storeId: number) {
+  try {
+    await requireMerchant(storeId);
+    const [orders, withdrawals] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          storeId,
+          status: { in: ['PAID', 'COMPLETED', 'paid', 'completed'] }
+        },
+        select: {
+          totalAmount: true,
+          paymentFee: true,
+          transactionFee: true
+        }
+      }),
+      prisma.withdrawal.findMany({
+        where: {
+          storeId,
+          status: { in: ['PENDING', 'COMPLETED'] }
+        },
+        select: {
+          amount: true
+        }
+      })
+    ]);
+
+    const grossNet = orders.reduce((sum, item) => {
+      return sum + (item.totalAmount - (item.paymentFee || 0) - (item.transactionFee || 0));
+    }, 0);
+    const withdrawn = withdrawals.reduce((sum, item) => sum + item.amount, 0);
+    const balance = Math.max(0, grossNet - withdrawn);
+
+    await prisma.store.update({
+      where: { id: storeId },
+      data: { balance }
+    });
+
+    return balance;
+  } catch (error) {
+    console.error('Error calculating available balance:', error);
+    return 0;
+  }
+}

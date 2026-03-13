@@ -307,26 +307,33 @@ export async function createPosOrder(storeId: number, data: any) {
         paymentFee
     } = data;
 
-    const order = await prisma.order.create({
-      data: {
-        storeId,
-        customerPhone: customerPhone || "POS-CUSTOMER",
-        totalAmount: total,
-        status: "COMPLETED", // POS orders are completed immediately
-        paymentMethod: paymentMethod,
-        taxAmount: taxAmount || 0,
-        serviceCharge: serviceCharge || 0,
-        tipAmount: tipAmount || 0,
-        paymentFee: paymentFee || 0,
-        items: {
-            create: items.map((item: any) => ({
-                productId: item.id,
-                quantity: item.quantity,
-                price: item.price
-            }))
+    const netAmount = total - (paymentFee || 0);
+    const [order] = await prisma.$transaction([
+      prisma.order.create({
+        data: {
+          storeId,
+          customerPhone: customerPhone || "POS-CUSTOMER",
+          totalAmount: total,
+          status: "COMPLETED",
+          paymentMethod: paymentMethod,
+          taxAmount: taxAmount || 0,
+          serviceCharge: serviceCharge || 0,
+          tipAmount: tipAmount || 0,
+          paymentFee: paymentFee || 0,
+          items: {
+              create: items.map((item: any) => ({
+                  productId: item.id,
+                  quantity: item.quantity,
+                  price: item.price
+              }))
+          }
         }
-      }
-    });
+      }),
+      prisma.store.update({
+        where: { id: storeId },
+        data: { balance: { increment: netAmount } }
+      })
+    ]);
     
     // Update stock
     for (const item of items) {
