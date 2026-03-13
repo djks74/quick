@@ -178,39 +178,62 @@ export default function ProductsManager({
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Product</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Barcode</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Category</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Price</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center">Cost</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center">Margin</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Price</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {filteredProducts.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                        <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-gray-700">
-                            {product.image ? (
-                                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <ImageIcon className="w-5 h-5 text-gray-300 dark:text-gray-600" />
-                            )}
+                    {filteredProducts.map((product) => {
+                        const productCost = product.ingredients?.reduce((total: number, ing: any) => {
+                            const inventoryItem = inventoryItems.find(i => i.id === ing.inventoryItemId);
+                            return total + (inventoryItem ? inventoryItem.costPrice * ing.quantity : 0);
+                        }, 0) || 0;
+                        const margin = product.price > 0 ? ((product.price - productCost) / product.price) * 100 : 0;
+
+                        return (
+                        <tr key={product.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-gray-700">
+                                {product.image ? (
+                                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <ImageIcon className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+                                )}
+                                </div>
+                                <div>
+                                <div className="font-bold text-gray-900 dark:text-white text-sm">{product.name}</div>
+                                <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">ID: #{product.id}</div>
+                                </div>
                             </div>
-                            <div>
-                            <div className="font-bold text-gray-900 dark:text-white text-sm">{product.name}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">ID: #{product.id}</div>
-                            </div>
-                        </div>
-                        </td>
-                        <td className="px-6 py-4 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                            {product.barcode || "-"}
-                        </td>
-                        <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400">
-                            {product.category?.replace("-", " ") || "Uncategorized"}
-                        </span>
-                        </td>
-                        <td className="px-6 py-4 font-black text-gray-900 dark:text-white text-sm">
-                        {formatCurrency(product.price, "IDR")}
-                        </td>
+                            </td>
+                            <td className="px-6 py-4 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                                {product.barcode || "-"}
+                            </td>
+                            <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400">
+                                {product.category?.replace("-", " ") || "Uncategorized"}
+                            </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest block mb-0.5">Total Cost</span>
+                            <span className="text-xs font-bold text-primary">{formatCurrency(productCost, "IDR")}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                            <span className={cn(
+                                "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest",
+                                margin > 30 ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" :
+                                margin > 10 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" :
+                                "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                            )}>
+                                {margin.toFixed(0)}% Margin
+                            </span>
+                            </td>
+                            <td className="px-6 py-4 text-right font-black text-gray-900 dark:text-white text-sm">
+                            {formatCurrency(product.price, "IDR")}
+                            </td>
                         <td className="px-6 py-4 text-right">
                         <div className="flex justify-end space-x-2">
                             <button 
