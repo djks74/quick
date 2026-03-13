@@ -48,6 +48,7 @@ interface ProductFormProps {
 export default function ProductForm({ product, categories, inventoryItems = [], onClose, onSave }: ProductFormProps) {
   const [galleryInput, setGalleryInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const normalizeImage = (src?: string | null) => {
     if (!src) return "/placeholder-product.svg";
     if (src === "/placeholder-product.jpg") return "/placeholder-product.svg";
@@ -156,7 +157,8 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
   const productType = watch("type");
   const selectedCategory = categories.find(c => c.slug === selectedCategorySlug);
 
-  const onSubmit = (data: ProductFormData) => {
+  const onSubmit = async (data: ProductFormData) => {
+    setSubmitError(null);
     // For variable products, the base price is the minimum variation price
     let finalData = { ...data };
     if (data.type === "variable" && data.variations && data.variations.length > 0) {
@@ -181,7 +183,11 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
       finalData.ingredients = merged;
     }
 
-    onSave({ ...finalData, id: product?.id });
+    try {
+      await Promise.resolve(onSave({ ...finalData, id: product?.id }));
+    } catch (e) {
+      setSubmitError("Failed to save product");
+    }
   };
 
   return (
@@ -199,7 +205,12 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
+        <form onSubmit={handleSubmit(onSubmit, () => setSubmitError("Please fix the highlighted fields"))} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
+          {submitError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider">
+              {submitError}
+            </div>
+          )}
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
