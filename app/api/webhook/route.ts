@@ -4,6 +4,7 @@ import { createPaymentLink } from '@/lib/payment';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
+import { refundWaUsageByMessageId } from '@/lib/wa-credit';
 
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
@@ -71,8 +72,17 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0];
     const value = changes?.value;
 
-    // 1. FAST EXIT: Ignore status updates (sent, delivered, read) to reduce log noise
+    // 1. Handle status updates for credit refund
     if (value?.statuses) {
+        const statuses = value.statuses as Array<{ id?: string; status?: string }>;
+        for (const statusEntry of statuses) {
+          const messageId = statusEntry?.id;
+          const statusText = (statusEntry?.status || "").toLowerCase();
+          if (!messageId) continue;
+          if (statusText === "failed" || statusText === "undelivered") {
+            await refundWaUsageByMessageId(messageId, statusText);
+          }
+        }
         return NextResponse.json({ success: true });
     }
 

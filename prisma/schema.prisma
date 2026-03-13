@@ -63,6 +63,9 @@ model Store {
   subscriptionPlan        String    @default("FREE") // FREE, PRO
   transactionFeePercent   Float     @default(0.0)
   balance                 Float     @default(0.0)
+  waBalance               Float     @default(0.0)
+  waPricePerMessage       Float     @default(350.0)
+  waLowCreditAlertSentAt  DateTime?
   
   // Relations
   products                Product[]
@@ -71,6 +74,7 @@ model Store {
   tables                  Table[]
   withdrawals             Withdrawal[]
   inventory               InventoryItem[]
+  waUsageLogs             WaUsageLog[]
   
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -226,6 +230,26 @@ model InventoryItem {
 model ProcessedMessage {
   id        String   @id // Message ID from WhatsApp
   createdAt DateTime @default(now())
+}
+
+model WaUsageLog {
+  id              Int      @id @default(autoincrement())
+  storeId         Int
+  store           Store    @relation(fields: [storeId], references: [id])
+  type            String
+  amount          Float
+  description     String
+  balanceAfter    Float
+  externalRef     String?
+  messageId       String?
+  messageStatus   String?
+  refundedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([storeId, createdAt])
+  @@index([externalRef])
+  @@index([messageId])
 }
 
 model Table {

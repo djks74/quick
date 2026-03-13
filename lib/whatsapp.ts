@@ -1,4 +1,76 @@
 import { prisma } from "@/lib/prisma";
+import { finalizeWaMessageLog, reserveWaCreditForMessage } from "@/lib/wa-credit";
+
+type WaResolvedConfig = {
+  token: string | null;
+  phoneNumberId: string | null;
+  useEnterpriseConfig: boolean;
+};
+
+async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig> {
+  const store = storeId > 0 ? await prisma.store.findUnique({ where: { id: storeId } }) : null;
+  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
+
+  let token = platform?.whatsappToken || process.env.WHATSAPP_TOKEN || null;
+  let phoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID || null;
+  let useEnterpriseConfig = false;
+
+  if (store?.slug !== "demo" && store?.subscriptionPlan === "ENTERPRISE" && store.whatsappToken && store.whatsappPhoneId) {
+    token = store.whatsappToken;
+    phoneNumberId = store.whatsappPhoneId;
+    useEnterpriseConfig = true;
+  }
+
+  return { token, phoneNumberId, useEnterpriseConfig };
+}
+
+async function dispatchWhatsAppMessage(formattedTo: string, message: string, token: string, phoneNumberId: string, options?: { buttonText?: string, buttonUrl?: string }) {
+  let body: any = {
+    messaging_product: "whatsapp",
+    to: formattedTo,
+  };
+
+  if (options?.buttonText && options?.buttonUrl) {
+    body.type = "interactive";
+    body.interactive = {
+      type: "cta_url",
+      body: {
+        text: message
+      },
+      action: {
+        name: "cta_url",
+        parameters: {
+          display_text: options.buttonText,
+          url: options.buttonUrl
+        }
+      }
+    };
+  } else {
+    body.type = "text";
+    body.text = {
+      body: message,
+      preview_url: true
+    };
+  }
+
+  const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    return { ok: false as const, error: errText, usedInteractive: body.type === "interactive" };
+  }
+
+  const payload = await res.json().catch(() => ({}));
+  const messageId = payload?.messages?.[0]?.id || null;
+  return { ok: true as const, messageId };
+}
 
 export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string }) {
   // Sanitize Phone Number (Indonesia Default)
@@ -7,87 +79,84 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     formattedTo = '62' + formattedTo.substring(1);
   }
 
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
-  const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } });
-  
-  let token = platform?.whatsappToken || process.env.WHATSAPP_TOKEN;
-  let phoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
-
-  // Enterprise Override: Use Store's own config if they are Enterprise and have set it up
-  if (store?.slug !== "demo" && store?.subscriptionPlan === 'ENTERPRISE' && store.whatsappToken && store.whatsappPhoneId) {
-    token = store.whatsappToken;
-    phoneNumberId = store.whatsappPhoneId;
-    console.log(`[WHATSAPP] Using Enterprise Config for Store ${storeId}`);
-  } else {
-    console.log(`[WHATSAPP] Using Platform Config for Store ${storeId}`);
-  }
+  const resolved = await resolveWhatsAppConfig(storeId);
+  const token = resolved.token;
+  const phoneNumberId = resolved.phoneNumberId;
   
   if (!token) {
     console.log(`[WHATSAPP_MOCK] (No Token Configured) Sending to ${to}: ${message}`);
-    return;
+    return true;
   }
 
   console.log('SEND_WHATSAPP_DEBUG:', { to, message, phoneNumberId, token: token ? 'EXISTS' : 'MISSING', options });
 
   if (!phoneNumberId) {
     console.log(`[WHATSAPP_MOCK] (No Phone ID) Sending to ${to}: ${message}`);
-    return;
+    return true;
+  }
+
+  const isBillable = storeId > 0 && !resolved.useEnterpriseConfig;
+  const externalRef = `WA-${storeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let usageLogId: number | null = null;
+  let lowCreditAlertPhone: string | null = null;
+  let lowCreditAlertUrl = "";
+
+  if (isBillable) {
+    const reserve = await reserveWaCreditForMessage(
+      storeId,
+      `Message to ${formattedTo}`,
+      externalRef
+    );
+    if (!reserve.ok) {
+      if (reserve.reason === "INSUFFICIENT_BALANCE") {
+        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}`);
+      } else {
+        console.warn(`[WHATSAPP_CREDIT] Failed reserving credit for store ${storeId}`);
+      }
+      return false;
+    }
+    usageLogId = reserve.logId;
+    if (reserve.shouldAlert && reserve.alertPhone) {
+      lowCreditAlertPhone = reserve.alertPhone;
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
+      lowCreditAlertUrl = reserve.storeSlug && baseUrl ? `${baseUrl.replace(/\/$/, "")}/${reserve.storeSlug}/admin/finance/ledger` : "";
+    }
   }
 
   try {
-    let body: any = {
-      messaging_product: "whatsapp",
-      to: formattedTo,
-    };
-
-    if (options?.buttonText && options?.buttonUrl) {
-      // Send Interactive CTA URL Button
-      body.type = "interactive";
-      body.interactive = {
-        type: "cta_url",
-        body: {
-          text: message
-        },
-        action: {
-          name: "cta_url",
-          parameters: {
-            display_text: options.buttonText,
-            url: options.buttonUrl
-          }
-        }
-      };
-    } else {
-      // Fallback to standard text message
-      body.type = "text";
-      body.text = { 
-          body: message,
-          preview_url: true 
-      };
-    }
-
-    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body)
-    });
-    
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('[WHATSAPP_API_ERROR]', err);
-      
-      // If interactive fails (maybe API version or account restriction), fallback to text
-      if (body.type === "interactive") {
-          console.log('[WHATSAPP] CTA Button failed, falling back to text...');
-          return await sendWhatsAppMessage(to, `${message}\n\n${options?.buttonUrl}`, storeId);
+    const result = await dispatchWhatsAppMessage(formattedTo, message, token, phoneNumberId, options);
+    if (!result.ok) {
+      console.error("[WHATSAPP_API_ERROR]", result.error);
+      if (usageLogId) {
+        await finalizeWaMessageLog(usageLogId, null, "failed");
+      }
+      if (result.usedInteractive && options?.buttonUrl) {
+        console.log("[WHATSAPP] CTA Button failed, falling back to text...");
+        return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
       }
       return false;
+    }
+
+    if (usageLogId) {
+      await finalizeWaMessageLog(usageLogId, result.messageId, "sent");
+    }
+    if (lowCreditAlertPhone) {
+      const alertText = lowCreditAlertUrl
+        ? `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending: ${lowCreditAlertUrl}`
+        : `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending.`;
+      await dispatchWhatsAppMessage(
+        lowCreditAlertPhone.replace(/\D/g, "").replace(/^0/, "62"),
+        alertText,
+        token,
+        phoneNumberId
+      );
     }
     return true;
   } catch (error) {
     console.error('[WHATSAPP_SEND_ERROR]', error);
+    if (usageLogId) {
+      await finalizeWaMessageLog(usageLogId, null, "failed");
+    }
     return false;
   }
 }

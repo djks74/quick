@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { applyWaTopup, grantBundleCredit } from '@/lib/wa-credit';
 
 type IngredientUOM = 'gram' | 'kg' | 'pcs';
 
@@ -24,10 +25,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log('PAYMENT_WEBHOOK:', JSON.stringify(body, null, 2));
 
-    const { order_id, transaction_status, gross_amount } = body;
+    const orderRef = body.order_id || body.external_id || body.externalId;
+    const transactionStatusRaw = body.transaction_status || body.status || body.transactionStatus;
+    const gross_amount = body.gross_amount || body.amount;
+    if (!orderRef) {
+      return NextResponse.json({ error: 'Missing order reference' }, { status: 400 });
+    }
 
     // Extract Order ID from "ORDER-123-171..." or "SUB-123-171..."
-    const orderIdParts = order_id.split('-');
+    const orderIdParts = orderRef.split('-');
     const type = orderIdParts[0]; // 'ORDER' or 'SUB'
     const id = parseInt(orderIdParts[1]);
 
@@ -36,11 +42,12 @@ export async function POST(req: NextRequest) {
     }
 
     let status = 'PENDING';
-    if (transaction_status === 'capture' || transaction_status === 'settlement') {
+    const normalizedStatus = String(transactionStatusRaw || '').toLowerCase();
+    if (normalizedStatus === 'capture' || normalizedStatus === 'settlement' || normalizedStatus === 'paid') {
       status = 'PAID';
-    } else if (transaction_status === 'deny' || transaction_status === 'cancel' || transaction_status === 'expire') {
+    } else if (normalizedStatus === 'deny' || normalizedStatus === 'cancel' || normalizedStatus === 'expire' || normalizedStatus === 'failed') {
       status = 'CANCELLED';
-    } else if (transaction_status === 'pending') {
+    } else if (normalizedStatus === 'pending') {
       status = 'PENDING';
     }
 
@@ -51,9 +58,22 @@ export async function POST(req: NextRequest) {
                 where: { id },
                 data: { subscriptionPlan: 'ENTERPRISE' }
             });
+            await grantBundleCredit(id, orderRef);
             console.log(`[SUBSCRIPTION] Store ${id} upgraded to ENTERPRISE`);
         }
         return NextResponse.json({ success: true });
+    }
+
+    if (type === "TOPUP") {
+      if (status === "PAID") {
+        await applyWaTopup(
+          id,
+          Number(gross_amount || 0),
+          orderRef,
+          `Top-up via payment gateway (${orderRef})`
+        );
+      }
+      return NextResponse.json({ success: true });
     }
 
     // Update Order
