@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureStoreSettingsSchema } from "@/lib/api";
 import PosClient from "./PosClient";
 
 export const metadata = {
@@ -16,6 +17,8 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
   if (!session) {
     redirect(`/login?callbackUrl=/${slug}/pos`);
   }
+
+  await ensureStoreSettingsSchema();
 
   // Fetch Store
   const store = await prisma.store.findUnique({
@@ -116,7 +119,8 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
         qrisFeePercent: store.qrisFeePercent,
         manualTransferFee: store.manualTransferFee,
         feePaidBy: store.feePaidBy,
-        posGridColumns: store.posGridColumns
+        posGridColumns: store.posGridColumns,
+        posPaymentMethods: store.posPaymentMethods
       }}
       products={serializedProducts}
       categories={serializedCategories}

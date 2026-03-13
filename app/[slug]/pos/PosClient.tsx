@@ -69,6 +69,12 @@ interface Category {
   slug: string;
 }
 
+interface PosPaymentMethod {
+  id: string;
+  name: string;
+  mode: "cash" | "card" | "qris" | "transfer" | "other";
+}
+
 interface PosClientProps {
   store: any;
   products: Product[];
@@ -91,6 +97,8 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [cashReceived, setCashReceived] = useState<string>("");
+  const [discountType, setDiscountType] = useState<"nominal" | "percent">("nominal");
+  const [discountValue, setDiscountValue] = useState<string>("");
   const [tipAmount, setTipAmount] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<any>(null);
@@ -150,24 +158,67 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const parsedDiscountValue = parseFloat(discountValue) || 0;
+  const discountAmount = Math.max(
+    0,
+    discountType === "percent"
+      ? Math.min(subtotal, subtotal * (Math.min(100, parsedDiscountValue) / 100))
+      : Math.min(subtotal, parsedDiscountValue)
+  );
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   
   // Tax & Service Charge
-  const tax = subtotal * (taxPercent / 100);
-  const serviceCharge = subtotal * (servicePercent / 100);
+  const tax = discountedSubtotal * (taxPercent / 100);
+  const serviceCharge = discountedSubtotal * (servicePercent / 100);
   
   // Payment Fees (POS - Only if Customer Pays, but POS usually handles fees differently or external EDC)
   // User request: Platform fee only on storefront/whatsapp. POS uses own EDC/QRIS.
   let paymentFee = 0;
   // if (store.feePaidBy === "CUSTOMER") {
-  //   if (paymentMethod === "qris" && qrisFeePercent > 0) {
-  //     paymentFee = (subtotal + tax + serviceCharge) * (qrisFeePercent / 100);
-  //   } else if (paymentMethod === "transfer" && transferFee > 0) {
+  //   if (activePaymentMode === "qris" && qrisFeePercent > 0) {
+  //     paymentFee = (discountedSubtotal + tax + serviceCharge) * (qrisFeePercent / 100);
+  //   } else if (activePaymentMode === "transfer" && transferFee > 0) {
   //     paymentFee = transferFee;
   //   }
   // }
 
   const tip = parseFloat(tipAmount) || 0;
-  const total = subtotal + tax + serviceCharge + paymentFee + tip;
+  const total = discountedSubtotal + tax + serviceCharge + paymentFee + tip;
+
+  const configuredPosMethods = useMemo<PosPaymentMethod[]>(() => {
+    if (!Array.isArray(store.posPaymentMethods)) return [];
+    return store.posPaymentMethods
+      .map((item: any) => {
+        const name = String(item?.name || "").trim();
+        const mode = String(item?.mode || "other");
+        if (!name) return null;
+        return {
+          id: String(item?.id || `pm-${name.toLowerCase().replace(/\s+/g, "-")}`),
+          name,
+          mode: (["cash", "card", "qris", "transfer", "other"].includes(mode) ? mode : "other") as PosPaymentMethod["mode"]
+        };
+      })
+      .filter(Boolean) as PosPaymentMethod[];
+  }, [store.posPaymentMethods]);
+
+  const legacyFallbackMethods = useMemo<PosPaymentMethod[]>(() => {
+    const methods: PosPaymentMethod[] = [{ id: "cash", name: "Cash", mode: "cash" }];
+    if (store.enableManualTransfer) methods.push({ id: "transfer", name: "Bank Transfer", mode: "transfer" });
+    if (store.enableMidtrans || store.enableXendit) methods.push({ id: "qris", name: "QRIS / E-Wallet", mode: "qris" });
+    return methods;
+  }, [store.enableManualTransfer, store.enableMidtrans, store.enableXendit]);
+
+  const paymentMethods = configuredPosMethods.length > 0 ? configuredPosMethods : legacyFallbackMethods;
+  const activePaymentMethod = paymentMethods.find((method) => method.id === paymentMethod) || paymentMethods[0];
+  const activePaymentMode = activePaymentMethod?.mode || "cash";
+
+  useEffect(() => {
+    if (!activePaymentMethod) return;
+    if (!paymentMethods.some((method) => method.id === paymentMethod)) {
+      setPaymentMethod(activePaymentMethod.id);
+      setCashReceived("");
+    }
+  }, [activePaymentMethod, paymentMethod, paymentMethods]);
 
   const addToCart = (product: Product, note?: string) => {
     playBeep();
@@ -224,6 +275,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
         customerPhone: "POS-CUSTOMER",
         taxAmount: tax,
         serviceCharge: serviceCharge,
+        discountAmount: discountAmount,
         tipAmount: tip,
         paymentFee: paymentFee
       });
@@ -235,7 +287,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
       setOrderSuccess({
         id: result.orderId,
         total: total,
-        change: paymentMethod === 'cash' ? (parseFloat(cashReceived || '0') - total) : 0
+        change: activePaymentMode === 'cash' ? (parseFloat(cashReceived || '0') - total) : 0
       });
       setCart([]);
       setIsCheckoutOpen(false);
@@ -356,6 +408,14 @@ export default function PosClient({ store, products, categories, user }: PosClie
             <span className="uppercase tracking-widest">Subtotal</span>
             <span className="text-gray-900 dark:text-white">{formatPrice(subtotal)}</span>
           </div>
+          {discountAmount > 0 && (
+              <div className="flex justify-between text-red-500">
+                <span className="uppercase tracking-widest">
+                  Discount {discountType === "percent" ? `(${Math.min(100, parsedDiscountValue)}%)` : ""}
+                </span>
+                <span>-{formatPrice(discountAmount)}</span>
+              </div>
+          )}
           {taxPercent > 0 && (
               <div className="flex justify-between">
                 <span className="uppercase tracking-widest">Tax ({taxPercent}%)</span>
@@ -413,7 +473,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
               <span className={cn("text-sm", isDarkMode ? "text-gray-400" : "text-gray-600")}>Total Amount</span>
               <span className="text-xl font-black text-[#2271b1]">{formatPrice(orderSuccess.total)}</span>
             </div>
-            {paymentMethod === 'cash' && (
+            {activePaymentMode === 'cash' && (
               <div className="flex justify-between items-center text-green-600 dark:text-green-400">
                 <span className="text-sm">Change</span>
                 <span className="text-xl font-black">{formatPrice(orderSuccess.change)}</span>
@@ -437,7 +497,10 @@ export default function PosClient({ store, products, categories, user }: PosClie
               onClick={() => {
                 setOrderSuccess(null);
                 setCashReceived("");
-                setPaymentMethod("cash");
+                setPaymentMethod(paymentMethods[0]?.id || "cash");
+                setDiscountType("nominal");
+                setDiscountValue("");
+                setTipAmount("");
               }} 
               className="px-6 py-4 bg-[#2271b1] hover:bg-[#135e96] text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-blue-500/20"
             >
@@ -747,48 +810,23 @@ export default function PosClient({ store, products, categories, user }: PosClie
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
               {/* Payment Methods */}
               <div className={cn("w-full md:w-1/3 border-r p-4 space-y-2 overflow-y-auto", isDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200")}>
-                <button 
-                  onClick={() => setPaymentMethod("cash")}
-                  className={cn(
-                    "w-full p-4 rounded-xl flex items-center space-x-3 transition-all border-2",
-                    paymentMethod === "cash" 
-                      ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1] shadow-md" 
-                      : isDarkMode ? "border-transparent hover:bg-gray-800 text-gray-400" : "border-transparent hover:bg-gray-100 text-gray-600"
-                  )}
-                >
-                  <Banknote className="w-6 h-6" />
-                  <span className="font-bold">Cash</span>
-                </button>
-                
-                {store.enableManualTransfer && (
-                  <button 
-                    onClick={() => setPaymentMethod("transfer")}
+                {paymentMethods.map((method) => (
+                  <button
+                    key={method.id}
+                    onClick={() => setPaymentMethod(method.id)}
                     className={cn(
                       "w-full p-4 rounded-xl flex items-center space-x-3 transition-all border-2",
-                      paymentMethod === "transfer" 
-                        ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1] shadow-md" 
+                      paymentMethod === method.id
+                        ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1] shadow-md"
                         : isDarkMode ? "border-transparent hover:bg-gray-800 text-gray-400" : "border-transparent hover:bg-gray-100 text-gray-600"
                     )}
                   >
-                    <CreditCard className="w-6 h-6" />
-                    <span className="font-bold">Bank Transfer</span>
+                    {method.mode === "cash" && <Banknote className="w-6 h-6" />}
+                    {method.mode === "qris" && <Smartphone className="w-6 h-6" />}
+                    {(method.mode === "card" || method.mode === "transfer" || method.mode === "other") && <CreditCard className="w-6 h-6" />}
+                    <span className="font-bold">{method.name}</span>
                   </button>
-                )}
-
-                {(store.enableMidtrans || store.enableXendit) && (
-                   <button 
-                    onClick={() => setPaymentMethod("qris")}
-                    className={cn(
-                      "w-full p-4 rounded-xl flex items-center space-x-3 transition-all border-2",
-                      paymentMethod === "qris" 
-                        ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1] shadow-md" 
-                        : isDarkMode ? "border-transparent hover:bg-gray-800 text-gray-400" : "border-transparent hover:bg-gray-100 text-gray-600"
-                    )}
-                  >
-                    <Smartphone className="w-6 h-6" />
-                    <span className="font-bold">QRIS / E-Wallet</span>
-                  </button>
-                )}
+                ))}
               </div>
 
               {/* Payment Details */}
@@ -802,6 +840,66 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             {serviceCharge > 0 && <div>Includes Service: {formatPrice(serviceCharge)}</div>}
                             {/* {paymentFee > 0 && <div>Includes Platform Fee: {formatPrice(paymentFee)}</div>} */}
                         </div>
+                    </div>
+
+                    <div className="mb-6">
+                        <label className={cn("block text-sm font-bold mb-2", isDarkMode ? "text-gray-300" : "text-gray-700")}>Discount</label>
+                        <div className="grid grid-cols-3 gap-2 mb-2">
+                            <button
+                                type="button"
+                                onClick={() => setDiscountType("nominal")}
+                                className={cn(
+                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    discountType === "nominal"
+                                        ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1]"
+                                        : isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
+                                )}
+                            >
+                                Rp
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDiscountType("percent")}
+                                className={cn(
+                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    discountType === "percent"
+                                        ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1]"
+                                        : isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
+                                )}
+                            >
+                                %
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDiscountValue("")}
+                                className={cn(
+                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
+                                )}
+                            >
+                                Reset
+                            </button>
+                        </div>
+                        <div className="relative">
+                            {discountType === "nominal" ? (
+                              <span className="absolute left-4 top-3.5 text-gray-400 font-bold">Rp</span>
+                            ) : (
+                              <span className="absolute left-4 top-3.5 text-gray-400 font-bold">%</span>
+                            )}
+                            <input
+                                type="number"
+                                className={cn(
+                                    "w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:border-[#2271b1] outline-none",
+                                    isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-200"
+                                )}
+                                placeholder="0"
+                                value={discountValue}
+                                onChange={(e) => setDiscountValue(e.target.value)}
+                            />
+                        </div>
+                        {discountAmount > 0 && (
+                          <p className="text-xs font-bold text-red-500 mt-1">Discount applied: -{formatPrice(discountAmount)}</p>
+                        )}
                     </div>
 
                     <div className="mb-6">
@@ -821,7 +919,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                         </div>
                     </div>
 
-                    {paymentMethod === "cash" && (
+                    {activePaymentMode === "cash" && (
                         <div className="space-y-6 max-w-xs mx-auto">
                             <div>
                                 <label className={cn("block text-sm font-bold mb-2", isDarkMode ? "text-gray-300" : "text-gray-700")}>Cash Received</label>
@@ -873,7 +971,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                         </div>
                     )}
 
-                    {paymentMethod === "transfer" && (
+                    {activePaymentMode === "transfer" && (
                          <div className="text-center space-y-4">
                             <div className={cn("p-4 rounded-xl inline-block", isDarkMode ? "bg-gray-700" : "bg-gray-100")}>
                                 <CreditCard className="w-12 h-12 text-gray-400 mx-auto" />
@@ -889,7 +987,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                          </div>
                     )}
 
-                    {paymentMethod === "qris" && (
+                    {activePaymentMode === "qris" && (
                          <div className="text-center space-y-4">
                             <div className={cn("border-2 p-4 rounded-xl inline-block w-48 h-48 flex items-center justify-center", isDarkMode ? "bg-white border-gray-600" : "bg-white border-gray-200")}>
                                 <Smartphone className="w-16 h-16 text-gray-300" />
@@ -901,12 +999,23 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             </button>
                          </div>
                     )}
+                    {(activePaymentMode === "card" || activePaymentMode === "other") && (
+                         <div className="text-center space-y-4">
+                            <div className={cn("p-4 rounded-xl inline-block", isDarkMode ? "bg-gray-700" : "bg-gray-100")}>
+                                <CreditCard className="w-12 h-12 text-gray-400 mx-auto" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg">{activePaymentMethod?.name || "Card / Other"}</h3>
+                                <p className="text-sm text-gray-500 mt-2">Process payment on your terminal/device, then complete this order.</p>
+                            </div>
+                         </div>
+                    )}
                 </div>
 
                 <div className="mt-8">
                     <button 
                         onClick={handleCheckout}
-                        disabled={isProcessing || (paymentMethod === 'cash' && parseFloat(cashReceived || '0') < total)}
+                        disabled={isProcessing || (activePaymentMode === 'cash' && parseFloat(cashReceived || '0') < total)}
                         className="w-full py-4 bg-[#2271b1] text-white font-bold text-lg rounded-xl shadow-lg hover:bg-[#135e96] transition-all disabled:opacity-50 disabled:shadow-none flex items-center justify-center"
                     >
                         {isProcessing ? (

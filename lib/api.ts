@@ -7,6 +7,7 @@ import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/o
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
+let ensuredStoreSettingsSchema: Promise<void> | null = null;
 
 async function ensureRecipeSchema() {
   if (!ensuredRecipeSchema) {
@@ -75,11 +76,28 @@ async function ensureRecipeSchema() {
   await ensuredRecipeSchema;
 }
 
+export async function ensureStoreSettingsSchema() {
+  if (!ensuredStoreSettingsSchema) {
+    ensuredStoreSettingsSchema = (async () => {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "posPaymentMethods" JSONB NOT NULL DEFAULT '[]'::jsonb;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "discountAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      `);
+    })().catch(() => {});
+  }
+  await ensuredStoreSettingsSchema;
+}
+
 // --- Store ---
 
 export async function getStoreBySlug(slug: string) {
   try {
     await ensureWaCreditSchema();
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({
       where: { slug }
     });
@@ -93,6 +111,7 @@ export async function getStoreBySlug(slug: string) {
 export async function getStoreSettings(storeId: number | string) {
   try {
     await ensureWaCreditSchema();
+    await ensureStoreSettingsSchema();
     const where = typeof storeId === 'string' ? { slug: storeId } : { id: storeId };
     const settings = await prisma.store.findUnique({
       where: where as any
@@ -108,6 +127,7 @@ import { revalidatePath } from 'next/cache';
 
 export async function updateStoreSettings(storeId: number, data: any) {
   try {
+    await ensureStoreSettingsSchema();
     // 1. Fetch store to get ownerId
     const store = await prisma.store.findUnique({
       where: { id: storeId },
@@ -172,6 +192,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
           manualTransferFee: data.manualTransferFee,
           feePaidBy: data.feePaidBy,
           posGridColumns: data.posGridColumns,
+          posPaymentMethods: Array.isArray(data.posPaymentMethods) ? data.posPaymentMethods : [],
           ...(canUseOwnIntegrationConfig
             ? {
                 whatsappToken: data.whatsappToken,
@@ -316,6 +337,7 @@ export async function getStoreCashiers(storeId: number) {
 export async function createPosOrder(storeId: number, data: any) {
   try {
     await ensureOrderNotificationsSchema();
+    await ensureStoreSettingsSchema();
     const { 
         items, 
         total, 
@@ -324,6 +346,7 @@ export async function createPosOrder(storeId: number, data: any) {
         customerPhone,
         taxAmount,
         serviceCharge,
+        discountAmount,
         tipAmount,
         paymentFee
     } = data;
@@ -339,6 +362,7 @@ export async function createPosOrder(storeId: number, data: any) {
           paymentMethod: paymentMethod,
           taxAmount: taxAmount || 0,
           serviceCharge: serviceCharge || 0,
+          discountAmount: discountAmount || 0,
           tipAmount: tipAmount || 0,
           paymentFee: paymentFee || 0,
           items: {
@@ -376,7 +400,8 @@ export async function createPosOrder(storeId: number, data: any) {
       body: `${customerPhone || "POS-CUSTOMER"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
       metadata: {
         paymentMethod,
-        totalAmount: total
+        totalAmount: total,
+        discountAmount: discountAmount || 0
       }
     });
 

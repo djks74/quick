@@ -6,8 +6,14 @@ import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername } from "@/lib/api";
-import { Check, Lock } from "lucide-react";
+import { Check, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type PosPaymentMethod = {
+  id: string;
+  name: string;
+  mode: "cash" | "card" | "qris" | "transfer" | "other";
+};
 
 export default function AdminSettings() {
   const { slug } = useParams();
@@ -36,9 +42,12 @@ export default function AdminSettings() {
   const { headerSettings, setHeaderSettings } = useShop();
   const [activeTab, setActiveTab] = useState("General");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<number | null>(null);
   const [subscriptionPlan, setSubscriptionPlan] = useState("FREE");
+  const [newPosMethodName, setNewPosMethodName] = useState("");
+  const [newPosMethodMode, setNewPosMethodMode] = useState<PosPaymentMethod["mode"]>("card");
   
   const [settings, setSettings] = useState({
     storeName: "",
@@ -59,6 +68,7 @@ export default function AdminSettings() {
     manualTransferFee: "0",
     feePaidBy: "CUSTOMER",
     posGridColumns: 4,
+    posPaymentMethods: [] as PosPaymentMethod[],
     paymentGatewaySecret: "",
     paymentGatewayClientKey: ""
   });
@@ -76,6 +86,8 @@ export default function AdminSettings() {
       const store = await getStoreBySlug(slugValue);
       if (store) {
         setStoreId(store.id);
+      } else {
+        setIsDataLoading(false);
       }
     }
     loadStore();
@@ -106,6 +118,15 @@ export default function AdminSettings() {
           manualTransferFee: (data.manualTransferFee ?? 0).toString(),
           feePaidBy: data.feePaidBy || "CUSTOMER",
           posGridColumns: data.posGridColumns ?? 4,
+          posPaymentMethods: Array.isArray(data.posPaymentMethods)
+            ? data.posPaymentMethods
+                .map((item: any) => ({
+                  id: String(item?.id || `pm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+                  name: String(item?.name || "").trim(),
+                  mode: (["cash", "card", "qris", "transfer", "other"].includes(String(item?.mode)) ? item.mode : "other") as PosPaymentMethod["mode"]
+                }))
+                .filter((item: PosPaymentMethod) => item.name.length > 0)
+            : [],
           paymentGatewaySecret: data.paymentGatewaySecret || "",
           paymentGatewayClientKey: data.paymentGatewayClientKey || ""
         });
@@ -125,6 +146,7 @@ export default function AdminSettings() {
 
       const posUsername = await getPosCashierUsername(storeId);
       setSettings(prev => ({ ...prev, posUsername: posUsername || "" }));
+      setIsDataLoading(false);
     }
     loadSettings();
   }, [storeId, setSiteName]);
@@ -140,6 +162,7 @@ export default function AdminSettings() {
         serviceChargePercent: parseFloat(settings.serviceChargePercent.toString().replace(',', '.')) || 0,
         qrisFeePercent: parseFloat(settings.qrisFeePercent.toString().replace(',', '.')) || 0,
         manualTransferFee: parseFloat(settings.manualTransferFee.toString().replace(',', '.')) || 0,
+        posPaymentMethods: settings.posPaymentMethods,
         bankAccount: bankAccount
       });
 
@@ -171,9 +194,41 @@ export default function AdminSettings() {
   const isEnterprise = subscriptionPlan === 'ENTERPRISE';
   const isDemoStore = slug === "demo";
   const canOverridePlatformConfig = isEnterprise && !isDemoStore;
+
+  const addPosPaymentMethod = () => {
+    const name = newPosMethodName.trim();
+    if (!name) return;
+    const method: PosPaymentMethod = {
+      id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      mode: newPosMethodMode
+    };
+    setSettings((prev) => ({
+      ...prev,
+      posPaymentMethods: [...prev.posPaymentMethods, method]
+    }));
+    setNewPosMethodName("");
+    setNewPosMethodMode("card");
+  };
+
+  const removePosPaymentMethod = (id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      posPaymentMethods: prev.posPaymentMethods.filter((method) => method.id !== id)
+    }));
+  };
   
   // Early return ONLY after hooks are defined
-  if (status === "loading") return <div className="p-8">Loading...</div>;
+  if (status === "loading" || isDataLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm font-bold uppercase tracking-widest">Loading settings...</span>
+        </div>
+      </div>
+    );
+  }
   if (!session || !canAccess) return null;
 
   return (
@@ -270,6 +325,63 @@ export default function AdminSettings() {
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         Cashier login link: <span className="font-bold">{`/login?callbackUrl=/${slug}/pos`}</span>
+                      </div>
+                      <div className="space-y-3 pt-2">
+                        <div>
+                          <label className="block text-sm font-medium mb-1 dark:text-gray-300">POS Payment Methods</label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Add methods like Credit Card, Debit Card, EDC, or custom business methods.</p>
+                          <div className="space-y-2">
+                            {settings.posPaymentMethods.length === 0 && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700 rounded-md px-3 py-2">
+                                No custom methods yet. POS will fallback to Cash and enabled gateway methods.
+                              </div>
+                            )}
+                            {settings.posPaymentMethods.map((method) => (
+                              <div key={method.id} className="flex items-center justify-between gap-2 border border-[#ccd0d4] dark:border-gray-700 rounded-md px-3 py-2 bg-white dark:bg-gray-800">
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 dark:text-white">{method.name}</p>
+                                  <p className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">{method.mode}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removePosPaymentMethod(method.id)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            className="md:col-span-2 border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]"
+                            placeholder="e.g. Credit Card"
+                            value={newPosMethodName}
+                            onChange={(e) => setNewPosMethodName(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && addPosPaymentMethod()}
+                          />
+                          <select
+                            className="border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]"
+                            value={newPosMethodMode}
+                            onChange={(e) => setNewPosMethodMode(e.target.value as PosPaymentMethod["mode"])}
+                          >
+                            <option value="card">Card</option>
+                            <option value="cash">Cash</option>
+                            <option value="qris">QRIS</option>
+                            <option value="transfer">Transfer</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addPosPaymentMethod}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#2271b1] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#135e96]"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add POS Method
+                        </button>
                       </div>
                     </>
                  )}
@@ -589,6 +701,7 @@ export default function AdminSettings() {
             disabled={isSaving}
             className="px-6 py-2 bg-[#2271b1] text-white font-medium hover:bg-[#135e96] transition-colors rounded shadow-sm flex items-center"
           >
+            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             {isSaving ? "Saving..." : "Save Changes"}
           </button>
           {saveMessage && (

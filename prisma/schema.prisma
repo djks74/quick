@@ -54,6 +54,7 @@ model Store {
   
   // POS Settings
   posGridColumns          Int       @default(4) // 3, 4, 5, 6
+  posPaymentMethods       Json?     @default("[]")
   
   paymentGatewaySecret    String?
   paymentGatewayClientKey String?
@@ -161,6 +162,7 @@ model Order {
   transactionFee Float      @default(0.0) // Fee collected by platform
   taxAmount     Float      @default(0.0)
   serviceCharge Float      @default(0.0)
+  discountAmount Float     @default(0.0)
   tipAmount     Float      @default(0.0)
   paymentFee    Float      @default(0.0) // Fee charged to customer if applicable
   createdAt     DateTime    @default(now())
