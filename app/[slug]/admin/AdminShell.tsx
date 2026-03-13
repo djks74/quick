@@ -7,11 +7,12 @@ import {
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
+  Store, 
   Settings, 
+  Layers,
   LogOut,
   ChevronRight,
   ChevronDown,
-  Layers,
   Plus,
   Home,
   MousePointer2,
@@ -58,7 +59,14 @@ export default function AdminShell({
       children: [
         { name: "All Products", href: `${baseUrl}/products` },
         { name: "Categories", href: `${baseUrl}/products?view=categories` },
-        { name: "Inventory", href: `${baseUrl}/products/inventory` },
+      ]
+    },
+    {
+      name: "Ingredients",
+      icon: Layers,
+      children: [
+        { name: "All Items", href: `${baseUrl}/inventory` },
+        { name: "Stock Manager", href: `${baseUrl}/inventory/scan` },
       ]
     },
     { 

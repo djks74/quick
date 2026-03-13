@@ -69,6 +69,7 @@ model Store {
   orders                  Order[]
   tables                  Table[]
   withdrawals             Withdrawal[]
+  inventory               InventoryItem[]
   
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -165,6 +166,22 @@ model WhatsAppSession {
   updatedAt   DateTime @updatedAt
 
   @@unique([phoneNumber, storeId]) // Session per user per store
+}
+
+model InventoryItem {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  store       Store    @relation(fields: [storeId], references: [id])
+  name        String
+  barcode     String?  // SKU or Barcode for scanning
+  stock       Float    @default(0)
+  unit        String   @default("pcs") // pcs, kg, gr, etc.
+  minStock    Float    @default(0)     // Alert when below this
+  costPrice   Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, barcode])
 }
 
 model ProcessedMessage {
