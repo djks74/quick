@@ -91,7 +91,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
             placeholder="Search by name or barcode..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all outline-none dark:text-white"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         </div>
@@ -205,26 +205,26 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
              }} className="p-6 space-y-4">
                <div>
                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Item Name</label>
-                 <input name="name" defaultValue={editingItem?.name} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none" placeholder="e.g. Flour, Sugar, Milk" />
+                 <input name="name" defaultValue={editingItem?.name} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="e.g. Flour, Sugar, Milk" />
                </div>
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Barcode / SKU</label>
-                   <input name="barcode" defaultValue={editingItem?.barcode} className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none" placeholder="123456789" />
+                   <input name="barcode" defaultValue={editingItem?.barcode} className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="123456789" />
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unit</label>
-                   <input name="unit" defaultValue={editingItem?.unit || 'pcs'} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none" placeholder="kg, gr, pcs" />
+                   <input name="unit" defaultValue={editingItem?.unit || 'pcs'} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="kg, gr, pcs" />
                  </div>
                </div>
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stock</label>
-                   <input name="stock" type="number" step="0.01" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none" />
+                   <input name="stock" type="number" step="0.01" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Min Stock Alert</label>
-                   <input name="minStock" type="number" step="0.01" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none" />
+                   <input name="minStock" type="number" step="0.01" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                </div>
                <div className="flex gap-2 pt-4">
