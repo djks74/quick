@@ -12,7 +12,7 @@ import {
   ChevronRight,
   ChevronDown
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 interface InventoryItem {
   id: number;
