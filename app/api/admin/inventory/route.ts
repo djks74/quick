@@ -39,46 +39,63 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("[INVENTORY_POST] Request body:", JSON.stringify(body));
+    
     const { slug, action, id, ...data } = body;
 
-    if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
+    if (!slug) {
+      console.error("[INVENTORY_POST] Missing slug");
+      return NextResponse.json({ error: "Missing slug" }, { status: 400 });
+    }
 
     const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    if (!store) {
+      console.error("[INVENTORY_POST] Store not found for slug:", slug);
+      return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
 
     // Handle Stock Update (Scanning)
     if (action === "update_stock") {
       const { itemId, amount } = body;
+      console.log("[INVENTORY_POST] Updating stock for item:", itemId, "amount:", amount);
       const item = await prisma.inventoryItem.update({
-        where: { id: itemId, storeId: store.id },
-        data: { stock: { increment: amount } }
+        where: { id: Number(itemId), storeId: store.id },
+        data: { stock: { increment: Number(amount) } }
       });
       return NextResponse.json(item);
     }
 
     // Convert empty barcode to null to avoid unique constraint issues
-    const barcode = data.barcode?.trim() || null;
+    const barcode = data.barcode?.toString().trim() || null;
+    const name = data.name?.toString().trim();
+
+    if (!name) {
+      console.error("[INVENTORY_POST] Missing name in data:", data);
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
 
     // Handle Create New Item
+    console.log("[INVENTORY_POST] Creating new item for store:", store.id);
     const newItem = await prisma.inventoryItem.create({
       data: {
-        name: data.name,
+        name: name,
         barcode,
-        stock: data.stock || 0,
-        unit: data.unit || "pcs",
-        minStock: data.minStock || 0,
-        costPrice: data.costPrice || 0,
+        stock: Number(data.stock) || 0,
+        unit: data.unit?.toString() || "pcs",
+        minStock: Number(data.minStock) || 0,
+        costPrice: Number(data.costPrice) || 0,
         storeId: store.id,
       }
     });
+    console.log("[INVENTORY_POST] Item created successfully:", newItem.id);
     return NextResponse.json(newItem);
   } catch (error: any) {
-    console.error("[INVENTORY_API_POST]", error);
+    console.error("[INVENTORY_API_POST_ERROR]", error);
     // Provide a more descriptive error if it's a unique constraint violation
     if (error.code === 'P2002') {
       return NextResponse.json({ error: "Barcode already exists for this store" }, { status: 400 });
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -86,30 +103,43 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("[INVENTORY_PUT] Request body:", JSON.stringify(body));
+    
     const { id, slug, ...data } = body;
 
     if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
+    if (!id) return NextResponse.json({ error: "Missing item ID" }, { status: 400 });
 
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
     // Convert empty barcode to null
-    const barcode = data.barcode?.trim() || null;
+    const barcode = data.barcode?.toString().trim() || null;
+    const name = data.name?.toString().trim();
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
 
     const updated = await prisma.inventoryItem.update({
-      where: { id: id, storeId: store.id },
+      where: { id: Number(id), storeId: store.id },
       data: {
-        ...data,
-        barcode
+        name: name,
+        barcode,
+        stock: Number(data.stock) || 0,
+        unit: data.unit?.toString() || "pcs",
+        minStock: Number(data.minStock) || 0,
+        costPrice: Number(data.costPrice) || 0,
       }
     });
+    console.log("[INVENTORY_PUT] Item updated successfully:", updated.id);
     return NextResponse.json(updated);
   } catch (error: any) {
-    console.error("[INVENTORY_API_PUT]", error);
+    console.error("[INVENTORY_API_PUT_ERROR]", error);
     if (error.code === 'P2002') {
       return NextResponse.json({ error: "Barcode already exists for this store" }, { status: 400 });
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 
