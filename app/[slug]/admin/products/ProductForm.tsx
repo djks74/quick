@@ -512,7 +512,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
 
                 return (
                   <div key={field.id} className="flex items-start space-x-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
                       <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ingredient</label>
                         <select
@@ -536,9 +536,9 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                           ))}
                         </select>
                       </div>
-                      <div>
+                      <div className="md:col-span-2">
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Quantity</label>
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-[minmax(110px,1fr)_110px] gap-2">
                           <input
                             type="number"
                             step="0.01"
@@ -550,12 +550,12 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                                 return Number.isFinite(num) ? num : 0;
                               }
                             })}
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                            className="w-full min-w-[110px] px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all text-gray-900 dark:text-white font-bold outline-none"
                             placeholder="0"
                           />
                           <select
                             {...register(`ingredients.${index}.quantityUnit` as const)}
-                            className="px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-black uppercase tracking-widest dark:text-white outline-none"
+                            className="w-[110px] px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-black uppercase tracking-widest dark:text-white outline-none"
                           >
                             <option value="gram">Gram</option>
                             <option value="kg">Kg</option>
@@ -579,7 +579,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                                 return num > 0 ? num : 1;
                               }
                             })}
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all text-gray-900 dark:text-white font-bold outline-none"
                             placeholder="1000"
                           />
                         </div>
