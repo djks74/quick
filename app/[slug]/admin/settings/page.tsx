@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
-import { getStoreSettings, updateStoreSettings, getStoreBySlug } from "@/lib/api";
+import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername } from "@/lib/api";
 import { Check, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +15,22 @@ export default function AdminSettings() {
   const { setSiteName } = useAdmin();
   const { data: session, status } = useSession();
   const isSuperAdmin = (session as any)?.user?.role === "SUPER_ADMIN";
+  const slugValue = (Array.isArray(slug) ? slug[0] : slug) as string | undefined;
+  const sessionStoreSlug = (session as any)?.user?.storeSlug as string | null | undefined;
+  const canAccess = Boolean(isSuperAdmin || (sessionStoreSlug && slugValue && sessionStoreSlug === slugValue));
 
-  // Redirect non-super-admin users
+  // Redirect users without access
   useEffect(() => {
-    if (status !== "loading" && session && !isSuperAdmin) {
-      router.push(`/${slug}/admin`);
+    if (status === "loading") return;
+    if (!session) {
+      router.push(`/login?callbackUrl=/${slugValue || ""}/admin/settings`);
+      return;
     }
-  }, [session, isSuperAdmin, slug, router, status]);
+    if (!canAccess) {
+      if (sessionStoreSlug) router.push(`/${sessionStoreSlug}/admin`);
+      else router.push(`/`);
+    }
+  }, [session, canAccess, slug, router, status]);
   
   // Hooks must be called unconditionally
   const { headerSettings, setHeaderSettings } = useShop();
@@ -42,6 +51,8 @@ export default function AdminSettings() {
     enableXendit: false,
     enableManualTransfer: false,
     enablePos: false,
+    posUsername: "",
+    posPassword: "",
     taxPercent: "0",
     serviceChargePercent: "0",
     qrisFeePercent: "0.7",
@@ -61,12 +72,14 @@ export default function AdminSettings() {
   // Fetch Store ID
   useEffect(() => {
     async function loadStore() {
-      if (!slug) return;
-      const store = await getStoreBySlug(slug as string);
-      if (store) setStoreId(store.id);
+      if (!slugValue) return;
+      const store = await getStoreBySlug(slugValue);
+      if (store) {
+        setStoreId(store.id);
+      }
     }
     loadStore();
-  }, [slug]);
+  }, [slugValue]);
 
   // Load Settings
   useEffect(() => {
@@ -85,6 +98,8 @@ export default function AdminSettings() {
           enableXendit: data.enableXendit ?? false,
           enableManualTransfer: data.enableManualTransfer ?? false,
           enablePos: data.posEnabled ?? false,
+          posUsername: "",
+          posPassword: "",
           taxPercent: (data.taxPercent ?? 0).toString(),
           serviceChargePercent: (data.serviceChargePercent ?? 0).toString(),
           qrisFeePercent: (data.qrisFeePercent ?? 0.7).toString(),
@@ -107,6 +122,9 @@ export default function AdminSettings() {
         if (data.name) setSiteName(data.name);
         setSubscriptionPlan(data.subscriptionPlan || "FREE");
       }
+
+      const posUsername = await getPosCashierUsername(storeId);
+      setSettings(prev => ({ ...prev, posUsername: posUsername || "" }));
     }
     loadSettings();
   }, [storeId, setSiteName]);
@@ -135,6 +153,7 @@ export default function AdminSettings() {
             serviceChargePercent: (result.serviceChargePercent ?? 0).toString(),
             qrisFeePercent: (result.qrisFeePercent ?? 0).toString(),
             manualTransferFee: (result.manualTransferFee ?? 0).toString(),
+            posPassword: "",
         }));
       } else {
         console.error("Failed to save settings: Server returned null");
@@ -155,7 +174,7 @@ export default function AdminSettings() {
   
   // Early return ONLY after hooks are defined
   if (status === "loading") return <div className="p-8">Loading...</div>;
-  if (!isSuperAdmin) return null; // Or a restricted access message
+  if (!session || !canAccess) return null;
 
   return (
     <div className="space-y-6">
@@ -223,9 +242,36 @@ export default function AdminSettings() {
                     <label className="text-sm font-medium dark:text-gray-300">Enable POS System</label>
                  </div>
                  {settings.enablePos && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-sm text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-800 transition-colors">
+                    <>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-sm text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-800 transition-colors">
                         POS is active at <a href={`/${slug}/pos`} target="_blank" className="font-bold hover:underline">/{slug}/pos</a>
-                    </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-1 dark:text-gray-300">POS Username</label>
+                          <input
+                            type="text"
+                            className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                            value={settings.posUsername}
+                            onChange={(e) => setSettings({ ...settings, posUsername: e.target.value })}
+                            placeholder="e.g. kasir1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1 dark:text-gray-300">POS Password</label>
+                          <input
+                            type="password"
+                            className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                            value={settings.posPassword}
+                            onChange={(e) => setSettings({ ...settings, posPassword: e.target.value })}
+                            placeholder="Set new password"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Cashier login link: <span className="font-bold">{`/login?callbackUrl=/${slug}/pos`}</span>
+                      </div>
+                    </>
                  )}
               </div>
             </div>

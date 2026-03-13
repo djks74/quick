@@ -82,12 +82,11 @@ export default function AdminShell({
         { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
       ]
     },
-    // Settings hidden for non-Super Admin
-    ...(isSuperAdmin ? [{ 
+    { 
       name: "Settings", 
       href: `${baseUrl}/settings`, 
       icon: Settings 
-    }] : []),
+    },
     { 
       name: "Tables", 
       href: `${baseUrl}/tables`, 

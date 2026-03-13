@@ -10,11 +10,19 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+  const callbackUrl = searchParams.get("callbackUrl");
+  const inferredPosSlug = (() => {
+    if (!callbackUrl || !callbackUrl.startsWith("/")) return "";
+    const match = callbackUrl.match(/^\/([^/]+)\/pos(\/|$)/);
+    return match?.[1] || "";
+  })();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [posMode, setPosMode] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
-    password: ""
+    password: "",
+    storeSlug: ""
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,10 +31,12 @@ function LoginForm() {
     setError("");
 
     try {
+      const storeSlug = posMode ? (formData.storeSlug || inferredPosSlug) : "";
       const result = await signIn("credentials", {
         redirect: false,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        storeSlug
       });
 
       if (result?.error) {
@@ -34,10 +44,14 @@ function LoginForm() {
       } else {
         // Fetch session using getSession (more reliable client-side)
         const session = await getSession();
-        const callbackUrl = searchParams.get("callbackUrl");
         
         if (session?.user) {
-           if (callbackUrl && callbackUrl.startsWith('/')) {
+           if (posMode) {
+             const target = (callbackUrl && callbackUrl.startsWith("/"))
+               ? callbackUrl
+               : `/${storeSlug}/pos`;
+             router.push(target);
+           } else if (callbackUrl && callbackUrl.startsWith('/')) {
              router.push(callbackUrl);
            } else if (session.user.role === 'SUPER_ADMIN') {
              router.push('/super-admin');
@@ -80,13 +94,28 @@ function LoginForm() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        {posMode && !inferredPosSlug && (
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Store Slug</label>
+            <input
+              type="text"
+              required
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 dark:focus:border-blue-500 transition-all font-bold text-gray-900 dark:text-white"
+              placeholder="e.g. demo"
+              value={formData.storeSlug}
+              onChange={(e) => setFormData({ ...formData, storeSlug: e.target.value })}
+            />
+          </div>
+        )}
         <div>
-          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Email Address</label>
+          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">
+            {posMode ? "POS Username" : "Email Address"}
+          </label>
           <input
-            type="email"
+            type={posMode ? "text" : "email"}
             required
             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 dark:focus:border-blue-500 transition-all font-bold text-gray-900 dark:text-white"
-            placeholder="john@example.com"
+            placeholder={posMode ? "e.g. kasir1" : "john@example.com"}
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
@@ -121,6 +150,22 @@ function LoginForm() {
         <Link href="/register" className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest hover:underline">
           Create one
         </Link>
+        <span className="mx-2">•</span>
+        <button
+          type="button"
+          onClick={() => {
+            if (posMode) {
+              setPosMode(false);
+              setFormData((prev) => ({ ...prev, storeSlug: "" }));
+            } else {
+              setPosMode(true);
+              setFormData((prev) => ({ ...prev, storeSlug: prev.storeSlug || inferredPosSlug }));
+            }
+          }}
+          className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest hover:underline"
+        >
+          {posMode ? "Admin Login" : "POS Login"}
+        </button>
       </div>
     </div>
   );

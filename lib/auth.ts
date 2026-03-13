@@ -8,34 +8,58 @@ export const authOptions: any = {
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
+        storeSlug: { label: "Store Slug", type: "text" }
       },
       async authorize(credentials) {
-        console.log("Authorize called with:", { email: credentials?.email });
         if (!credentials?.email || !credentials?.password) {
-          console.log("Missing credentials");
           return null;
+        }
+
+        const loginId = credentials.email.toString().trim();
+        const storeSlug = credentials.storeSlug?.toString().trim();
+
+        if (storeSlug && !loginId.includes("@")) {
+          const store = await prisma.store.findUnique({
+            where: { slug: storeSlug },
+            select: { id: true, slug: true }
+          });
+
+          if (!store) return null;
+
+          const email = `pos+${store.id}@pos.local`;
+          const user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, email: true, name: true, role: true, password: true, workedAtId: true }
+          });
+
+          if (!user) return null;
+          if (user.role !== "CASHIER") return null;
+          if (user.workedAtId !== store.id) return null;
+          if ((user.name || "").trim() !== loginId) return null;
+
+          const isValid = await bcrypt.compare(credentials.password, user.password);
+          if (!isValid) return null;
+
+          return {
+            id: user.id.toString(),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            storeId: store.id,
+            storeSlug: store.slug
+          };
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: loginId },
           include: { stores: true }
         });
 
-        console.log("User found:", user ? "Yes" : "No");
-
-        if (!user) {
-          console.log("User not found");
-          return null;
-        }
+        if (!user) return null;
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
-        console.log("Password valid:", isValid);
-
-        if (!isValid) {
-          console.log("Invalid password");
-          return null;
-        }
+        if (!isValid) return null;
 
         // Return user object with store info (we'll expand token later)
         return {
@@ -43,8 +67,8 @@ export const authOptions: any = {
           email: user.email,
           name: user.name,
           role: user.role,
-          storeId: user.stores[0]?.id || null, // Assume first store for now
-          storeSlug: user.stores[0]?.slug || null
+          storeId: user.role === "CASHIER" ? (user.workedAtId || null) : (user.stores[0]?.id || null),
+          storeSlug: user.role === "CASHIER" ? null : (user.stores[0]?.slug || null)
         };
       }
     })

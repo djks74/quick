@@ -94,7 +94,8 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     if (!store) return null;
 
-    console.log("SERVER: Updating store settings for", storeId, JSON.stringify(data));
+    const { posPassword, ...safeLog } = data || {};
+    console.log("SERVER: Updating store settings for", storeId, JSON.stringify(safeLog));
 
     const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
 
@@ -168,6 +169,10 @@ export async function updateStoreSettings(storeId: number, data: any) {
         })
       ] : [])
     ]);
+
+    if (data?.posUsername || data?.posPassword) {
+      await upsertPosCashier(storeId, store.slug, data.posUsername, data.posPassword);
+    }
     
     // Revalidate paths to ensure fresh data
     revalidatePath(`/${store.slug}/admin/settings`);
@@ -179,6 +184,58 @@ export async function updateStoreSettings(storeId: number, data: any) {
     console.error('Error updating store settings:', error);
     return null;
   }
+}
+
+export async function getPosCashierUsername(storeId: number) {
+  try {
+    const email = `pos+${storeId}@pos.local`;
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { name: true }
+    });
+    return user?.name || "";
+  } catch (error) {
+    console.error('Error fetching POS cashier:', error);
+    return "";
+  }
+}
+
+export async function upsertPosCashier(storeId: number, storeSlug: string, username?: string, password?: string) {
+  const normalizedUsername = username?.toString().trim();
+  const normalizedPassword = password?.toString();
+
+  if (!normalizedUsername && !normalizedPassword) return null;
+
+  const email = `pos+${storeId}@pos.local`;
+  const existing = await prisma.user.findUnique({ where: { email } });
+
+  if (!existing) {
+    if (!normalizedPassword) return null;
+    const passwordHash = await bcrypt.hash(normalizedPassword, 10);
+    const created = await prisma.user.create({
+      data: {
+        email,
+        password: passwordHash,
+        name: normalizedUsername || `pos-${storeSlug}`,
+        role: "CASHIER",
+        workedAtId: storeId
+      }
+    });
+    return created;
+  }
+
+  const updateData: any = {
+    role: "CASHIER",
+    workedAtId: storeId
+  };
+  if (normalizedUsername) updateData.name = normalizedUsername;
+  if (normalizedPassword) updateData.password = await bcrypt.hash(normalizedPassword, 10);
+
+  const updated = await prisma.user.update({
+    where: { id: existing.id },
+    data: updateData
+  });
+  return updated;
 }
 
 export async function toggleStoreStatus(storeId: number, isOpen: boolean) {
