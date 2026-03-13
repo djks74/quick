@@ -43,6 +43,21 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
     };
   }, []);
 
+  useEffect(() => {
+    if (!isCameraOpen || !videoRef.current || !streamRef.current) return;
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+    const attach = async () => {
+      try {
+        await video.play();
+        runDetectLoop();
+      } catch {
+        setCameraError("Unable to start camera preview on this browser.");
+      }
+    };
+    attach();
+  }, [isCameraOpen]);
+
   const lookupIngredient = async (value: string) => {
     if (!value) return;
     setLoading(true);
@@ -87,6 +102,10 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
   };
 
   const runDetectLoop = () => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     const loop = async () => {
       if (!videoRef.current || !detectorRef.current || !isCameraOpen) return;
       try {
@@ -124,11 +143,6 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
       });
       streamRef.current = stream;
       setIsCameraOpen(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      runDetectLoop();
     } catch {
       setCameraError("Unable to access camera. Please allow camera permission.");
       stopCamera();
@@ -215,7 +229,7 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
 
       {isCameraOpen && (
         <div className="bg-black rounded-2xl border border-gray-800 overflow-hidden">
-          <video ref={videoRef} className="w-full max-h-[320px] object-cover" muted playsInline />
+          <video ref={videoRef} className="w-full max-h-[320px] object-cover" muted playsInline autoPlay />
         </div>
       )}
 
