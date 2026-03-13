@@ -16,6 +16,7 @@ import {
   Globe
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -217,12 +218,18 @@ export default function FlowShowcase() {
                   "absolute -inset-4 rounded-[40px] blur-2xl opacity-20 dark:opacity-10",
                   `bg-${step.color}-500`
                 )} />
-                <div className="relative rounded-[32px] overflow-hidden border-8 border-white dark:border-gray-800 shadow-2xl shadow-black/10">
-                  <img src={step.image} alt={step.title} className="w-full aspect-[4/3] object-cover" />
+                <div className="relative aspect-[4/3] rounded-[32px] overflow-hidden border-8 border-white dark:border-gray-800 shadow-2xl shadow-black/10">
+                  <Image 
+                    src={step.image} 
+                    alt={step.title} 
+                    fill
+                    unoptimized
+                    className="object-cover" 
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-8 left-8 text-white">
-                    <p className="text-xs font-black uppercase tracking-widest opacity-80 mb-2">{step.phase}</p>
-                    <h3 className="text-2xl font-black">{step.title}</h3>
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-80 mb-1">{step.phase}</p>
+                    <h4 className="text-2xl font-black">{step.title}</h4>
                   </div>
                 </div>
               </div>

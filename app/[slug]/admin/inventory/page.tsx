@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { 
   Plus, 
   Search, 
@@ -25,7 +25,8 @@ interface InventoryItem {
   updatedAt: string;
 }
 
-export default function InventoryListPage({ params }: { params: { slug: string } }) {
+export default function InventoryListPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -34,11 +35,11 @@ export default function InventoryListPage({ params }: { params: { slug: string }
 
   useEffect(() => {
     fetchItems();
-  }, []);
+  }, [slug]);
 
   const fetchItems = async () => {
     try {
-      const res = await fetch(`/api/admin/inventory?slug=${params.slug}`);
+      const res = await fetch(`/api/admin/inventory?slug=${slug}`);
       const data = await res.json();
       if (res.ok) setItems(data);
     } catch (err) {
@@ -56,7 +57,7 @@ export default function InventoryListPage({ params }: { params: { slug: string }
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
     try {
-      const res = await fetch(`/api/admin/inventory?slug=${params.slug}&id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/inventory?slug=${slug}&id=${id}`, { method: 'DELETE' });
       if (res.ok) fetchItems();
     } catch (err) {
       console.error(err);

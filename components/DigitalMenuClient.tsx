@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { 
   ShoppingCart, 
   Minus, 
@@ -381,7 +382,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               <div key={product.id} className="group bg-white dark:bg-[#1A1D21] p-3.5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all duration-300 flex gap-4">
                 <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-800 flex-shrink-0 border border-gray-50 dark:border-gray-800 relative">
                   {product.image && product.image.startsWith('http') ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <Image 
+                      src={product.image} 
+                      alt={product.name} 
+                      fill
+                      unoptimized
+                      className="object-cover group-hover:scale-110 transition-transform duration-500" 
+                    />
                   ) : (
                     <CategoryIcon category={product.category || product.name} themeColor={themeColor} />
                   )}
@@ -536,7 +543,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     <div key={idx} className="flex gap-4 items-center animate-in slide-in-from-right duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
                        <div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-800 overflow-hidden border border-gray-100 dark:border-gray-800 flex-shrink-0 relative">
                           {item.image && item.image.startsWith('http') ? (
-                            <img src={item.image} className="w-full h-full object-cover" />
+                            <Image 
+                              src={item.image} 
+                              alt={item.name} 
+                              fill
+                              unoptimized
+                              className="object-cover" 
+                            />
                           ) : (
                             <CategoryIcon category={item.category || item.name} themeColor={themeColor} />
                           )}

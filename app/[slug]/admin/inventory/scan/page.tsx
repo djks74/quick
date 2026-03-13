@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, use } from "react";
 import { 
   Search, 
   Scan, 
@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default function IngredientStockManager({ params }: { params: { slug: string } }) {
+export default function IngredientStockManager({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
   const [barcode, setBarcode] = useState("");
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,7 @@ export default function IngredientStockManager({ params }: { params: { slug: str
     setItem(null);
 
     try {
-      const res = await fetch(`/api/admin/inventory?barcode=${barcode}&slug=${params.slug}`);
+      const res = await fetch(`/api/admin/inventory?barcode=${barcode}&slug=${slug}`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || "Ingredient not found");
@@ -64,7 +65,7 @@ export default function IngredientStockManager({ params }: { params: { slug: str
         body: JSON.stringify({
           itemId: item.id,
           amount,
-          slug: params.slug,
+          slug: slug,
           action: "update_stock"
         }),
       });
