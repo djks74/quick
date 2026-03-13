@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { 
   LayoutDashboard, 
   Package, 
@@ -18,19 +18,23 @@ import {
   MousePointer2,
   Wallet,
   History,
-  Trash2
+  Trash2,
+  Bell,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
 import { signOut } from "next-auth/react";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import ThemeToggle from "@/components/ThemeToggle";
+import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
 
 interface SidebarItem {
   name: string;
   href?: string;
   icon: any;
   children?: { name: string; href: string }[];
+  isNotifications?: boolean;
 }
 
 export default function AdminShell({
@@ -47,9 +51,16 @@ export default function AdminShell({
   const [openMenus, setOpenMenus] = useState<string[]>(["Products", "Orders", "Pages", "Appearance"]);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isFloatingNotificationsOpen, setIsFloatingNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [toastItems, setToastItems] = useState<any[]>([]);
+  const notificationsReadyRef = useRef(false);
+  const knownNotificationIdsRef = useRef<Set<number>>(new Set());
   
   const slug = store.slug;
   const baseUrl = `/${slug}/admin`;
+  const unreadNotifications = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
 
   const sidebarItems: SidebarItem[] = [
     { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
@@ -73,6 +84,11 @@ export default function AdminShell({
       name: "Orders", 
       href: `${baseUrl}/orders`,
       icon: ShoppingCart,
+    },
+    {
+      name: "Notifications",
+      icon: Bell,
+      isNotifications: true
     },
     {
       name: "Finance",
@@ -106,6 +122,49 @@ export default function AdminShell({
   const isMinimal = layoutStyle === "minimal";
 
   const showSubscriptionGate = !isSuperAdmin && store.subscriptionPlan !== 'ENTERPRISE';
+
+  const pushToast = (item: any) => {
+    const toastId = `${item.id}-${Date.now()}`;
+    setToastItems((prev) => [{ ...item, toastId }, ...prev].slice(0, 4));
+    setTimeout(() => {
+      setToastItems((prev) => prev.filter((t) => t.toastId !== toastId));
+    }, 5000);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const refresh = async () => {
+      const rows = await getOrderNotifications(store.id, 25);
+      if (!mounted) return;
+      const nextRows = rows as any[];
+      if (!notificationsReadyRef.current) {
+        notificationsReadyRef.current = true;
+        knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+        setNotifications(nextRows);
+        return;
+      }
+      const newItems = nextRows.filter((n) => !knownNotificationIdsRef.current.has(n.id));
+      knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+      newItems.slice(0, 3).forEach(pushToast);
+      setNotifications(rows as any[]);
+    };
+    refresh();
+    const timer = setInterval(refresh, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [store.id]);
+
+  const markOneRead = async (id: number) => {
+    const ok = await markOrderNotificationRead(id);
+    if (ok) setNotifications(prev => prev.map((n) => n.id === id ? { ...n, readAt: new Date().toISOString() } : n));
+  };
+
+  const markAllRead = async () => {
+    const ok = await markAllOrderNotificationsRead(store.id);
+    if (ok) setNotifications(prev => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+  };
 
   return (
     <div className={cn(
@@ -235,6 +294,81 @@ export default function AdminShell({
         )}>
           <nav className="flex-1 py-2">
             {sidebarItems.map((item) => {
+              if (item.isNotifications) {
+                return (
+                  <div key={item.name} className="relative group">
+                    <button
+                      onClick={() => setIsNotificationsOpen(v => !v)}
+                      className={cn(
+                        "w-full flex items-center px-3 py-2 transition-colors duration-100",
+                        isNotificationsOpen
+                          ? (isModern || isMinimal ? "bg-primary/10 dark:bg-blue-900/20 text-primary dark:text-blue-400 font-bold" : "bg-[#2271b1] dark:bg-blue-600 text-white")
+                          : (isModern || isMinimal ? "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-blue-400" : "text-[#f0f0f1] dark:text-gray-400 hover:bg-[#1d2327] dark:hover:bg-gray-800 hover:text-[#72aee6] dark:hover:text-blue-400")
+                      )}
+                    >
+                      <item.icon className="w-4 h-4 mr-2" />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      {unreadNotifications > 0 && (
+                        <span className="text-[10px] font-black rounded-full px-1.5 py-0.5 bg-orange-500 text-white mr-2">
+                          {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                        </span>
+                      )}
+                      {isNotificationsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    </button>
+                    {isNotificationsOpen && (
+                      <div className={cn(
+                        "py-1.5",
+                        isModern || isMinimal ? "bg-gray-50/50 dark:bg-gray-900/30" : "bg-[#1d2327] dark:bg-black/20"
+                      )}>
+                        <div className="px-3 pb-2 flex items-center justify-between">
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest", isModern || isMinimal ? "text-gray-400 dark:text-gray-500" : "text-[#c3c4c7] dark:text-gray-500")}>
+                            {unreadNotifications ? `${unreadNotifications} unread` : "All read"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={markAllRead}
+                            disabled={!unreadNotifications}
+                            className={cn(
+                              "text-[10px] font-black uppercase tracking-widest",
+                              isModern || isMinimal
+                                ? "text-primary dark:text-blue-400 disabled:text-gray-300 dark:disabled:text-gray-600"
+                                : "text-[#72aee6] dark:text-blue-400 disabled:text-gray-500"
+                            )}
+                          >
+                            Mark all
+                          </button>
+                        </div>
+                        {notifications.length === 0 ? (
+                          <div className={cn("px-3 py-2 text-xs italic", isModern || isMinimal ? "text-gray-500 dark:text-gray-500" : "text-[#c3c4c7] dark:text-gray-500")}>
+                            No notifications
+                          </div>
+                        ) : (
+                          notifications.slice(0, 6).map((n) => (
+                            <div key={n.id} className={cn("px-3 py-2 border-t", isModern || isMinimal ? "border-gray-100 dark:border-gray-800" : "border-[#3c434a] dark:border-gray-800")}>
+                              <div className={cn("text-[11px] font-bold", isModern || isMinimal ? "text-gray-800 dark:text-gray-200" : "text-white dark:text-gray-300")}>
+                                {n.title}
+                              </div>
+                              <div className={cn("text-[10px] mt-1", isModern || isMinimal ? "text-gray-500 dark:text-gray-500" : "text-[#c3c4c7] dark:text-gray-500")}>
+                                {n.source} • #{n.orderId}
+                              </div>
+                              {!n.readAt && (
+                                <button
+                                  type="button"
+                                  onClick={() => markOneRead(n.id)}
+                                  className={cn("mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest", isModern || isMinimal ? "text-primary dark:text-blue-400" : "text-[#72aee6] dark:text-blue-400")}
+                                >
+                                  <Check className="w-3 h-3" />
+                                  Read
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               const hasChildren = !!item.children;
               const isOpen = openMenus.includes(item.name);
               const isActive = item.href === pathname || item.children?.some(child => child.href === pathname);
@@ -330,6 +464,90 @@ export default function AdminShell({
             </div>
           </div>
         </main>
+      </div>
+
+      <div className="fixed top-12 right-6 z-[130] space-y-2">
+        {toastItems.map((t) => (
+          <div
+            key={t.toastId}
+            className="w-[300px] rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-[#1A1D21] shadow-xl p-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-sm font-bold text-gray-900 dark:text-white">{t.title}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.body}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mt-1">
+                  {t.source} • Order #{t.orderId}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToastItems((prev) => prev.filter((x) => x.toastId !== t.toastId))}
+                className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="fixed bottom-6 right-6 z-[120]">
+        <button
+          type="button"
+          onClick={() => setIsFloatingNotificationsOpen((v) => !v)}
+          className="relative w-12 h-12 rounded-full bg-primary dark:bg-blue-600 text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+        >
+          <Bell className="w-5 h-5" />
+          {unreadNotifications > 0 && (
+            <span className="absolute -top-1 -right-1 text-[10px] font-black rounded-full px-1.5 py-0.5 bg-orange-500 text-white">
+              {unreadNotifications > 9 ? "9+" : unreadNotifications}
+            </span>
+          )}
+        </button>
+        {isFloatingNotificationsOpen && (
+          <div className="absolute bottom-14 right-0 w-[340px] max-h-[420px] overflow-y-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1A1D21] shadow-2xl">
+            <div className="p-3 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
+              <div>
+                <div className="text-sm font-bold text-gray-900 dark:text-white">Notifications</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                  {unreadNotifications ? `${unreadNotifications} unread` : "All read"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={markAllRead}
+                disabled={!unreadNotifications}
+                className="text-[10px] font-black uppercase tracking-widest text-primary dark:text-blue-400 disabled:text-gray-300 dark:disabled:text-gray-600"
+              >
+                Mark all
+              </button>
+            </div>
+            {notifications.length === 0 ? (
+              <div className="p-3 text-xs italic text-gray-500 dark:text-gray-500">No notifications</div>
+            ) : (
+              notifications.slice(0, 10).map((n) => (
+                <div key={n.id} className="p-3 border-b border-gray-100 dark:border-gray-800">
+                  <div className="text-[12px] font-bold text-gray-800 dark:text-gray-200">{n.title}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-500 mt-1">{n.body}</div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-1">
+                    {n.source} • #{n.orderId}
+                  </div>
+                  {!n.readAt && (
+                    <button
+                      type="button"
+                      onClick={() => markOneRead(n.id)}
+                      className="mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-primary dark:text-blue-400"
+                    >
+                      <Check className="w-3 h-3" />
+                      Read
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <style jsx global>{`

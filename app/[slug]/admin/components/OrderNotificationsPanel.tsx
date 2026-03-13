@@ -15,6 +15,13 @@ type Row = {
   readAt: string | null;
 };
 
+function formatIsoHourMinute(iso: string) {
+  if (!iso) return "--:--";
+  const time = iso.split("T")[1];
+  if (!time) return "--:--";
+  return time.slice(0, 5);
+}
+
 export default function OrderNotificationsPanel({
   storeId,
   initialNotifications = [],
@@ -83,7 +90,7 @@ export default function OrderNotificationsPanel({
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{n.title}</div>
                     <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest shrink-0">
-                      {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {formatIsoHourMinute(n.createdAt)}
                     </div>
                   </div>
                   <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{n.body}</div>
@@ -111,4 +118,3 @@ export default function OrderNotificationsPanel({
     </div>
   );
 }
-

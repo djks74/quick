@@ -76,6 +76,13 @@ interface PosClientProps {
   user: any;
 }
 
+function formatIsoHourMinute(iso: string) {
+  if (!iso) return "--:--";
+  const time = iso.split("T")[1];
+  if (!time) return "--:--";
+  return time.slice(0, 5);
+}
+
 export default function PosClient({ store, products, categories, user }: PosClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -530,7 +537,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                           <div className="flex items-start justify-between gap-2">
                             <div className={cn("text-sm font-bold", isDarkMode ? "text-white" : "text-gray-900")}>{n.title}</div>
                             <div className={cn("text-[10px] font-black uppercase tracking-widest shrink-0", isDarkMode ? "text-gray-400" : "text-gray-400")}>
-                              {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              {formatIsoHourMinute(n.createdAt)}
                             </div>
                           </div>
                           <div className={cn("text-xs mt-1", isDarkMode ? "text-gray-300" : "text-gray-600")}>{n.body}</div>
