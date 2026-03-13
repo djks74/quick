@@ -14,7 +14,13 @@ async function requireMerchant(storeId: number) {
     select: { ownerId: true }
   });
 
-  if (!store || (store.ownerId !== parseInt(user.id) && user.role !== 'SUPER_ADMIN')) {
+  const userId = Number(user?.id);
+  const userStoreId = Number(user?.storeId);
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isStoreOwner = store?.ownerId === userId;
+  const isStoreUser = userStoreId === storeId;
+
+  if (!store || (!isSuperAdmin && !isStoreOwner && !isStoreUser)) {
     throw new Error("Unauthorized");
   }
   return user;
