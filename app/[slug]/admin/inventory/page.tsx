@@ -185,10 +185,10 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                  id: editingItem?.id,
                  name: formData.get('name'),
                  barcode: formData.get('barcode'),
-                 stock: parseFloat(formData.get('stock') as string),
-                 minStock: parseFloat(formData.get('minStock') as string),
+                 stock: parseFloat(formData.get('stock') as string) || 0,
+                 minStock: parseFloat(formData.get('minStock') as string) || 0,
                  unit: formData.get('unit'),
-                 costPrice: parseFloat(formData.get('costPrice') as string),
+                 costPrice: parseFloat(formData.get('costPrice') as string) || 0,
                };
 
                const method = editingItem ? 'PUT' : 'POST';

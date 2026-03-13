@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { slug, action, ...data } = body;
+    const { slug, action, id, ...data } = body;
 
     if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     // Handle Stock Update (Scanning)
     if (action === "update_stock") {
-      const { itemId, amount } = data;
+      const { itemId, amount } = body;
       const item = await prisma.inventoryItem.update({
         where: { id: itemId, storeId: store.id },
         data: { stock: { increment: amount } }
@@ -56,16 +56,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(item);
     }
 
+    // Convert empty barcode to null to avoid unique constraint issues
+    const barcode = data.barcode?.trim() || null;
+
     // Handle Create New Item
     const newItem = await prisma.inventoryItem.create({
       data: {
-        ...data,
+        name: data.name,
+        barcode,
+        stock: data.stock || 0,
+        unit: data.unit || "pcs",
+        minStock: data.minStock || 0,
+        costPrice: data.costPrice || 0,
         storeId: store.id,
       }
     });
     return NextResponse.json(newItem);
   } catch (error: any) {
     console.error("[INVENTORY_API_POST]", error);
+    // Provide a more descriptive error if it's a unique constraint violation
+    if (error.code === 'P2002') {
+      return NextResponse.json({ error: "Barcode already exists for this store" }, { status: 400 });
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -81,13 +93,22 @@ export async function PUT(req: NextRequest) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
+    // Convert empty barcode to null
+    const barcode = data.barcode?.trim() || null;
+
     const updated = await prisma.inventoryItem.update({
       where: { id: id, storeId: store.id },
-      data
+      data: {
+        ...data,
+        barcode
+      }
     });
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error("[INVENTORY_API_PUT]", error);
+    if (error.code === 'P2002') {
+      return NextResponse.json({ error: "Barcode already exists for this store" }, { status: 400 });
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
