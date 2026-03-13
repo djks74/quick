@@ -32,6 +32,8 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchItems();
@@ -75,7 +77,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage your stock levels for kitchen and store operations.</p>
         </div>
         <button 
-          onClick={() => { setEditingItem(null); setIsModalOpen(true); }}
+          onClick={() => { setEditingItem(null); setError(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all font-bold text-sm shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -149,7 +151,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                 </td>
                 <td className="px-6 py-4 text-right space-x-2">
                   <button 
-                    onClick={() => { setEditingItem(item); setIsModalOpen(true); }}
+                    onClick={() => { setEditingItem(item); setError(null); setIsModalOpen(true); }}
                     className="p-2 text-gray-400 hover:text-primary transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -186,6 +188,9 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
              </div>
              <form onSubmit={async (e) => {
                e.preventDefault();
+               setSaving(true);
+               setError(null);
+               
                const formData = new FormData(e.currentTarget);
                const parseNumber = (val: any) => {
                  if (!val) return 0;
@@ -204,18 +209,34 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                  costPrice: parseNumber(formData.get('costPrice')),
                };
 
-               const method = editingItem ? 'PUT' : 'POST';
-               const res = await fetch('/api/admin/inventory', {
-                 method,
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(data)
-               });
-               
-               if (res.ok) {
-                 setIsModalOpen(false);
-                 fetchItems();
+               try {
+                 const method = editingItem ? 'PUT' : 'POST';
+                 const res = await fetch('/api/admin/inventory', {
+                   method,
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify(data)
+                 });
+                 
+                 const result = await res.json();
+                 
+                 if (res.ok) {
+                   setIsModalOpen(false);
+                   fetchItems();
+                 } else {
+                   setError(result.error || "Failed to save item");
+                 }
+               } catch (err) {
+                 setError("An unexpected error occurred");
+               } finally {
+                 setSaving(false);
                }
              }} className="p-6 space-y-4">
+               {error && (
+                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider">
+                   <AlertTriangle className="w-4 h-4 shrink-0" />
+                   {error}
+                 </div>
+               )}
                <div>
                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Item Name</label>
                  <input name="name" defaultValue={editingItem?.name} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="e.g. Flour, Sugar, Milk" />
@@ -237,16 +258,23 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stock</label>
-                   <input name="stock" type="number" step="0.01" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="stock" type="number" step="1" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Min Stock Alert</label>
-                   <input name="minStock" type="number" step="0.01" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="minStock" type="number" step="1" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                </div>
                <div className="flex gap-2 pt-4">
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-bold text-sm">Cancel</button>
-                 <button type="submit" className="flex-1 px-4 py-2 bg-primary text-white rounded-xl font-bold text-sm">Save Item</button>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-bold text-sm disabled:opacity-50" disabled={saving}>Cancel</button>
+                 <button type="submit" className="flex-1 px-4 py-2 bg-primary text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70" disabled={saving}>
+                   {saving ? (
+                     <>
+                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                       Saving...
+                     </>
+                   ) : 'Save Item'}
+                 </button>
                </div>
              </form>
           </div>
