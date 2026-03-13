@@ -24,6 +24,7 @@ const productSchema = z.object({
   type: z.enum(["simple", "variable"]),
   rating: z.number().min(0).max(5).optional(),
   stock: z.number().min(0).optional(),
+  barcode: z.string().optional(),
   variations: z.array(variationSchema).optional(),
 });
 
@@ -59,6 +60,7 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
       type: (product?.type as "simple" | "variable") || "simple",
       rating: product?.rating || 0,
       stock: product?.stock || 0,
+      barcode: product?.barcode || "",
       variations: product?.variations || [],
     },
   });
@@ -218,6 +220,15 @@ export default function ProductForm({ product, categories, onClose, onSave }: Pr
                     placeholder="0"
                   />
                   {errors.stock && <p className="text-red-500 text-xs mt-1">{errors.stock.message}</p>}
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Barcode / SKU</label>
+                  <input 
+                    type="text"
+                    {...register("barcode")}
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
+                    placeholder="e.g. 123456789"
+                  />
                 </div>
               </div>
             )}

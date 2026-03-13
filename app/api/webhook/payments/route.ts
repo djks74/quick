@@ -73,12 +73,22 @@ export async function POST(req: NextRequest) {
               merchantPhone = store.owner.phoneNumber;
           }
 
-          if (merchantPhone) {
-              const items = await prisma.orderItem.findMany({
-                  where: { orderId: order.id },
-                  include: { product: true }
-              });
+          const items = await prisma.orderItem.findMany({
+              where: { orderId: order.id },
+              include: { product: true }
+          });
 
+          // Reduce Inventory for each item
+          for (const item of items) {
+              if (item.product.stock > 0) {
+                  await prisma.product.update({
+                      where: { id: item.productId },
+                      data: { stock: { decrement: item.quantity } }
+                  });
+              }
+          }
+
+          if (merchantPhone) {
               let msg = `💰 *Payment Received for Order #${order.id}*\n`;
               if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
               msg += `👤 Customer: ${order.customerPhone}\n`;

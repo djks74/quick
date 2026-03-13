@@ -104,6 +104,7 @@ model Product {
   variations       Json?
   unit             String      @default("pcs")
   stock            Int         @default(0)
+  barcode          String?     // Barcode/SKU for scanning
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   orderItems       OrderItem[]

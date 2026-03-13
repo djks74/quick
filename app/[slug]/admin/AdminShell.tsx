@@ -58,6 +58,7 @@ export default function AdminShell({
       children: [
         { name: "All Products", href: `${baseUrl}/products` },
         { name: "Categories", href: `${baseUrl}/products?view=categories` },
+        { name: "Inventory", href: `${baseUrl}/products/inventory` },
       ]
     },
     { 
