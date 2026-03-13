@@ -76,6 +76,8 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { id, slug, ...data } = body;
 
+    if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
+
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
@@ -96,6 +98,8 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = parseInt(searchParams.get("id") || "");
     const slug = searchParams.get("slug");
+
+    if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
 
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
