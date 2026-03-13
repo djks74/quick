@@ -220,11 +220,11 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stock</label>
-                   <input name="stock" type="number" step="0.01" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="stock" type="number" step="1" defaultValue={editingItem?.stock || 0} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Min Stock Alert</label>
-                   <input name="minStock" type="number" step="0.01" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
+                   <input name="minStock" type="number" step="1" defaultValue={editingItem?.minStock || 5} required className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" />
                  </div>
                </div>
                <div className="flex gap-2 pt-4">
