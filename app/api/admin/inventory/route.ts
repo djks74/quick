@@ -15,23 +15,32 @@ export async function GET(req: NextRequest) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
-    // If barcode provided, find one. Otherwise find all.
-    if (barcode) {
-      const item = await prisma.inventoryItem.findFirst({
-        where: { storeId: store.id, barcode: barcode },
-      });
-      if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
-      return NextResponse.json(item);
-    }
+    try {
+      // If barcode provided, find one. Otherwise find all.
+      if (barcode) {
+        const item = await prisma.inventoryItem.findFirst({
+          where: { storeId: store.id, barcode: barcode },
+        });
+        if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+        return NextResponse.json(item);
+      }
 
-    const items = await prisma.inventoryItem.findMany({
-      where: { storeId: store.id },
-      orderBy: { updatedAt: 'desc' }
-    });
-    return NextResponse.json(items);
+      const items = await prisma.inventoryItem.findMany({
+        where: { storeId: store.id },
+        orderBy: { updatedAt: 'desc' }
+      });
+      return NextResponse.json(items);
+    } catch (dbError: any) {
+      console.error("[INVENTORY_API_GET_DB_ERROR]", dbError);
+      // Fallback: if table doesn't exist yet, return empty array instead of 500
+      if (dbError.code === 'P2021') {
+        return NextResponse.json([]);
+      }
+      throw dbError;
+    }
   } catch (error: any) {
     console.error("[INVENTORY_API_GET]", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 
