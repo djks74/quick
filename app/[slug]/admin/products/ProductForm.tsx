@@ -61,7 +61,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
     defaultValues: {
       name: product?.name || "",
       price: product?.price || 0,
-      image: product?.image || "/placeholder-product.jpg",
+      image: product?.image || "/placeholder-product.svg",
       gallery: product?.gallery || [],
       category: product?.category || categories[0]?.slug || "",
       subCategory: product?.subCategory || "",

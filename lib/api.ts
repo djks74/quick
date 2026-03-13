@@ -394,7 +394,7 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
       id: p.id,
       name: p.name,
       price: p.price,
-      image: p.image || '/placeholder-product.jpg',
+      image: p.image || '/placeholder-product.svg',
       gallery: p.gallery || [],
       rating: p.rating,
       category: p.category || 'uncategorized',
@@ -679,7 +679,16 @@ export async function getInventoryItems(storeId: number) {
   try {
     return await prisma.inventoryItem.findMany({
       where: { storeId },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        stock: true,
+        unit: true,
+        minStock: true,
+        costPrice: true
+      }
     });
   } catch (error) {
     console.error('Error fetching inventory items:', error);

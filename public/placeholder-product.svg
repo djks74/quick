@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f3f4f6"/>
+  <rect x="120" y="140" width="360" height="320" rx="32" fill="#e5e7eb"/>
+  <path d="M210 380l70-90 60 70 40-50 90 120H210z" fill="#cbd5e1"/>
+  <circle cx="250" cy="240" r="28" fill="#cbd5e1"/>
+  <text x="300" y="520" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="22" font-weight="700" fill="#9ca3af">
+    No Image
+  </text>
+</svg>
