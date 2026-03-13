@@ -9,8 +9,7 @@ import {
   AlertTriangle,
   Package,
   Layers,
-  ChevronRight,
-  ChevronDown
+  Printer
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -25,6 +24,94 @@ interface InventoryItem {
   updatedAt: string;
 }
 
+const CODE39_MAP: Record<string, string> = {
+  "0": "nnnwwnwnn",
+  "1": "wnnwnnnnw",
+  "2": "nnwwnnnnw",
+  "3": "wnwwnnnnn",
+  "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn",
+  "6": "nnwwwnnnn",
+  "7": "nnnwnnwnw",
+  "8": "wnnwnnwnn",
+  "9": "nnwwnnwnn",
+  "A": "wnnnnwnnw",
+  "B": "nnwnnwnnw",
+  "C": "wnwnnwnnn",
+  "D": "nnnnwwnnw",
+  "E": "wnnnwwnnn",
+  "F": "nnwnwwnnn",
+  "G": "nnnnnwwnw",
+  "H": "wnnnnwwnn",
+  "I": "nnwnnwwnn",
+  "J": "nnnnwwwnn",
+  "K": "wnnnnnnww",
+  "L": "nnwnnnnww",
+  "M": "wnwnnnnwn",
+  "N": "nnnnwnnww",
+  "O": "wnnnwnnwn",
+  "P": "nnwnwnnwn",
+  "Q": "nnnnnnwww",
+  "R": "wnnnnnwwn",
+  "S": "nnwnnnwwn",
+  "T": "nnnnwnwwn",
+  "U": "wwnnnnnnw",
+  "V": "nwwnnnnnw",
+  "W": "wwwnnnnnn",
+  "X": "nwnnwnnnw",
+  "Y": "wwnnwnnnn",
+  "Z": "nwwnwnnnn",
+  "-": "nwnnnnwnw",
+  ".": "wwnnnnwnn",
+  " ": "nwwnnnwnn",
+  "$": "nwnwnwnnn",
+  "/": "nwnwnnnwn",
+  "+": "nwnnnwnwn",
+  "%": "nnnwnwnwn",
+  "*": "nwnnwnwnn"
+};
+
+function buildCode39Layout(rawValue: string) {
+  const value = rawValue?.trim().toUpperCase();
+  if (!value) return null;
+  const encoded = `*${value}*`;
+  for (const char of encoded) {
+    if (!CODE39_MAP[char]) return null;
+  }
+  const narrow = 2;
+  const wide = 5;
+  const gap = 2;
+  let x = 0;
+  const rects: { x: number; width: number }[] = [];
+  for (let c = 0; c < encoded.length; c++) {
+    const pattern = CODE39_MAP[encoded[c]];
+    for (let i = 0; i < pattern.length; i++) {
+      const width = pattern[i] === "w" ? wide : narrow;
+      if (i % 2 === 0) rects.push({ x, width });
+      x += width;
+    }
+    if (c < encoded.length - 1) x += gap;
+  }
+  return { width: x, rects, text: value };
+}
+
+function BarcodePreview({ value, height = 44 }: { value: string; height?: number }) {
+  const layout = buildCode39Layout(value);
+  if (!layout) {
+    return <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold tracking-widest uppercase">{value || "—"}</div>;
+  }
+  return (
+    <div className="space-y-1">
+      <svg viewBox={`0 0 ${layout.width} ${height}`} className="w-full max-w-[180px] h-10 bg-white rounded p-1">
+        {layout.rects.map((bar, index) => (
+          <rect key={`${bar.x}-${index}`} x={bar.x} y={0} width={bar.width} height={height} fill="#111827" />
+        ))}
+      </svg>
+      <div className="text-[10px] text-gray-400 dark:text-gray-500 font-black tracking-widest">{layout.text}</div>
+    </div>
+  );
+}
+
 export default function InventoryListPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -34,6 +121,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
 
   useEffect(() => {
     fetchItems();
@@ -66,6 +154,46 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
     }
   };
 
+  const generateBarcode = () => {
+    setBarcodeInput(`${Date.now().toString().slice(-10)}${Math.floor(10 + Math.random() * 90)}`);
+  };
+
+  const handlePrintBarcode = (item: InventoryItem) => {
+    const barcode = item.barcode?.trim();
+    const layout = buildCode39Layout(barcode || "");
+    if (!layout) {
+      alert("Barcode is missing or unsupported for printing.");
+      return;
+    }
+    const bars = layout.rects
+      .map((bar) => `<rect x="${bar.x}" y="0" width="${bar.width}" height="72" fill="#111827" />`)
+      .join("");
+    const popup = window.open("", "_blank", "width=420,height=620");
+    if (!popup) return;
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Print Barcode</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            .wrap { border: 1px solid #ddd; border-radius: 12px; padding: 20px; width: 320px; }
+            .name { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+            .code { margin-top: 8px; letter-spacing: 2px; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <div class="name">${item.name}</div>
+            <svg viewBox="0 0 ${layout.width} 72" width="280" height="72">${bars}</svg>
+            <div class="code">${layout.text}</div>
+          </div>
+          <script>window.onload = function(){ window.print(); };</script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -77,7 +205,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage your stock levels for kitchen and store operations.</p>
         </div>
         <button 
-          onClick={() => { setEditingItem(null); setError(null); setIsModalOpen(true); }}
+          onClick={() => { setEditingItem(null); setBarcodeInput(""); setError(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all font-bold text-sm shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -127,7 +255,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                   <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Unit: {item.unit}</div>
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">
-                  {item.barcode || "—"}
+                  <BarcodePreview value={item.barcode || ""} />
                 </td>
                 <td className="px-6 py-4">
                   <div className="font-black text-gray-900 dark:text-white text-sm">
@@ -151,7 +279,13 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                 </td>
                 <td className="px-6 py-4 text-right space-x-2">
                   <button 
-                    onClick={() => { setEditingItem(item); setError(null); setIsModalOpen(true); }}
+                    onClick={() => handlePrintBarcode(item)}
+                    className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => { setEditingItem(item); setBarcodeInput(item.barcode || ""); setError(null); setIsModalOpen(true); }}
                     className="p-2 text-gray-400 hover:text-primary transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -202,7 +336,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                  slug: slug,
                  id: editingItem?.id,
                  name: formData.get('name'),
-                 barcode: formData.get('barcode'),
+                  barcode: barcodeInput,
                  stock: parseNumber(formData.get('stock')),
                  minStock: parseNumber(formData.get('minStock')),
                  unit: formData.get('unit'),
@@ -243,8 +377,18 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                </div>
                <div className="grid grid-cols-2 gap-4">
                  <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Barcode / SKU</label>
-                   <input name="barcode" defaultValue={editingItem?.barcode} className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="123456789" />
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Barcode / SKU</label>
+                  <div className="flex gap-2">
+                    <input name="barcode" value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border-none focus:ring-2 focus:ring-primary/20 outline-none dark:text-white" placeholder="Auto-generated if empty" />
+                    <button type="button" onClick={generateBarcode} className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-black uppercase tracking-widest">
+                      Auto
+                    </button>
+                  </div>
+                  {barcodeInput && (
+                    <div className="mt-2">
+                      <BarcodePreview value={barcodeInput} />
+                    </div>
+                  )}
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unit</label>

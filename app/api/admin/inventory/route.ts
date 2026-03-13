@@ -3,6 +3,18 @@ import { prisma } from "@/lib/prisma";
 
 let ensuredSchema: Promise<void> | null = null;
 
+async function generateUniqueInventoryBarcode(storeId: number) {
+  for (let i = 0; i < 5; i++) {
+    const candidate = `${Date.now().toString().slice(-10)}${Math.floor(10 + Math.random() * 90)}`;
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { storeId, barcode: candidate },
+      select: { id: true }
+    });
+    if (!existing) return candidate;
+  }
+  return `${Date.now()}${Math.floor(100 + Math.random() * 900)}`;
+}
+
 async function ensureInventorySchema() {
   if (!ensuredSchema) {
     ensuredSchema = (async () => {
@@ -149,7 +161,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert empty barcode to null to avoid unique constraint issues
-    const barcode = data.barcode?.toString().trim() || null;
+    let barcode = data.barcode?.toString().trim() || null;
+    if (!barcode) {
+      barcode = await generateUniqueInventoryBarcode(store.id);
+    }
     const name = data.name?.toString().trim();
 
     if (!name) {
