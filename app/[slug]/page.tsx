@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import DigitalMenuClient from "@/components/DigitalMenuClient";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 
 export const revalidate = 60; // Revalidate every minute (ISR)
 
 export default async function StorePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await ensureStoreSettingsSchema();
 
   const store = await prisma.store.findUnique({
     where: { slug },

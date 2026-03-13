@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 
 export async function POST(req: Request) {
   try {
+    await ensureStoreSettingsSchema();
     const { phone, storeId, tableNumber, type } = await req.json();
 
     if (!phone || !storeId) {

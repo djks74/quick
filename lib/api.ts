@@ -5,9 +5,9 @@ import { Product, Category } from './types';
 import bcrypt from 'bcryptjs';
 import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/order-notifications";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
-let ensuredStoreSettingsSchema: Promise<void> | null = null;
 
 async function ensureRecipeSchema() {
   if (!ensuredRecipeSchema) {
@@ -74,22 +74,6 @@ async function ensureRecipeSchema() {
   }
 
   await ensuredRecipeSchema;
-}
-
-export async function ensureStoreSettingsSchema() {
-  if (!ensuredStoreSettingsSchema) {
-    ensuredStoreSettingsSchema = (async () => {
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "posPaymentMethods" JSONB NOT NULL DEFAULT '[]'::jsonb;
-      `);
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Order"
-        ADD COLUMN IF NOT EXISTS "discountAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
-      `);
-    })().catch(() => {});
-  }
-  await ensuredStoreSettingsSchema;
 }
 
 // --- Store ---

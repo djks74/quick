@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processPayment } from '@/lib/payment';
 import { createOrderNotification } from '@/lib/order-notifications';
+import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureStoreSettingsSchema();
     const body = await req.json();
     const { storeId, items, total, customerInfo, paymentMethod, specificType } = body;
 

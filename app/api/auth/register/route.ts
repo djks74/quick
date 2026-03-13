@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureStoreSettingsSchema();
     const { name, email, password, storeName } = await req.json();
 
     if (!name || !email || !password || !storeName) {

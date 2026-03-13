@@ -1,6 +1,7 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 
 export const authOptions: any = {
   providers: [
@@ -12,6 +13,7 @@ export const authOptions: any = {
         storeSlug: { label: "Store Slug", type: "text" }
       },
       async authorize(credentials) {
+        await ensureStoreSettingsSchema();
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
