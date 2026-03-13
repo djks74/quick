@@ -18,11 +18,21 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
 
   const productsData = await prisma.product.findMany({
     where: { storeId: store.id },
-    orderBy: { name: 'asc' }
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      price: true,
+      unit: true,
+      image: true,
+      description: true,
+      category: true,
+      variations: true
+    }
   });
 
   // Serialize and prepare data efficiently
-  const categories = store.categories.map(c => ({
+  const categories = store.categories.map((c: any) => ({
     id: c.id,
     name: c.name,
     slug: c.slug

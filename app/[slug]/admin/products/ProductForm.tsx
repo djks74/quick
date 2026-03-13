@@ -6,7 +6,7 @@ import * as z from "zod";
 import { X, Plus, Trash2, Image as ImageIcon, Upload, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Product, Variation, Category } from "@/lib/types";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 const variationSchema = z.object({
   id: z.number().optional(),
@@ -371,9 +371,21 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                   <Layers className="w-5 h-5 text-primary" />
                   Recipe / Ingredients
                 </h3>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                  Total Production Cost: <span className="text-primary">{formatCurrency(cogs, "IDR")}</span>
-                </p>
+                <div className="flex items-center gap-4 mt-1">
+                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                    Total Cost: <span className="text-primary">{formatCurrency(cogs, "IDR")}</span>
+                  </p>
+                  {watch("price") > 0 && (
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                      Margin: <span className={cn(
+                        "font-black",
+                        ((watch("price") - cogs) / watch("price")) > 0.3 ? "text-green-500" : "text-orange-500"
+                      )}>
+                        {(((watch("price") - cogs) / watch("price")) * 100).toFixed(0)}%
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 type="button"

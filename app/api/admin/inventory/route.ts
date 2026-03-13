@@ -1,6 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+let ensuredSchema: Promise<void> | null = null;
+
+async function ensureInventorySchema() {
+  if (!ensuredSchema) {
+    ensuredSchema = (async () => {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Product"
+        ADD COLUMN IF NOT EXISTS "barcode" TEXT;
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "InventoryItem" (
+          "id" SERIAL PRIMARY KEY,
+          "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "name" TEXT NOT NULL,
+          "barcode" TEXT,
+          "stock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "unit" TEXT NOT NULL DEFAULT 'pcs',
+          "minStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "costPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "InventoryItem_storeId_barcode_key"
+        ON "InventoryItem" ("storeId", "barcode");
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "ProductIngredient" (
+          "id" SERIAL PRIMARY KEY,
+          "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "inventoryItemId" INTEGER NOT NULL REFERENCES "InventoryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "quantity" DOUBLE PRECISION NOT NULL,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "ProductIngredient_productId_inventoryItemId_key"
+        ON "ProductIngredient" ("productId", "inventoryItemId");
+      `);
+    })().catch(() => {});
+  }
+
+  await ensuredSchema;
+}
+
 // GET /api/admin/inventory?slug=store-slug&barcode=123
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +65,8 @@ export async function GET(req: NextRequest) {
 
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+
+    await ensureInventorySchema();
 
     try {
       // If barcode provided, find one. Otherwise find all.
@@ -62,6 +115,8 @@ export async function POST(req: NextRequest) {
       console.error("[INVENTORY_POST] Store not found for slug:", slug);
       return NextResponse.json({ error: "Store not found" }, { status: 404 });
     }
+
+    await ensureInventorySchema();
 
     // Handle Stock Update (Scanning)
     if (action === "update_stock") {
@@ -136,6 +191,8 @@ export async function PUT(req: NextRequest) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
+    await ensureInventorySchema();
+
     // Convert empty barcode to null
     const barcode = data.barcode?.toString().trim() || null;
     const name = data.name?.toString().trim();
@@ -186,6 +243,8 @@ export async function DELETE(req: NextRequest) {
 
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+
+    await ensureInventorySchema();
 
     await prisma.inventoryItem.delete({
       where: { id: id, storeId: store.id }
