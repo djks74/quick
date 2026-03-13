@@ -181,7 +181,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
                e.preventDefault();
                const formData = new FormData(e.currentTarget);
                const data = {
-                 slug: params.slug,
+                 slug: slug,
                  id: editingItem?.id,
                  name: formData.get('name'),
                  barcode: formData.get('barcode'),
