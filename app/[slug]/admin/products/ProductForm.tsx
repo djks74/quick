@@ -99,6 +99,8 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
     }
     return total;
   }, 0);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'main' | 'gallery') => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
