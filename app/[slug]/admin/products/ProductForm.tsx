@@ -48,6 +48,11 @@ interface ProductFormProps {
 export default function ProductForm({ product, categories, inventoryItems = [], onClose, onSave }: ProductFormProps) {
   const [galleryInput, setGalleryInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const normalizeImage = (src?: string | null) => {
+    if (!src) return "/placeholder-product.svg";
+    if (src === "/placeholder-product.jpg") return "/placeholder-product.svg";
+    return src;
+  };
   
   const {
     register,
@@ -61,7 +66,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
     defaultValues: {
       name: product?.name || "",
       price: product?.price || 0,
-      image: product?.image || "/placeholder-product.svg",
+      image: normalizeImage(product?.image),
       gallery: product?.gallery || [],
       category: product?.category || categories[0]?.slug || "",
       subCategory: product?.subCategory || "",
@@ -158,6 +163,24 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
       const minPrice = Math.min(...data.variations.map(v => v.price));
       finalData.price = minPrice;
     }
+
+    if (finalData.ingredients && finalData.ingredients.length > 0) {
+      const merged = finalData.ingredients
+        .filter(i => i.inventoryItemId > 0)
+        .reduce((acc, i) => {
+          const existing = acc.find(x => x.inventoryItemId === i.inventoryItemId);
+          if (existing) {
+            existing.quantity = (existing.quantity || 0) + (i.quantity || 0);
+          } else {
+            acc.push({ ...i });
+          }
+          return acc;
+        }, [] as { inventoryItemId: number; quantity: number }[])
+        .filter(i => (i.quantity || 0) > 0);
+
+      finalData.ingredients = merged;
+    }
+
     onSave({ ...finalData, id: product?.id });
   };
 
@@ -424,7 +447,14 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                           <input
                             type="number"
                             step="0.01"
-                            {...register(`ingredients.${index}.quantity` as const, { valueAsNumber: true })}
+                            {...register(`ingredients.${index}.quantity` as const, {
+                              setValueAs: (v) => {
+                                if (v === "" || v === null || v === undefined) return 0;
+                                const cleaned = v.toString().replace(",", ".");
+                                const num = parseFloat(cleaned);
+                                return Number.isFinite(num) ? num : 0;
+                              }
+                            })}
                             className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm transition-all dark:text-white outline-none"
                             placeholder="0"
                           />

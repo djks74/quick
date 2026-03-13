@@ -4,6 +4,57 @@ import { prisma } from './prisma';
 import { Product, Category } from './types';
 import bcrypt from 'bcryptjs';
 
+let ensuredRecipeSchema: Promise<void> | null = null;
+
+async function ensureRecipeSchema() {
+  if (!ensuredRecipeSchema) {
+    ensuredRecipeSchema = (async () => {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Product"
+        ADD COLUMN IF NOT EXISTS "barcode" TEXT;
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "InventoryItem" (
+          "id" SERIAL PRIMARY KEY,
+          "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "name" TEXT NOT NULL,
+          "barcode" TEXT,
+          "stock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "unit" TEXT NOT NULL DEFAULT 'pcs',
+          "minStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "costPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "InventoryItem_storeId_barcode_key"
+        ON "InventoryItem" ("storeId", "barcode");
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "ProductIngredient" (
+          "id" SERIAL PRIMARY KEY,
+          "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "inventoryItemId" INTEGER NOT NULL REFERENCES "InventoryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "quantity" DOUBLE PRECISION NOT NULL,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "ProductIngredient_productId_inventoryItemId_key"
+        ON "ProductIngredient" ("productId", "inventoryItemId");
+      `);
+    })().catch(() => {});
+  }
+
+  await ensuredRecipeSchema;
+}
+
 // --- Store ---
 
 export async function getStoreBySlug(slug: string) {
@@ -328,6 +379,7 @@ export async function deleteTable(id: number) {
 
 export async function getProducts(storeId: number, categorySlug?: string): Promise<Product[]> {
   try {
+    await ensureRecipeSchema();
     const where: any = { storeId };
     if (categorySlug) {
       where.category = categorySlug;
@@ -394,7 +446,7 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
       id: p.id,
       name: p.name,
       price: p.price,
-      image: p.image || '/placeholder-product.svg',
+      image: !p.image || p.image === '/placeholder-product.jpg' ? '/placeholder-product.svg' : p.image,
       gallery: p.gallery || [],
       rating: p.rating,
       category: p.category || 'uncategorized',
@@ -419,6 +471,7 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
 
 export async function createProduct(storeId: number, data: any) {
   try {
+    await ensureRecipeSchema();
     console.log("SERVER: Creating product", storeId, JSON.stringify(data));
     const baseData: any = {
       storeId,
@@ -482,6 +535,7 @@ export async function createProduct(storeId: number, data: any) {
 
 export async function updateProduct(id: number, data: any) {
   try {
+    await ensureRecipeSchema();
     console.log("SERVER: Updating product", id, JSON.stringify(data));
     
     // Use a transaction to update product and its ingredients
