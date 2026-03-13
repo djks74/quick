@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     // NOTE: Sending free-form text as the first message will FAIL if not within 24h window.
     // If this fails, we will need to implement a fallback to redirect the user to WhatsApp.
     
+    const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${store.slug}${tableNumber ? `?table=${tableNumber}` : ''}`;
     let message = `👋 Welcome to *${store.name}*`;
     if (tableNumber) {
         message += ` at *${tableNumber}*`;
@@ -55,14 +56,14 @@ export async function POST(req: Request) {
     message += `!\n\n`;
     
     if (type === 'whatsapp') {
-        message += `Please reply with "Menu" to start ordering here on WhatsApp. 🍽️`;
+        message += `You can order directly via the button below, or reply with "Menu" to order here on WhatsApp. 🍽️`;
     } else {
         message += `You are currently viewing our Digital Menu on the web. Enjoy! 🌐`;
     }
 
     let sent = false;
     try {
-      sent = await sendWhatsAppMessage(phone, message, storeId) || false;
+      sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
     } catch (sendError) {
       console.error("Failed to send WhatsApp message:", sendError);
     }

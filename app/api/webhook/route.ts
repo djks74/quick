@@ -257,13 +257,12 @@ export async function POST(req: NextRequest) {
         const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
         await updateSession(from, targetStore.id, { tableNumber: tableNum, step: 'MENU_SELECTION' });
 
+        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
         await sendWhatsAppMessage(from, 
           `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
-          `1. View Menu (Web)\n` +
-          `2. Order via WhatsApp\n` +
-          `3. Quick Pay\n\n` +
-          `Reply with number to select.`,
-          targetStore.id
+          `You can view our full digital menu and order directly via the button below, or reply with "Menu" to order via WhatsApp text.`,
+          targetStore.id,
+          { buttonText: "View Menu", buttonUrl: menuUrl }
         );
         return NextResponse.json({ success: true });
       }
@@ -326,8 +325,7 @@ export async function POST(req: NextRequest) {
 
             const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
             let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
-            menuText += `📱 *Recommended*: Order via Web\n${menuUrl}\n\n`;
-            menuText += `👇 *Or Order via Text*:\n`;
+            menuText += `👇 *Order via WhatsApp Text*:\n`;
             
             products.forEach((p, index) => {
               const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
@@ -338,7 +336,7 @@ export async function POST(req: NextRequest) {
             });
             menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
 
-            await sendWhatsAppMessage(from, menuText, targetStore.id);
+            await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
             return NextResponse.json({ success: true });
         } catch (err) {
             console.error('DEBUG: Error in Menu Handler', err);
@@ -394,7 +392,6 @@ export async function POST(req: NextRequest) {
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
           let title = selectedCategoryName ? `${selectedCategoryName}` : `All Menu`;
           let menuText = `🍽️ *${title}* 🍽️\n\n`;
-          menuText += `📱 *Web*: ${menuUrl}\n\n`;
           
           products.forEach((p, idx) => {
              const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
@@ -404,7 +401,7 @@ export async function POST(req: NextRequest) {
           });
           menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
           
-          await sendWhatsAppMessage(from, menuText, targetStore.id);
+          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
           return NextResponse.json({ success: true });
       }
 
@@ -438,7 +435,7 @@ export async function POST(req: NextRequest) {
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${session.tableNumber}`;
-          await sendWhatsAppMessage(from, `Please order here: ${menuUrl}`, targetStore.id);
+          await sendWhatsAppMessage(from, `Click the button below to view the menu and order on the web:`, targetStore.id, { buttonText: "View Menu", buttonUrl: menuUrl });
           await updateSession(from, targetStore.id, { step: 'START' });
         } else if (textBody === '2') {
           const categories = await prisma.category.findMany({ where: { storeId: targetStore.id }, orderBy: { name: 'asc' } });
@@ -453,7 +450,7 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: 'ORDERING' });
           const products = await prisma.product.findMany({ where: { storeId: targetStore.id }, take: 10, orderBy: { name: 'asc' } });
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n📱 *Recommended*: Order via Web\n${menuUrl}\n\n👇 *Or Order via Text*:\n`;
+          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n👇 *Order via WhatsApp Text*:\n`;
           products.forEach((p, index) => {
             const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
               ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
@@ -461,7 +458,7 @@ export async function POST(req: NextRequest) {
             menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
           });
           menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
-          await sendWhatsAppMessage(from, menuText, targetStore.id);
+          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
         } else if (textBody === '3') {
           await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
           await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
@@ -480,7 +477,7 @@ export async function POST(req: NextRequest) {
               data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING' }
             });
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-            await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\nPay here: ${paymentLink}`, targetStore.id);
+            await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
             await updateSession(from, targetStore.id, { step: 'START' });
           } catch (e) {
             await sendWhatsAppMessage(from, `Error creating order. Please try again.`, targetStore.id);
