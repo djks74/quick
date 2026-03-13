@@ -128,6 +128,19 @@ export async function POST(req: NextRequest) {
       }
 
       console.log("[INVENTORY_POST] Updating stock for item:", itemId, "amount:", amount);
+      const existing = await prisma.inventoryItem.findFirst({
+        where: { id: itemId, storeId: store.id },
+        select: { stock: true }
+      });
+
+      if (!existing) {
+        return NextResponse.json({ error: "Ingredient not found" }, { status: 404 });
+      }
+
+      if (existing.stock + amount < 0) {
+        return NextResponse.json({ error: "Stock cannot go below zero" }, { status: 400 });
+      }
+
       const item = await prisma.inventoryItem.update({
         where: { id: itemId, storeId: store.id },
         data: { stock: { increment: amount } }

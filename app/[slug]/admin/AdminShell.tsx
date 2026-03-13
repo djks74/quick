@@ -20,7 +20,9 @@ import {
   History,
   Trash2,
   Bell,
-  Check
+  Check,
+  Menu,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
@@ -53,6 +55,7 @@ export default function AdminShell({
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isFloatingNotificationsOpen, setIsFloatingNotificationsOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [toastItems, setToastItems] = useState<any[]>([]);
   const notificationsReadyRef = useRef(false);
@@ -158,6 +161,10 @@ export default function AdminShell({
     };
   }, [store.id]);
 
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [pathname]);
+
   const markOneRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);
     if (ok) setNotifications(prev => prev.map((n) => n.id === id ? { ...n, readAt: new Date().toISOString() } : n));
@@ -178,25 +185,35 @@ export default function AdminShell({
       {showSubscriptionGate && <SubscriptionGate store={store} />}
       {/* WordPress Top Admin Bar */}
       <header className={cn(
-        "h-[32px] flex items-center justify-between px-4 fixed top-0 w-full z-[100] text-sm transition-all",
+        "h-10 md:h-[32px] flex items-center justify-between px-2 md:px-4 fixed top-0 w-full z-[100] text-sm transition-all",
         isModern ? "bg-white dark:bg-[#1A1D21] border-b border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400" : 
         isMinimal ? "bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-200" : 
         "bg-[#1d2327] dark:bg-[#0F1113] text-[#c3c4c7] dark:text-gray-400 border-b dark:border-gray-800"
       )}>
         <div className="flex items-center h-full">
+          <button
+            type="button"
+            onClick={() => setIsMobileSidebarOpen((v) => !v)}
+            className={cn(
+              "md:hidden p-2 rounded-md mr-1",
+              isModern || isMinimal ? "hover:bg-gray-100 dark:hover:bg-gray-800" : "hover:bg-[#2c3338] dark:hover:bg-gray-800"
+            )}
+          >
+            {isMobileSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
           {/* Site Name Link */}
           <Link href={`/${slug}`} target="_blank" className={cn(
-            "flex items-center space-x-2 px-3 h-full transition-colors group",
+            "flex items-center space-x-2 px-2 md:px-3 h-full transition-colors group max-w-[210px] md:max-w-none",
             isModern ? "hover:bg-gray-50 dark:hover:bg-gray-800 text-primary dark:text-blue-400" : 
             isMinimal ? "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-white" : 
             "hover:bg-[#2c3338] dark:hover:bg-gray-800 hover:text-[#72aee6] dark:hover:text-blue-400"
           )}>
             <Home className="w-4 h-4" />
-            <span className="font-medium">{store.name}</span>
+            <span className="font-medium truncate">{store.name}</span>
           </Link>
 
           {/* + New Dropdown */}
-          <div className="relative h-full">
+          <div className="relative h-full hidden md:block">
             <button 
               onMouseEnter={() => setIsNewMenuOpen(true)}
               onMouseLeave={() => setIsNewMenuOpen(false)}
@@ -226,7 +243,7 @@ export default function AdminShell({
           </div>
         </div>
 
-        <div className="flex items-center h-full space-x-2">
+        <div className="flex items-center h-full space-x-1 md:space-x-2">
           {/* Theme Toggle */}
           <div className="scale-75 origin-right">
             <ThemeToggle />
@@ -237,7 +254,7 @@ export default function AdminShell({
             <Link 
               href="/super-admin" 
               className={cn(
-                "px-3 py-1 rounded-md text-xs font-bold mr-2 transition-colors",
+                "hidden md:inline-flex px-3 py-1 rounded-md text-xs font-bold mr-2 transition-colors",
                 isModern || isMinimal 
                   ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50" 
                   : "bg-red-600 text-white hover:bg-red-700"
@@ -250,14 +267,15 @@ export default function AdminShell({
           {/* User Profile */}
           <div className="relative h-full">
             <button 
+              onClick={() => setIsUserMenuOpen((v) => !v)}
               onMouseEnter={() => setIsUserMenuOpen(true)}
               onMouseLeave={() => setIsUserMenuOpen(false)}
               className={cn(
-                "flex items-center space-x-2 px-3 h-full transition-colors",
+                "flex items-center space-x-2 px-2 md:px-3 h-full transition-colors",
                 isModern || isMinimal ? "hover:bg-gray-50 dark:hover:bg-gray-800" : "hover:bg-[#2c3338] dark:hover:bg-gray-800 hover:text-[#72aee6] dark:hover:text-blue-400"
               )}
             >
-              <span>Howdy, <span className={cn("font-bold", isModern || isMinimal ? "text-primary dark:text-blue-400" : "text-white")}>Admin</span></span>
+              <span className="hidden md:inline">Howdy, <span className={cn("font-bold", isModern || isMinimal ? "text-primary dark:text-blue-400" : "text-white")}>Admin</span></span>
               <div className="w-5 h-5 rounded bg-gray-500 flex items-center justify-center text-[10px] text-white">A</div>
             </button>
             {isUserMenuOpen && (
@@ -286,10 +304,19 @@ export default function AdminShell({
         </div>
       </header>
 
-      <div className="flex flex-1 pt-[32px]">
+      <div className="flex flex-1 pt-10 md:pt-[32px]">
+        {isMobileSidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          />
+        )}
         {/* Sidebar */}
         <aside className={cn(
-          "w-[160px] flex flex-col fixed inset-y-0 left-0 z-50 mt-[32px] text-sm overflow-y-auto custom-scrollbar transition-all",
+          "w-[260px] md:w-[160px] flex flex-col fixed inset-y-0 left-0 z-50 mt-10 md:mt-[32px] text-sm overflow-y-auto custom-scrollbar transition-all transform md:translate-x-0",
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
           isModern ? "bg-white dark:bg-[#1A1D21] border-r border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400" : 
           isMinimal ? "bg-white/50 dark:bg-[#1A1D21]/50 backdrop-blur-md border-r border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-200" : 
           "bg-[#2c3338] dark:bg-[#0F1113] text-white dark:text-gray-300"
@@ -403,6 +430,7 @@ export default function AdminShell({
                             <Link
                               key={child.href}
                               href={child.href}
+                              onClick={() => setIsMobileSidebarOpen(false)}
                               className={cn(
                                 "block pl-9 pr-3 py-1.5 text-xs transition-colors",
                                 pathname === child.href 
@@ -419,6 +447,7 @@ export default function AdminShell({
                   ) : (
                     <Link
                       href={item.href || "#"}
+                      onClick={() => setIsMobileSidebarOpen(false)}
                       className={cn(
                         "flex items-center px-3 py-2 transition-colors duration-100",
                         pathname === item.href 
@@ -445,11 +474,11 @@ export default function AdminShell({
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 ml-[160px] p-6 min-h-screen">
+        <main className="flex-1 ml-0 md:ml-[160px] p-3 md:p-6 min-h-screen">
           <div className="max-w-[1200px] mx-auto">
             <header className="mb-6 flex items-center justify-between">
               <h1 className={cn(
-                "text-2xl font-normal flex items-center",
+                "text-xl md:text-2xl font-normal flex items-center",
                 isModern || isMinimal ? "text-gray-900 dark:text-white" : "text-[#1d2327] dark:text-gray-300"
               )}>
                 {pageTitle}
@@ -457,7 +486,7 @@ export default function AdminShell({
             </header>
 
             <div className={cn(
-              "shadow-sm p-6 min-h-[600px] transition-all",
+              "shadow-sm p-4 md:p-6 min-h-[600px] transition-all",
               isModern ? "bg-white dark:bg-[#1A1D21] rounded-xl border border-gray-100 dark:border-gray-800" : 
               isMinimal ? "bg-white/70 dark:bg-[#1A1D21]/70 backdrop-blur-sm rounded-2xl border border-gray-100 dark:border-gray-800 shadow-none" : 
               "bg-white dark:bg-[#1A1D21] border border-[#ccd0d4] dark:border-gray-800"
@@ -468,11 +497,11 @@ export default function AdminShell({
         </main>
       </div>
 
-      <div className="fixed top-12 right-6 z-[130] space-y-2">
+      <div className="fixed top-12 right-2 md:right-6 z-[130] space-y-2">
         {toastItems.map((t) => (
           <div
             key={t.toastId}
-            className="w-[300px] rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-[#1A1D21] shadow-xl p-3"
+            className="w-[calc(100vw-1rem)] sm:w-[300px] rounded-xl border border-orange-200 dark:border-orange-800 bg-white dark:bg-[#1A1D21] shadow-xl p-3"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -494,7 +523,7 @@ export default function AdminShell({
         ))}
       </div>
 
-      <div className="fixed bottom-6 right-6 z-[120]">
+      <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[120]">
         <button
           type="button"
           onClick={() => setIsFloatingNotificationsOpen((v) => !v)}
@@ -508,7 +537,7 @@ export default function AdminShell({
           )}
         </button>
         {isFloatingNotificationsOpen && (
-          <div className="absolute bottom-14 right-0 w-[340px] max-h-[420px] overflow-y-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1A1D21] shadow-2xl">
+          <div className="absolute bottom-14 right-0 w-[calc(100vw-1rem)] max-w-[340px] max-h-[420px] overflow-y-auto rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1A1D21] shadow-2xl">
             <div className="p-3 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
               <div>
                 <div className="text-sm font-bold text-gray-900 dark:text-white">Notifications</div>

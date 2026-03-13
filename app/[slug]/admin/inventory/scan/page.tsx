@@ -39,7 +39,7 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
     setItem(null);
 
     try {
-      const res = await fetch(`/api/admin/inventory?barcode=${barcode}&slug=${slug}`);
+      const res = await fetch(`/api/admin/inventory?barcode=${encodeURIComponent(barcode)}&slug=${slug}`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || "Ingredient not found");
@@ -85,13 +85,25 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-6">
+    <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 py-4 md:py-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-black text-gray-900 dark:text-white flex items-center justify-center gap-3">
           <Scan className="w-8 h-8 text-primary" />
           Stock Scanner
         </h2>
         <p className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Scan ingredients to manage raw material stock</p>
+      </div>
+
+      <div className="bg-white dark:bg-[#1A1D21] rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
+          1. Scan ingredient barcode or type SKU, then press Enter.
+        </div>
+        <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
+          2. Tap Reduce 1 to deduct stock for used ingredient.
+        </div>
+        <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
+          3. Tap Add 1 for restock corrections.
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -111,7 +123,7 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
                   type="text"
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-primary/20 rounded-2xl px-12 py-5 text-2xl font-black focus:ring-4 focus:ring-primary/5 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600 dark:text-white text-center"
+                  className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-primary/20 rounded-2xl px-12 py-5 text-lg md:text-2xl font-black focus:ring-4 focus:ring-primary/5 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600 dark:text-white text-center"
                   placeholder="000000000"
                   autoFocus
                 />
