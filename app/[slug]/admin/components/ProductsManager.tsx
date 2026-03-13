@@ -234,7 +234,7 @@ export default function ProductsManager({
                             <td className="px-6 py-4 text-right font-black text-gray-900 dark:text-white text-sm">
                             {formatCurrency(product.price, "IDR")}
                             </td>
-                        <td className="px-6 py-4 text-right">
+                            <td className="px-6 py-4 text-right">
                         <div className="flex justify-end space-x-2">
                             <button 
                             onClick={() => handleDuplicate(product)}
@@ -258,7 +258,8 @@ export default function ProductsManager({
                         </div>
                         </td>
                     </tr>
-                    ))}
+                    );
+                    })}
                 </tbody>
                 </table>
             </div>
