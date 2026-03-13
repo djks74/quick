@@ -4,15 +4,15 @@ import { useState, useRef, useEffect, use } from "react";
 import { 
   Search, 
   Scan, 
-  Plus, 
-  Minus, 
   RefreshCw, 
   AlertCircle,
   CheckCircle2,
   Package,
   Layers,
   ArrowDownLeft,
-  ArrowUpRight
+  ArrowUpRight,
+  Camera,
+  CameraOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,23 +23,35 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cameraSupported, setCameraSupported] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<any>(null);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
+    setCameraSupported(typeof window !== "undefined" && "BarcodeDetector" in window && !!navigator.mediaDevices?.getUserMedia);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
   }, []);
 
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcode) return;
-
+  const lookupIngredient = async (value: string) => {
+    if (!value) return;
     setLoading(true);
     setError(null);
     setSuccess(null);
     setItem(null);
 
     try {
-      const res = await fetch(`/api/admin/inventory?barcode=${encodeURIComponent(barcode)}&slug=${slug}`);
+      const res = await fetch(`/api/admin/inventory?barcode=${encodeURIComponent(value)}&slug=${slug}`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || "Ingredient not found");
@@ -51,6 +63,75 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
       setLoading(false);
       setBarcode("");
       if (inputRef.current) inputRef.current.focus();
+    }
+  };
+
+  const stopCamera = () => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const handleScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await lookupIngredient(barcode);
+  };
+
+  const runDetectLoop = () => {
+    const loop = async () => {
+      if (!videoRef.current || !detectorRef.current || !isCameraOpen) return;
+      try {
+        const barcodes = await detectorRef.current.detect(videoRef.current);
+        if (barcodes?.length) {
+          const rawValue = barcodes[0]?.rawValue;
+          if (rawValue) {
+            stopCamera();
+            setBarcode(rawValue);
+            await lookupIngredient(rawValue);
+            return;
+          }
+        }
+      } catch {
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  const startCamera = async () => {
+    try {
+      setCameraError(null);
+      setError(null);
+      if (!cameraSupported) {
+        setCameraError("Camera scan is not supported on this browser.");
+        return;
+      }
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+      detectorRef.current = new BarcodeDetectorCtor({
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"]
+      });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }
+      });
+      streamRef.current = stream;
+      setIsCameraOpen(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      runDetectLoop();
+    } catch {
+      setCameraError("Unable to access camera. Please allow camera permission.");
+      stopCamera();
     }
   };
 
@@ -105,6 +186,45 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
           3. Tap Add 1 for restock corrections.
         </div>
       </div>
+
+      <div className="bg-white dark:bg-[#1A1D21] rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+        <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
+          Use physical scanner or phone camera to scan barcode directly.
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={startCamera}
+            disabled={!cameraSupported || isCameraOpen || loading}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 text-primary dark:text-blue-400 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+          >
+            <Camera className="w-4 h-4" />
+            Start Camera
+          </button>
+          <button
+            type="button"
+            onClick={stopCamera}
+            disabled={!isCameraOpen}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+          >
+            <CameraOff className="w-4 h-4" />
+            Stop
+          </button>
+        </div>
+      </div>
+
+      {isCameraOpen && (
+        <div className="bg-black rounded-2xl border border-gray-800 overflow-hidden">
+          <video ref={videoRef} className="w-full max-h-[320px] object-cover" muted playsInline />
+        </div>
+      )}
+
+      {cameraError && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl border border-red-100 dark:border-red-900/30">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-bold">{cameraError}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Scanner Section */}
