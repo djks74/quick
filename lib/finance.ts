@@ -84,7 +84,7 @@ export async function getStoreLedger(storeId: number) {
     return await prisma.order.findMany({
       where: { 
         storeId,
-        status: 'PAID'
+        status: { in: ['PAID', 'COMPLETED', 'paid', 'completed'] }
       },
       orderBy: { updatedAt: 'desc' }
     });

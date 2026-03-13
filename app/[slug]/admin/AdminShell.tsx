@@ -94,7 +94,7 @@ export default function AdminShell({
       name: "Finance",
       icon: Wallet,
       children: [
-        { name: "Ledger Book", href: `${baseUrl}/finance/ledger` },
+        { name: "Report", href: `${baseUrl}/finance/ledger` },
         { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
       ]
     },
@@ -120,6 +120,8 @@ export default function AdminShell({
 
   const isModern = layoutStyle === "modern";
   const isMinimal = layoutStyle === "minimal";
+  const pageName = pathname.split("/").pop()?.replace("-", " ") || "Dashboard";
+  const pageTitle = pageName.toLowerCase() === "ledger" ? "Report" : pageName;
 
   const showSubscriptionGate = !isSuperAdmin && store.subscriptionPlan !== 'ENTERPRISE';
 
@@ -450,7 +452,7 @@ export default function AdminShell({
                 "text-2xl font-normal flex items-center",
                 isModern || isMinimal ? "text-gray-900 dark:text-white" : "text-[#1d2327] dark:text-gray-300"
               )}>
-                {pathname.split("/").pop()?.replace("-", " ") || "Dashboard"}
+                {pageTitle}
               </h1>
             </header>
 
