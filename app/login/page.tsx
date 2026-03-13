@@ -42,29 +42,27 @@ function LoginForm() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
-        // Fetch session using getSession (more reliable client-side)
-        const session = await getSession();
-        
-        if (session?.user) {
-           if (posMode) {
-             const target = (callbackUrl && callbackUrl.startsWith("/"))
-               ? callbackUrl
-               : `/${storeSlug}/pos`;
-             router.push(target);
-           } else if (callbackUrl && callbackUrl.startsWith('/')) {
-             router.push(callbackUrl);
-           } else if (session.user.role === 'SUPER_ADMIN') {
-             router.push('/super-admin');
-           } else if (session.user.storeSlug) {
-             router.push(`/${session.user.storeSlug}/admin`);
-           } else {
-             // Fallback if no store
-             router.push('/');
-           }
-           router.refresh(); // Ensure server components update
+        if (posMode) {
+          const target = (callbackUrl && callbackUrl.startsWith("/"))
+            ? callbackUrl
+            : `/${storeSlug}/pos`;
+          router.push(target);
+          router.refresh();
         } else {
-           // Retry or reload
-           window.location.href = "/";
+          if (callbackUrl && callbackUrl.startsWith('/')) {
+            router.push(callbackUrl);
+            router.refresh();
+          } else {
+            const session = await getSession();
+            if (session?.user?.role === 'SUPER_ADMIN') {
+              router.push('/super-admin');
+            } else if (session?.user?.storeSlug) {
+              router.push(`/${session.user.storeSlug}/admin`);
+            } else {
+              router.push('/');
+            }
+            router.refresh();
+          }
         }
       }
     } catch (err) {
@@ -144,6 +142,12 @@ function LoginForm() {
           {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Log In"}
         </button>
       </form>
+      {loading && (
+        <div className="mt-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 flex items-center justify-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Signing in...
+        </div>
+      )}
 
       <div className="mt-8 text-center text-xs font-bold text-gray-500 dark:text-gray-400">
         Don't have a store yet?{" "}

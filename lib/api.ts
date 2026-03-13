@@ -916,39 +916,34 @@ export async function getInventoryItems(storeId: number) {
 
 export async function getDashboardStats(storeId: number) {
   try {
-    const totalRevenue = await prisma.order.aggregate({
-      _sum: {
-        totalAmount: true
-      },
-      where: {
-        storeId,
-        status: { in: ['completed', 'paid', 'COMPLETED', 'PAID'] }
-      }
-    });
-
-    const totalOrders = await prisma.order.count({
-      where: { storeId }
-    });
-
-    // Count unique customers by phone
-    const customers = await prisma.order.groupBy({
-      by: ['customerPhone'],
-      where: { storeId }
-    });
-
-    // Sum of all items sold - this needs a join or two-step query because OrderItem doesn't have storeId directly 
-    // Wait, I didn't add storeId to OrderItem in schema, but Order has it.
-    // Let's filter OrderItems where Order.storeId = storeId
-    const productsSold = await prisma.orderItem.aggregate({
-      _sum: {
-        quantity: true
-      },
-      where: {
-        order: {
-          storeId: storeId
+    const [totalRevenue, totalOrders, customers, productsSold] = await Promise.all([
+      prisma.order.aggregate({
+        _sum: {
+          totalAmount: true
+        },
+        where: {
+          storeId,
+          status: { in: ['completed', 'paid', 'COMPLETED', 'PAID'] }
         }
-      }
-    });
+      }),
+      prisma.order.count({
+        where: { storeId }
+      }),
+      prisma.order.groupBy({
+        by: ['customerPhone'],
+        where: { storeId }
+      }),
+      prisma.orderItem.aggregate({
+        _sum: {
+          quantity: true
+        },
+        where: {
+          order: {
+            storeId: storeId
+          }
+        }
+      })
+    ]);
 
     return {
       totalRevenue: totalRevenue._sum.totalAmount || 0,
@@ -972,7 +967,23 @@ export async function getOrders(storeId: number) {
     const orders = await prisma.order.findMany({
       where: { storeId },
       orderBy: { createdAt: 'desc' },
-      include: { items: true }
+      select: {
+        id: true,
+        customerPhone: true,
+        createdAt: true,
+        status: true,
+        totalAmount: true,
+        paymentMethod: true,
+        uniqueCode: true,
+        taxAmount: true,
+        serviceCharge: true,
+        paymentFee: true,
+        transactionFee: true,
+        tableNumber: true,
+        _count: {
+          select: { items: true }
+        }
+      }
     });
 
     return orders.map(o => ({
@@ -984,7 +995,7 @@ export async function getOrders(storeId: number) {
       status: o.status.toLowerCase(),
       total: o.totalAmount,
       currency: "IDR",
-      items: o.items.length,
+      items: o._count.items,
       paymentMethod: o.paymentMethod || 'manual',
       uniqueCode: o.uniqueCode,
       taxAmount: o.taxAmount,

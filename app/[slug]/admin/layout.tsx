@@ -6,14 +6,15 @@ import AdminShell from "./AdminShell";
 
 export default async function AdminLayout({ children, params }: { children: React.ReactNode, params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const session = await getServerSession(authOptions);
+  const [session, store] = await Promise.all([
+    getServerSession(authOptions),
+    getStoreBySlug(slug)
+  ]);
 
   if (!session) {
     redirect('/login');
   }
 
-  // Fetch store
-  const store = await getStoreBySlug(slug);
   if (!store) notFound();
 
   // Access Control
