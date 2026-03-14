@@ -82,6 +82,29 @@ interface PosClientProps {
   user: any;
 }
 
+interface CompletedOrderState {
+  id: number;
+  storeName: string;
+  createdAt: string;
+  paymentMethodName: string;
+  paymentMode: PosPaymentMethod["mode"];
+  subtotal: number;
+  discountAmount: number;
+  tax: number;
+  serviceCharge: number;
+  tip: number;
+  total: number;
+  cashReceived: number;
+  change: number;
+  items: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    price: number;
+    note?: string;
+  }>;
+}
+
 function formatIsoHourMinute(iso: string) {
   if (!iso) return "--:--";
   const time = iso.split("T")[1];
@@ -101,7 +124,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [discountValue, setDiscountValue] = useState<string>("");
   const [tipAmount, setTipAmount] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<any>(null);
+  const [orderSuccess, setOrderSuccess] = useState<CompletedOrderState | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -270,7 +293,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
       const result = await createPosOrder(store.id, {
         items: cart,
         total: total,
-        paymentMethod: paymentMethod,
+        paymentMethod: activePaymentMethod?.name || paymentMethod,
         cashReceived: cashReceived,
         customerPhone: "POS-CUSTOMER",
         taxAmount: tax,
@@ -284,11 +307,29 @@ export default function PosClient({ store, products, categories, user }: PosClie
         throw new Error(result.error);
       }
       
-      setOrderSuccess({
-        id: result.orderId,
-        total: total,
-        change: activePaymentMode === 'cash' ? (parseFloat(cashReceived || '0') - total) : 0
-      });
+      const completedOrder: CompletedOrderState = {
+        id: Number(result.orderId),
+        storeName: store.name,
+        createdAt: new Date().toISOString(),
+        paymentMethodName: activePaymentMethod?.name || "Payment",
+        paymentMode: activePaymentMode,
+        subtotal,
+        discountAmount,
+        tax,
+        serviceCharge,
+        tip,
+        total,
+        cashReceived: parseFloat(cashReceived || "0") || 0,
+        change: activePaymentMode === 'cash' ? (parseFloat(cashReceived || '0') - total) : 0,
+        items: cart.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          note: item.note
+        }))
+      };
+      setOrderSuccess(completedOrder);
       setCart([]);
       setIsCheckoutOpen(false);
     } catch (error) {
@@ -305,6 +346,78 @@ export default function PosClient({ store, products, categories, user }: PosClie
       currency: 'IDR',
       minimumFractionDigits: 0
     }).format(price);
+  };
+
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const handlePrintReceipt = () => {
+    if (!orderSuccess) return;
+    const receiptWindow = window.open("", "_blank", "width=420,height=800");
+    if (!receiptWindow) {
+      window.print();
+      return;
+    }
+
+    const itemRows = orderSuccess.items
+      .map(
+        (item) => `
+          <tr>
+            <td style="padding:4px 0;vertical-align:top;">${escapeHtml(item.name)} x${item.quantity}${item.note ? `<div style="font-size:11px;color:#666;">${escapeHtml(item.note)}</div>` : ""}</td>
+            <td style="padding:4px 0;text-align:right;vertical-align:top;">${formatPrice(item.price * item.quantity)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const summaryRows = `
+      <tr><td style="padding:3px 0;">Subtotal</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.subtotal)}</td></tr>
+      ${orderSuccess.discountAmount > 0 ? `<tr><td style="padding:3px 0;">Discount</td><td style="padding:3px 0;text-align:right;">-${formatPrice(orderSuccess.discountAmount)}</td></tr>` : ""}
+      ${orderSuccess.tax > 0 ? `<tr><td style="padding:3px 0;">Tax</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.tax)}</td></tr>` : ""}
+      ${orderSuccess.serviceCharge > 0 ? `<tr><td style="padding:3px 0;">Service</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.serviceCharge)}</td></tr>` : ""}
+      ${orderSuccess.tip > 0 ? `<tr><td style="padding:3px 0;">Tip</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.tip)}</td></tr>` : ""}
+      <tr><td style="padding:8px 0 4px 0;font-weight:700;border-top:1px dashed #999;">Total</td><td style="padding:8px 0 4px 0;text-align:right;font-weight:700;border-top:1px dashed #999;">${formatPrice(orderSuccess.total)}</td></tr>
+      ${orderSuccess.paymentMode === "cash" ? `<tr><td style="padding:3px 0;">Cash</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.cashReceived)}</td></tr><tr><td style="padding:3px 0;">Change</td><td style="padding:3px 0;text-align:right;">${formatPrice(orderSuccess.change)}</td></tr>` : ""}
+    `;
+
+    receiptWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Receipt #${orderSuccess.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111; margin: 0; padding: 16px; }
+            .receipt { max-width: 360px; margin: 0 auto; }
+            .title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+            .meta { font-size: 12px; color: #555; margin-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            .footer { margin-top: 14px; text-align: center; font-size: 12px; color: #666; }
+            @media print { body { padding: 0; } .receipt { max-width: none; width: 100%; } }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="title">${escapeHtml(orderSuccess.storeName)}</div>
+            <div class="meta">Order #${orderSuccess.id}<br/>${new Date(orderSuccess.createdAt).toLocaleString()}<br/>Payment: ${escapeHtml(orderSuccess.paymentMethodName)}</div>
+            <table>${itemRows}</table>
+            <table style="margin-top:8px;">${summaryRows}</table>
+            <div class="footer">Thank you</div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    receiptWindow.document.close();
   };
 
   const CartContent = ({ isMobile, onClose }: { isMobile?: boolean, onClose?: () => void }) => (
@@ -473,7 +586,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
               <span className={cn("text-sm", isDarkMode ? "text-gray-400" : "text-gray-600")}>Total Amount</span>
               <span className="text-xl font-black text-[#2271b1]">{formatPrice(orderSuccess.total)}</span>
             </div>
-            {activePaymentMode === 'cash' && (
+            {orderSuccess.paymentMode === 'cash' && (
               <div className="flex justify-between items-center text-green-600 dark:text-green-400">
                 <span className="text-sm">Change</span>
                 <span className="text-xl font-black">{formatPrice(orderSuccess.change)}</span>
@@ -483,7 +596,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
           <div className="grid grid-cols-2 gap-4 pt-2">
             <button 
-              onClick={() => window.print()} 
+              onClick={handlePrintReceipt}
               className={cn(
                 "px-6 py-4 border rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95",
                 isDarkMode 
@@ -799,9 +912,9 @@ export default function PosClient({ store, products, categories, user }: PosClie
       {/* Checkout Modal */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={cn("rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]", isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900")}>
-            <div className={cn("p-6 border-b flex items-center justify-between", isDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200")}>
-              <h2 className="text-xl font-bold">Payment</h2>
+          <div className={cn("rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[88vh]", isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900")}>
+            <div className={cn("p-4 border-b flex items-center justify-between", isDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200")}>
+              <h2 className="text-lg font-bold">Payment</h2>
               <button onClick={() => setIsCheckoutOpen(false)} className={cn("p-2 rounded-full", isDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-200")}>
                 <X className={cn("w-6 h-6", isDarkMode ? "text-gray-400" : "text-gray-500")} />
               </button>
@@ -809,47 +922,48 @@ export default function PosClient({ store, products, categories, user }: PosClie
             
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
               {/* Payment Methods */}
-              <div className={cn("w-full md:w-1/3 border-r p-4 space-y-2 overflow-y-auto", isDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200")}>
+              <div className={cn("w-full md:w-1/3 border-r p-3 space-y-1.5 overflow-y-auto", isDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200")}>
                 {paymentMethods.map((method) => (
                   <button
                     key={method.id}
                     onClick={() => setPaymentMethod(method.id)}
                     className={cn(
-                      "w-full p-4 rounded-xl flex items-center space-x-3 transition-all border-2",
+                      "w-full p-2.5 rounded-xl flex items-center space-x-2 transition-all border-2",
                       paymentMethod === method.id
                         ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1] shadow-md"
                         : isDarkMode ? "border-transparent hover:bg-gray-800 text-gray-400" : "border-transparent hover:bg-gray-100 text-gray-600"
                     )}
                   >
-                    {method.mode === "cash" && <Banknote className="w-6 h-6" />}
-                    {method.mode === "qris" && <Smartphone className="w-6 h-6" />}
-                    {(method.mode === "card" || method.mode === "transfer" || method.mode === "other") && <CreditCard className="w-6 h-6" />}
-                    <span className="font-bold">{method.name}</span>
+                    {method.mode === "cash" && <Banknote className="w-4 h-4" />}
+                    {method.mode === "qris" && <Smartphone className="w-4 h-4" />}
+                    {(method.mode === "card" || method.mode === "transfer" || method.mode === "other") && <CreditCard className="w-4 h-4" />}
+                    <span className="font-bold text-sm">{method.name}</span>
                   </button>
                 ))}
               </div>
 
               {/* Payment Details */}
-              <div className="flex-1 p-6 flex flex-col overflow-y-auto">
+              <div className="flex-1 p-4 flex flex-col overflow-y-auto">
                 <div className="flex-1">
-                    <div className="text-center mb-8">
+                    <div className="text-center mb-4">
                         <p className={cn("mb-1", isDarkMode ? "text-gray-400" : "text-gray-500")}>Total Amount</p>
-                        <p className="text-4xl font-black text-[#2271b1]">{formatPrice(total)}</p>
-                        <div className={cn("text-xs mt-2 space-y-1", isDarkMode ? "text-gray-500" : "text-gray-400")}>
+                        <p className="text-3xl font-black text-[#2271b1]">{formatPrice(total)}</p>
+                        <div className={cn("text-[11px] mt-1 space-y-0.5", isDarkMode ? "text-gray-500" : "text-gray-400")}>
                             {tax > 0 && <div>Includes Tax: {formatPrice(tax)}</div>}
                             {serviceCharge > 0 && <div>Includes Service: {formatPrice(serviceCharge)}</div>}
                             {/* {paymentFee > 0 && <div>Includes Platform Fee: {formatPrice(paymentFee)}</div>} */}
                         </div>
                     </div>
 
-                    <div className="mb-6">
-                        <label className={cn("block text-sm font-bold mb-2", isDarkMode ? "text-gray-300" : "text-gray-700")}>Discount</label>
-                        <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="grid grid-cols-2 md:grid-cols-1 gap-2 mb-3">
+                      <div>
+                        <label className={cn("block text-xs font-bold mb-1", isDarkMode ? "text-gray-300" : "text-gray-700")}>Discount</label>
+                        <div className="grid grid-cols-3 gap-1.5 mb-1.5">
                             <button
                                 type="button"
                                 onClick={() => setDiscountType("nominal")}
                                 className={cn(
-                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    "py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border",
                                     discountType === "nominal"
                                         ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1]"
                                         : isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
@@ -861,7 +975,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                                 type="button"
                                 onClick={() => setDiscountType("percent")}
                                 className={cn(
-                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    "py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border",
                                     discountType === "percent"
                                         ? "border-[#2271b1] bg-[#2271b1]/10 text-[#2271b1]"
                                         : isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
@@ -873,7 +987,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                                 type="button"
                                 onClick={() => setDiscountValue("")}
                                 className={cn(
-                                    "py-2 rounded-lg text-xs font-black uppercase tracking-widest border",
+                                    "py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border",
                                     isDarkMode ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
                                 )}
                             >
@@ -889,7 +1003,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             <input
                                 type="number"
                                 className={cn(
-                                    "w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:border-[#2271b1] outline-none",
+                                    "w-full pl-10 pr-3 py-2 text-sm border-2 rounded-xl focus:border-[#2271b1] outline-none",
                                     isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-200"
                                 )}
                                 placeholder="0"
@@ -898,18 +1012,17 @@ export default function PosClient({ store, products, categories, user }: PosClie
                             />
                         </div>
                         {discountAmount > 0 && (
-                          <p className="text-xs font-bold text-red-500 mt-1">Discount applied: -{formatPrice(discountAmount)}</p>
+                          <p className="text-[11px] font-bold text-red-500 mt-1">-{formatPrice(discountAmount)}</p>
                         )}
-                    </div>
-
-                    <div className="mb-6">
-                        <label className={cn("block text-sm font-bold mb-2", isDarkMode ? "text-gray-300" : "text-gray-700")}>Tip (Optional)</label>
+                      </div>
+                      <div>
+                                <label className={cn("block text-xs font-bold mb-1", isDarkMode ? "text-gray-300" : "text-gray-700")}>Tip</label>
                         <div className="relative">
                             <span className="absolute left-4 top-3.5 text-gray-400 font-bold">Rp</span>
                             <input 
                                 type="number" 
                                 className={cn(
-                                    "w-full pl-12 pr-4 py-3 border-2 rounded-xl focus:border-[#2271b1] outline-none",
+                                    "w-full pl-10 pr-3 py-2 text-sm border-2 rounded-xl focus:border-[#2271b1] outline-none",
                                     isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-200"
                                 )}
                                 placeholder="0"
@@ -917,18 +1030,19 @@ export default function PosClient({ store, products, categories, user }: PosClie
                                 onChange={(e) => setTipAmount(e.target.value)}
                             />
                         </div>
+                      </div>
                     </div>
 
                     {activePaymentMode === "cash" && (
-                        <div className="space-y-6 max-w-xs mx-auto">
+                        <div className="space-y-3 max-w-[220px] mx-auto">
                             <div>
-                                <label className={cn("block text-sm font-bold mb-2", isDarkMode ? "text-gray-300" : "text-gray-700")}>Cash Received</label>
+                                <label className={cn("block text-xs font-bold mb-1", isDarkMode ? "text-gray-300" : "text-gray-700")}>Cash Received</label>
                                 <div className="relative">
                                     <span className="absolute left-4 top-3.5 text-gray-400 font-bold">Rp</span>
                                     <input 
                                         type="number" 
                                         className={cn(
-                                            "w-full pl-12 pr-4 py-3 text-lg font-bold border-2 rounded-xl focus:border-[#2271b1] outline-none transition-colors",
+                                            "w-full pl-10 pr-3 py-2 text-base font-bold border-2 rounded-xl focus:border-[#2271b1] outline-none transition-colors",
                                             isDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-200"
                                         )}
                                         placeholder="0"
@@ -939,22 +1053,34 @@ export default function PosClient({ store, products, categories, user }: PosClie
                                 </div>
                             </div>
                             
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 gap-1">
                                 {[10000, 20000, 50000, 100000].map((amount) => (
                                     <button 
                                         key={amount}
-                                        onClick={() => setCashReceived(amount.toString())}
+                                        onClick={() => {
+                                            const current = parseFloat(cashReceived || "0") || 0;
+                                            setCashReceived((current + amount).toString());
+                                        }}
                                         className={cn(
-                                            "py-2 px-1 rounded-lg text-xs font-bold",
+                                            "py-1.5 px-1 rounded-lg text-[11px] font-bold min-w-0",
                                             isDarkMode ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"
                                         )}
                                     >
                                         {amount / 1000}k
                                     </button>
                                 ))}
+                                <button
+                                    onClick={() => setCashReceived("")}
+                                    className={cn(
+                                        "py-1.5 px-1 rounded-lg text-[11px] font-bold min-w-0",
+                                        isDarkMode ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                                    )}
+                                >
+                                    Reset Cash
+                                </button>
                                 <button 
                                     onClick={() => setCashReceived(total.toString())}
-                                    className="py-2 px-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold col-span-2"
+                                    className="py-1.5 px-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold col-span-2"
                                 >
                                     Exact Amount
                                 </button>
@@ -1012,7 +1138,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
                     )}
                 </div>
 
-                <div className="mt-8">
+                <div className="mt-4 sticky bottom-0 bg-inherit pt-2">
                     <button 
                         onClick={handleCheckout}
                         disabled={isProcessing || (activePaymentMode === 'cash' && parseFloat(cashReceived || '0') < total)}
