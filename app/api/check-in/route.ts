@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from '@/lib/whatsapp';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 
 export async function POST(req: Request) {
@@ -64,15 +64,36 @@ export async function POST(req: Request) {
     }
 
     let sent = false;
+    let templateSent = false;
     try {
       sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
+      if (!sent && type === 'whatsapp') {
+        const templateName = process.env.WHATSAPP_WELCOME_TEMPLATE || "hello_world";
+        const templateLang = process.env.WHATSAPP_WELCOME_TEMPLATE_LANG || "en_US";
+        templateSent = await sendWhatsAppTemplateMessage(phone, storeId, templateName, templateLang);
+      }
     } catch (sendError) {
       console.error("Failed to send WhatsApp message:", sendError);
     }
-
-    return NextResponse.json({ 
-        success: true, 
-        messageSent: sent 
+    if (type === 'whatsapp') {
+      if (!sent && !templateSent) {
+        return NextResponse.json({
+          success: false,
+          messageSent: false,
+          reason: "WHATSAPP_SEND_FAILED",
+          fallbackPhone: store.whatsapp || null
+        }, { status: 202 });
+      }
+      return NextResponse.json({
+        success: true,
+        messageSent: true,
+        templateUsed: !sent && templateSent,
+        fallbackPhone: store.whatsapp || null
+      });
+    }
+    return NextResponse.json({
+      success: true,
+      messageSent: false
     });
   } catch (error) {
     console.error('Check-in error:', error);

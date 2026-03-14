@@ -72,6 +72,44 @@ async function dispatchWhatsAppMessage(formattedTo: string, message: string, tok
   return { ok: true as const, messageId };
 }
 
+async function dispatchWhatsAppTemplateMessage(
+  formattedTo: string,
+  token: string,
+  phoneNumberId: string,
+  templateName: string,
+  languageCode: string
+) {
+  const body: any = {
+    messaging_product: "whatsapp",
+    to: formattedTo,
+    type: "template",
+    template: {
+      name: templateName,
+      language: {
+        code: languageCode
+      }
+    }
+  };
+
+  const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    return { ok: false as const, error: errText };
+  }
+
+  const payload = await res.json().catch(() => ({}));
+  const messageId = payload?.messages?.[0]?.id || null;
+  return { ok: true as const, messageId };
+}
+
 export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string }) {
   // Sanitize Phone Number (Indonesia Default)
   let formattedTo = to.replace(/\D/g, ''); 
@@ -164,6 +202,69 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     return true;
   } catch (error) {
     console.error('[WHATSAPP_SEND_ERROR]', error);
+    if (usageLogId) {
+      await finalizeWaMessageLog(usageLogId, null, "failed");
+    }
+    return false;
+  }
+}
+
+export async function sendWhatsAppTemplateMessage(
+  to: string,
+  storeId: number,
+  templateName: string,
+  languageCode: string = "id"
+) {
+  let formattedTo = to.replace(/\D/g, '');
+  if (formattedTo.startsWith('0')) {
+    formattedTo = '62' + formattedTo.substring(1);
+  }
+
+  const resolved = await resolveWhatsAppConfig(storeId);
+  const token = resolved.token;
+  const phoneNumberId = resolved.phoneNumberId;
+
+  if (!token || !phoneNumberId) {
+    return false;
+  }
+
+  const isBillable = storeId > 0 && !resolved.useEnterpriseConfig;
+  const externalRef = `WA-TPL-${storeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let usageLogId: number | null = null;
+
+  if (isBillable) {
+    const reserve = await reserveWaCreditForMessage(
+      storeId,
+      `Template message to ${formattedTo}`,
+      externalRef
+    );
+    if (!reserve.ok) {
+      return false;
+    }
+    usageLogId = reserve.logId;
+  }
+
+  try {
+    const result = await dispatchWhatsAppTemplateMessage(
+      formattedTo,
+      token,
+      phoneNumberId,
+      templateName,
+      languageCode
+    );
+    if (!result.ok) {
+      console.error("[WHATSAPP_TEMPLATE_ERROR]", result.error);
+      if (usageLogId) {
+        await finalizeWaMessageLog(usageLogId, null, "failed");
+      }
+      return false;
+    }
+    if (usageLogId) {
+      await finalizeWaMessageLog(usageLogId, result.messageId, "sent");
+    }
+    return true;
+  } catch (error) {
+    console.error("[WHATSAPP_TEMPLATE_SEND_ERROR]", error);
     if (usageLogId) {
       await finalizeWaMessageLog(usageLogId, null, "failed");
     }

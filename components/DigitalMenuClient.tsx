@@ -110,6 +110,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [checkInStep, setCheckInStep] = useState<'input' | 'choice' | 'success'>('input');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkInFallbackUrl, setCheckInFallbackUrl] = useState("");
   
   useEffect(() => {
     setMounted(true);
@@ -149,18 +150,17 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           });
           
           const data = await res.json();
+          const fallbackMessage = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
+          const fallbackPhone = data.fallbackPhone || store.whatsapp || siteConfig.whatsappNumber;
+          const whatsappUrl = `https://wa.me/${fallbackPhone}?text=${encodeURIComponent(fallbackMessage)}`;
+          setCheckInFallbackUrl(whatsappUrl);
 
           if (choice === 'whatsapp') {
               if (data.messageSent) {
                   // Server successfully sent the message to phone
                   setCheckInStep('success');
-                  setTimeout(() => {
-                      setShowCheckIn(false);
-                  }, 2500);
               } else {
                   // Server failed to send (likely 24h window), fallback to client-side redirect
-                  const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
-                  const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
                   window.open(whatsappUrl, '_blank');
                   setShowCheckIn(false);
               }
@@ -725,8 +725,23 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    </div>
                    <div className="space-y-2">
                     <h2 className="text-2xl font-black text-gray-900 dark:text-white">Success!</h2>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Please check your WhatsApp for confirmation.</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Request sent. If no WhatsApp message arrives, open chat manually below.</p>
                    </div>
+                   <button
+                    onClick={() => {
+                      if (checkInFallbackUrl) window.open(checkInFallbackUrl, '_blank');
+                      setShowCheckIn(false);
+                    }}
+                    className="w-full py-4 bg-[#25D366] text-white rounded-[20px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                   >
+                    <MessageCircle className="w-4 h-4" /> Open WhatsApp Chat
+                   </button>
+                   <button
+                    onClick={() => setShowCheckIn(false)}
+                    className="w-full py-3 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-[20px] font-black text-xs uppercase tracking-widest border border-gray-100 dark:border-gray-700"
+                   >
+                    Continue on Web
+                   </button>
                 </div>
               )}
            </div>
