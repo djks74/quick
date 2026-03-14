@@ -21,9 +21,9 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
     const transcribed = await transcribeAudio(audioId);
     if (transcribed) {
       commandText = transcribed;
-      await sendWhatsAppMessage(from, `🎤 Transcribed: "${commandText}"`, user.stores[0]?.id || 0);
+      await sendWhatsAppMessage(from, `🎤 Hasil transkripsi: "${commandText}"`, user.stores[0]?.id || 0);
     } else {
-      await sendWhatsAppMessage(from, `⚠️ Voice transcription is not configured yet. Please type your command.`, user.stores[0]?.id || 0);
+      await sendWhatsAppMessage(from, `⚠️ Fitur transkripsi suara belum aktif. Silakan ketik perintah.`, user.stores[0]?.id || 0);
       return;
     }
   }
@@ -32,7 +32,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   // For MVP, if user has 1 store, use it. If multiple, just use first one or ask (simpler: use first).
   const store = user.stores[0];
   if (!store) {
-    await sendWhatsAppMessage(from, "You don't have any stores connected.", 0);
+    await sendWhatsAppMessage(from, "Kamu belum punya toko yang terhubung.", 0);
     return;
   }
 
@@ -41,25 +41,26 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   // 1. Help Command
   if (lowerText === 'help' || lowerText === 'menu') {
     await sendWhatsAppMessage(from, 
-      `👨‍🍳 *Merchant Bot* 👨‍🍳\n\n` +
-      `Commands:\n` +
-      `1. *Update Price*: "Update price [Name] [Amount]"\n` +
-      `   Example: "Update price Nasi Goreng 25000"\n` +
-      `2. *Add Product*: "Add product [Name] [Amount]"\n` +
-      `   Example: "Add product Es Teh 5000"\n` +
-      `3. *List Products*: "List products"`,
+      `👨‍🍳 *Bot Merchant* 👨‍🍳\n\n` +
+      `Perintah:\n` +
+      `1. *Ubah Harga*: "Ubah harga [Nama] [Nominal]"\n` +
+      `   Contoh: "Ubah harga Nasi Goreng 25000"\n` +
+      `2. *Tambah Produk*: "Tambah produk [Nama] [Nominal]"\n` +
+      `   Contoh: "Tambah produk Es Teh 5000"\n` +
+      `3. *Daftar Produk*: "Daftar produk"\n` +
+      `4. *Ganti Bahasa*: ketik "EN" atau "ID"`,
       store.id
     );
     return;
   }
 
   // 2. List Products
-  if (lowerText.includes('list product')) {
+  if (lowerText.includes('list product') || lowerText.includes('daftar produk')) {
     const products = await prisma.product.findMany({
       where: { storeId: store.id },
       take: 10
     });
-    let msg = `📦 *Products (${store.name})*\n`;
+    let msg = `📦 *Produk (${store.name})*\n`;
     products.forEach(p => msg += `- ${p.name}: ${p.price}\n`);
     await sendWhatsAppMessage(from, msg, store.id);
     return;
@@ -99,7 +100,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
                where: { id: product.id },
                data: { variations: variations }
             });
-            await sendWhatsAppMessage(from, `✅ Updated *${product.name} (${variations[variationIndex].name})* to ${newPrice}`, store.id);
+            await sendWhatsAppMessage(from, `✅ Harga *${product.name} (${variations[variationIndex].name})* diubah jadi ${newPrice}`, store.id);
          } else {
             // Variation not found, maybe create it?
             // For now, let's error or assume user meant base price if simple typo?
@@ -109,7 +110,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
                where: { id: product.id },
                data: { variations: variations }
             });
-            await sendWhatsAppMessage(from, `✅ Added variation *${remainder}* to *${product.name}* at ${newPrice}`, store.id);
+            await sendWhatsAppMessage(from, `✅ Varian *${remainder}* ditambahkan ke *${product.name}* dengan harga ${newPrice}`, store.id);
          }
       } else {
          // No variation specified or product has no variations -> Update Base Price
@@ -117,10 +118,10 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             where: { id: product.id },
             data: { price: newPrice }
          });
-         await sendWhatsAppMessage(from, `✅ Updated *${product.name}* price to ${newPrice}`, store.id);
+         await sendWhatsAppMessage(from, `✅ Harga *${product.name}* diubah menjadi ${newPrice}`, store.id);
       }
     } else {
-      await sendWhatsAppMessage(from, `❌ Product not found matching "${inputString}".`, store.id);
+      await sendWhatsAppMessage(from, `❌ Produk dengan nama "${inputString}" tidak ditemukan.`, store.id);
     }
     return;
   }
@@ -141,10 +142,10 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         stock: 100 // Set default stock to 100
       }
     });
-    await sendWhatsAppMessage(from, `✅ Added new product *${newName}* at ${newPrice}`, store.id);
+    await sendWhatsAppMessage(from, `✅ Produk baru *${newName}* ditambahkan dengan harga ${newPrice}`, store.id);
     return;
   }
 
   // Default
-  await sendWhatsAppMessage(from, `Unknown command. Reply 'Help' for options.`, store.id);
+  await sendWhatsAppMessage(from, `Perintah tidak dikenali. Balas 'Help' atau 'Menu' untuk lihat opsi.`, store.id);
 }

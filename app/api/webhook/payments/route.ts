@@ -89,14 +89,14 @@ export async function POST(req: NextRequest) {
       if (shouldNotifyMerchant) {
         await sendMerchantWhatsApp(
           order.storeId,
-          `⚠️ *Payment Failed / Cancelled*\nOrder #${order.id} is still unpaid.\nCustomer: ${order.customerPhone}\nReason: ${normalizedStatus || "cancelled"}\n\nPlease follow up with customer or resend payment link.`
+          `⚠️ *Pembayaran Gagal / Dibatalkan*\nOrder #${order.id} masih belum dibayar.\nCustomer: ${order.customerPhone}\nAlasan: ${normalizedStatus || "cancelled"}\n\nSilakan follow up customer atau kirim ulang link pembayaran.`
         );
       }
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
         source: "PAYMENT_FAILURE",
-        title: `Payment failed for order #${order.id}`,
+        title: `Pembayaran gagal untuk order #${order.id}`,
         body: `${order.customerPhone} • ${normalizedStatus || "cancelled"}`,
         metadata: { status: normalizedStatus || "cancelled" }
       }).catch(() => null);
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
       // 1. Notify Customer
       await sendWhatsAppMessage(
         order.customerPhone,
-        `✅ Payment Received! \n\nOrder #${order.id} has been paid successfully.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\nThank you for your order! We are preparing it now.`,
+        `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\nTerima kasih! Pesanan sedang kami siapkan.`,
         order.storeId
       );
 
@@ -200,36 +200,36 @@ export async function POST(req: NextRequest) {
           }
 
           if (merchantPhone) {
-              let msg = `💰 *Payment Received for Order #${order.id}*\n`;
+              let msg = `💰 *Pembayaran Masuk untuk Order #${order.id}*\n`;
               if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
               msg += `👤 Customer: ${order.customerPhone}\n`;
-              msg += `💵 Amount: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
-              msg += `*Items:*\n`;
+              msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
+              msg += `*Item:*\n`;
               
               items.forEach(item => {
                   msg += `${item.quantity}x ${item.product.name}\n`;
               });
               
-              msg += `\n⚠️ Please start preparing the order!`;
+              msg += `\n⚠️ Mohon segera proses pesanan ini!`;
 
               await sendWhatsAppMessage(merchantPhone, msg, store.id);
 
               if (lowStockAlerts.length > 0) {
-                  let lowMsg = `⚠️ *Low Stock Alert*\n\n`;
+                  let lowMsg = `⚠️ *Peringatan Stok Menipis*\n\n`;
                   lowStockAlerts.forEach((it) => {
                       const safeStock = Math.max(0, Number(it.stock));
                       lowMsg += `- ${it.name}: ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(safeStock)} ${it.unit} (min ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(it.minStock)} ${it.unit})\n`;
                   });
-                  lowMsg += `\nPlease restock soon to avoid stockout.`;
+                  lowMsg += `\nSegera restock agar tidak kehabisan.`;
                   await sendWhatsAppMessage(merchantPhone, lowMsg, store.id);
               }
 
               if (outOfStockAlerts.length > 0) {
-                  let outMsg = `🚨 *Out of Stock (Critical)*\n\n`;
+                  let outMsg = `🚨 *Stok Habis (Kritis)*\n\n`;
                   outOfStockAlerts.forEach((it) => {
                     outMsg += `- ${it.name} (${it.unit})\n`;
                   });
-                  outMsg += `\nPlease restock immediately.`;
+                  outMsg += `\nMohon restock secepatnya.`;
                   await sendWhatsAppMessage(merchantPhone, outMsg, store.id);
               }
           }

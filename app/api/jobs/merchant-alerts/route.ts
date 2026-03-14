@@ -33,9 +33,9 @@ async function processPendingPaymentReminders() {
       const paymentUrl = resolvePaymentUrl(order.id, order.paymentUrl);
       await sendWhatsAppMessage(
         order.customerPhone,
-        `⏳ Reminder for Order #${order.id}\nAmount: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}\n\nDo you want to continue this order?\nReply: "Continue ${order.id}" or "Cancel ${order.id}"`,
+        `⏳ Pengingat Order #${order.id}\nJumlah: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}\n\nMau lanjutkan order ini?\nBalas: "Lanjut ${order.id}" atau "Batal ${order.id}"`,
         order.storeId,
-        { buttonText: "Continue Payment", buttonUrl: paymentUrl }
+        { buttonText: "Lanjut Bayar", buttonUrl: paymentUrl }
       );
       customerReminders += 1;
     }
@@ -44,13 +44,13 @@ async function processPendingPaymentReminders() {
     if (merchantLock) {
       await sendMerchantWhatsApp(
         order.storeId,
-        `⚠️ *Unpaid Order Risk*\nOrder #${order.id} is still pending payment (>2 minutes).\nCustomer: ${order.customerPhone}\nAmount: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}`
+        `⚠️ *Risiko Order Belum Dibayar*\nOrder #${order.id} masih pending pembayaran (>2 menit).\nCustomer: ${order.customerPhone}\nJumlah: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}`
       );
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
         source: "UNPAID_RISK",
-        title: `Order #${order.id} unpaid for >2 minutes`,
+        title: `Order #${order.id} belum dibayar >2 menit`,
         body: `${order.customerPhone} • Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}`,
         metadata: { ageMinutes: Math.floor((now.getTime() - order.createdAt.getTime()) / 60000) }
       }).catch(() => null);
@@ -81,14 +81,14 @@ async function processOrderSlaAlerts() {
     if (!lock) continue;
     await sendMerchantWhatsApp(
       order.storeId,
-      `⏰ *SLA Alert*\nOrder #${order.id} is paid but not processed for ${slaMinutes}+ minutes.\nPlease review and handle immediately.`
+      `⏰ *Peringatan SLA*\nOrder #${order.id} sudah dibayar tapi belum diproses selama ${slaMinutes}+ menit.\nMohon segera ditindaklanjuti.`
     );
     await createOrderNotification({
       storeId: order.storeId,
       orderId: order.id,
       source: "SLA_ALERT",
-      title: `Order #${order.id} not processed within SLA`,
-      body: `Paid order pending action for ${slaMinutes}+ minutes`,
+      title: `Order #${order.id} belum diproses melewati SLA`,
+      body: `Order berstatus PAID belum diproses selama ${slaMinutes}+ menit`,
       metadata: { slaMinutes }
     }).catch(() => null);
     slaAlerts += 1;
@@ -123,13 +123,13 @@ async function processCancellationSpikeAlerts() {
     if (!lock) continue;
     await sendMerchantWhatsApp(
       storeId,
-      `🚨 *Operational Anomaly*\nHigh cancellation/refund spike detected in the last 60 minutes.\nCancelled/Refunded/Failed: ${stat.bad}/${stat.total} (${Math.round(ratio * 100)}%).\nPlease check payment/channel issues immediately.`
+      `🚨 *Anomali Operasional*\nTerjadi lonjakan pembatalan/refund dalam 60 menit terakhir.\nCancelled/Refunded/Failed: ${stat.bad}/${stat.total} (${Math.round(ratio * 100)}%).\nMohon cek channel pembayaran/operasional sekarang.`
     );
     await createOrderNotification({
       storeId,
       orderId: stat.latestOrderId,
       source: "ANOMALY_ALERT",
-      title: "High cancellation/refund spike detected",
+      title: "Lonjakan pembatalan/refund terdeteksi",
       body: `${stat.bad}/${stat.total} in last 60 minutes`,
       metadata: { bad: stat.bad, total: stat.total, ratio }
     }).catch(() => null);

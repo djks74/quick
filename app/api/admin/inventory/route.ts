@@ -93,7 +93,7 @@ async function sendLowStockReminder(storeId: number, item: { name: string; stock
   if (!merchantPhone) return;
   const stockText = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(Math.max(0, Number(item.stock)));
   const minText = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(Number(item.minStock));
-  const msg = `⚠️ *Low Stock Alert*\n\n${item.name} is low.\nCurrent stock: ${stockText} ${item.unit}\nMinimum stock: ${minText} ${item.unit}\n\nPlease restock soon to avoid stockout.`;
+  const msg = `⚠️ *Peringatan Stok Menipis*\n\n${item.name} menipis.\nStok saat ini: ${stockText} ${item.unit}\nStok minimum: ${minText} ${item.unit}\n\nSegera restock agar tidak kehabisan.`;
   await sendWhatsAppMessage(merchantPhone, msg, store.id);
 }
 
@@ -105,7 +105,7 @@ async function sendOutOfStockReminder(storeId: number, item: { name: string; uni
   if (!store) return;
   const merchantPhone = store.whatsapp || store.owner?.phoneNumber;
   if (!merchantPhone) return;
-  const msg = `🚨 *Out of Stock (Critical)*\n\n${item.name} (${item.unit}) has reached 0 stock.\nPlease restock immediately.`;
+  const msg = `🚨 *Stok Habis (Kritis)*\n\n${item.name} (${item.unit}) sudah mencapai 0.\nMohon restock secepatnya.`;
   await sendWhatsAppMessage(merchantPhone, msg, store.id);
 }
 

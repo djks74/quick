@@ -64,28 +64,28 @@ async function sendDailySummary() {
     });
     const lowStockItems = inventoryItems.filter((it) => Number(it.stock) <= Number(it.minStock)).slice(0, 5);
 
-    let msg = `📊 *Daily Summary (Last 24h)*\nStore: ${store.name}\n\n`;
-    msg += `Orders: ${formatNumber(totalOrders)}\n`;
+    let msg = `📊 *Ringkasan Harian (24 jam terakhir)*\nToko: ${store.name}\n\n`;
+    msg += `Total order: ${formatNumber(totalOrders)}\n`;
     msg += `Paid/Completed: ${formatNumber(paidOrders.length)}\n`;
     msg += `Cancelled/Refunded/Failed: ${formatNumber(cancelledOrders.length)}\n`;
-    msg += `Sales: Rp ${formatNumber(sales)}\n`;
+    msg += `Penjualan: Rp ${formatNumber(sales)}\n`;
 
     if (topItems.length > 0) {
-      msg += `\nTop items:\n`;
+      msg += `\nItem terlaris:\n`;
       topItems.forEach(([name, qty]) => {
         msg += `- ${name}: ${formatNumber(qty)}\n`;
       });
     } else {
-      msg += `\nTop items: no sales yet\n`;
+      msg += `\nItem terlaris: belum ada penjualan\n`;
     }
 
     if (lowStockItems.length > 0) {
-      msg += `\nLow-stock items:\n`;
+      msg += `\nItem stok menipis:\n`;
       lowStockItems.forEach((it) => {
         msg += `- ${it.name}: ${formatNumber(it.stock)} ${it.unit} (min ${formatNumber(it.minStock)})\n`;
       });
     } else {
-      msg += `\nLow-stock items: none\n`;
+      msg += `\nItem stok menipis: tidak ada\n`;
     }
 
     const ok = await sendMerchantWhatsApp(store.id, msg);

@@ -7,6 +7,8 @@ import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
 import { resolvePaymentUrl } from '@/lib/merchant-alerts';
 
+type WaLang = "id" | "en";
+
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
   let session = await prisma.whatsAppSession.findUnique({
@@ -36,6 +38,55 @@ async function updateSession(phoneNumber: string, storeId: number, data: any) {
     },
     data
   });
+}
+
+let ensuredWaLangSchema: Promise<void> | null = null;
+
+async function ensureWaLangSchema() {
+  if (!ensuredWaLangSchema) {
+    ensuredWaLangSchema = (async () => {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "WaUserPreference" (
+          "id" SERIAL PRIMARY KEY,
+          "phoneNumber" TEXT NOT NULL,
+          "storeId" INTEGER NOT NULL,
+          "language" TEXT NOT NULL DEFAULT 'id',
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "WaUserPreference_phone_store_key"
+        ON "WaUserPreference" ("phoneNumber", "storeId");
+      `);
+    })().catch(() => {});
+  }
+  await ensuredWaLangSchema;
+}
+
+async function getWaLanguage(phoneNumber: string, storeId: number): Promise<WaLang> {
+  await ensureWaLangSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ language: string }>>(
+    `SELECT "language" FROM "WaUserPreference" WHERE "phoneNumber" = $1 AND "storeId" = $2 LIMIT 1`,
+    phoneNumber,
+    storeId
+  ).catch(() => []);
+  if (rows && rows[0]?.language?.toLowerCase() === "en") return "en";
+  return "id";
+}
+
+async function setWaLanguage(phoneNumber: string, storeId: number, language: WaLang) {
+  await ensureWaLangSchema();
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "WaUserPreference" ("phoneNumber", "storeId", "language", "updatedAt")
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT ("phoneNumber", "storeId")
+      DO UPDATE SET "language" = EXCLUDED."language", "updatedAt" = NOW()
+    `,
+    phoneNumber,
+    storeId,
+    language
+  ).catch(() => null);
 }
 
 function parseOrderingStep(step?: string | null) {
@@ -257,7 +308,7 @@ export async function POST(req: NextRequest) {
              where: { id: merchantSession.id },
              data: { step: 'USER_MODE' }
            });
-           await sendWhatsAppMessage(from, "🔄 Switched to **User Mode**. You can now order from other stores.\nType 'Admin Mode' to switch back.", 0);
+           await sendWhatsAppMessage(from, "🔄 Berhasil pindah ke **Mode User**. Sekarang kamu bisa order dari toko lain.\nKetik 'Admin Mode' untuk kembali.", 0);
            return NextResponse.json({ success: true });
         }
         
@@ -266,7 +317,7 @@ export async function POST(req: NextRequest) {
              where: { id: merchantSession.id },
              data: { step: 'MERCHANT_MODE' }
            });
-           await sendWhatsAppMessage(from, "🔄 Switched to **Admin Mode**. You can manage your store.\nType 'User Mode' to switch back.", user?.stores[0]?.id || 0);
+           await sendWhatsAppMessage(from, "🔄 Berhasil pindah ke **Mode Admin**. Sekarang kamu bisa kelola toko.\nKetik 'User Mode' untuk kembali.", user?.stores[0]?.id || 0);
            return NextResponse.json({ success: true });
         }
 
@@ -335,9 +386,26 @@ export async function POST(req: NextRequest) {
 
       // Get or create session
       const session = await getSession(from, targetStore.id);
+      let lang = await getWaLanguage(from, targetStore.id);
+      const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
       
       // 1. GLOBAL COMMANDS
       const checkInMatch = textBody.match(/(?:check-in|table|meja)\s*(?:table|meja)?\s*(.+)/i);
+
+      const langToEn = /^(en|english|inggris|bahasa inggris)$/i.test(textBody.trim());
+      const langToId = /^(id|indonesia|bahasa indonesia)$/i.test(textBody.trim());
+      if (langToEn || langToId) {
+        lang = langToEn ? "en" : "id";
+        await setWaLanguage(from, targetStore.id, lang);
+        await sendWhatsAppMessage(
+          from,
+          lang === "en"
+            ? `✅ Language changed to English.\nReply "Menu" to start ordering.`
+            : `✅ Bahasa diubah ke Indonesia.\nBalas "Menu" untuk mulai pesan.`,
+          targetStore.id
+        );
+        return NextResponse.json({ success: true });
+      }
       
       if (checkInMatch) {
         const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
@@ -345,17 +413,25 @@ export async function POST(req: NextRequest) {
 
         const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
         await sendWhatsAppMessage(from, 
-          `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
-          `You can view our full digital menu and order directly via the button below, or reply with "Menu" to order via WhatsApp text.`,
+          l(
+            `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
+            `Lihat menu digital lewat tombol di bawah, atau balas "Menu" untuk pesan via WhatsApp.\n` +
+            `Cari produk: "Cari nasi goreng".\n` +
+            `Ingin English? balas: EN`,
+            `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
+            `You can view our full digital menu and order directly via the button below, or reply with "Menu" to order via WhatsApp text.\n` +
+            `You can also search by name: "Search nasi goreng".\n` +
+            `Want Indonesian again? reply: ID`
+          ),
           targetStore.id,
-          { buttonText: "View Menu", buttonUrl: menuUrl }
+          { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
         );
         return NextResponse.json({ success: true });
       }
 
       if (lowerText === 'pay' || lowerText === 'payment' || lowerText === 'bayar') {
         await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
-        await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
+        await sendWhatsAppMessage(from, l(`Masukkan jumlah pembayaran (contoh 50000).`, `Please enter the amount you want to pay (e.g. 50000).`), targetStore.id);
         return NextResponse.json({ success: true });
       }
 
@@ -446,6 +522,62 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      const searchCommandMatch = textBody.match(/^(?:search|find|cari)\s+(.+)$/i);
+      if (searchCommandMatch) {
+        const query = searchCommandMatch[1].trim();
+        if (query.length < 2) {
+          await sendWhatsAppMessage(from, l(`Tulis nama produk setelah kata cari, contoh: "Cari nasi goreng".`, `Please provide product name after search, e.g. "Search nasi goreng".`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const inStockMatches = await prisma.product.findMany({
+          where: {
+            storeId: targetStore.id,
+            name: { contains: query, mode: 'insensitive' },
+            stock: { gt: 0 }
+          },
+          take: 10,
+          orderBy: { name: 'asc' }
+        });
+        if (inStockMatches.length > 1) {
+          const ids = inStockMatches.map((p) => p.id);
+          const nextStep = buildOrderingStep(null, ids);
+          await updateSession(from, targetStore.id, { step: nextStep });
+          let msg = l(`Ada beberapa pilihan untuk *${query}*:\n`, `I found multiple options for *${query}*:\n`);
+          inStockMatches.forEach((p, idx) => {
+            msg += `${idx + 1}. ${p.name}\n`;
+          });
+          msg += l(`\nBalas "Nomor Qty" (contoh "1 1") untuk pesan.`, `\nReply "ItemQty" (e.g. "1 1") to order.`);
+          await sendWhatsAppMessage(from, msg, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        if (inStockMatches.length === 1) {
+          const nextStep = buildOrderingStep(null, [inStockMatches[0].id]);
+          await updateSession(from, targetStore.id, { step: nextStep });
+          await sendWhatsAppMessage(from, l(`Ditemukan: *${inStockMatches[0].name}*\nBalas "1 1" untuk pesan 1 item.`, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one item.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const outOfStockMatches = await prisma.product.findMany({
+          where: {
+            storeId: targetStore.id,
+            name: { contains: query, mode: 'insensitive' },
+            stock: { lte: 0 }
+          },
+          take: 5,
+          orderBy: { name: 'asc' }
+        });
+        if (outOfStockMatches.length > 0) {
+          let outMsg = l(`Maaf, produk berikut sedang habis:\n`, `Sorry, these products are currently out of stock:\n`);
+          outOfStockMatches.forEach((p) => {
+            outMsg += `- ${p.name}\n`;
+          });
+          outMsg += l(`\nBalas 'Menu' untuk lihat produk tersedia.`, `\nReply 'Menu' to see available products.`);
+          await sendWhatsAppMessage(from, outMsg, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        await sendWhatsAppMessage(from, l(`Produk "${query}" tidak ditemukan. Balas 'Menu' untuk lihat daftar.`, `No product found for "${query}". Reply 'Menu' to browse items.`), targetStore.id);
+        return NextResponse.json({ success: true });
+      }
+
       if (lowerText === 'menu') {
         try {
             const categories = await prisma.category.findMany({
@@ -455,12 +587,12 @@ export async function POST(req: NextRequest) {
 
             if (categories.length > 0) {
                 let catText = `🍽️ *${targetStore.name} Menu*\n\n`;
-                catText += `Select a category:\n`;
-                catText += `1. All Menu\n`;
+                catText += l(`Pilih kategori:\n`, `Select a category:\n`);
+                catText += l(`1. Semua Menu\n`, `1. All Menu\n`);
                 categories.forEach((c, idx) => {
                     catText += `${idx + 2}. ${c.name}\n`;
                 });
-                catText += `\nReply with number to view items.`;
+                catText += l(`\nBalas angka untuk lihat item.\nAtau cari langsung: "Cari nasi goreng".`, `\nReply with number to view items.\nOr search directly: "Search nasi goreng".`);
                 
                 await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
                 await sendWhatsAppMessage(from, catText, targetStore.id);
@@ -475,13 +607,13 @@ export async function POST(req: NextRequest) {
             });
 
             if (products.length === 0) {
-                 await sendWhatsAppMessage(from, `Sorry, there are no in-stock products right now.`, targetStore.id);
+                 await sendWhatsAppMessage(from, l(`Maaf, saat ini belum ada produk yang tersedia.`, `Sorry, there are no in-stock products right now.`), targetStore.id);
                  return NextResponse.json({ success: true });
             }
 
             const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
             let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n`;
-            menuText += `👇 *Order via WhatsApp Text*:\n`;
+            menuText += l(`👇 *Pesan via WhatsApp*:\n`, `👇 *Order via WhatsApp Text*:\n`);
             
             products.forEach((p, index) => {
               const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
@@ -490,13 +622,13 @@ export async function POST(req: NextRequest) {
 
               menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
             });
-            menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
+            menuText += l(`\nBalas "Nomor Qty" (contoh '1 2').\nBalas "Nomor Qty Selesai Qris/Bank" (checkout cepat).\nBalas "Cari <produk>" untuk cari nama.\nBalas 'Menu' untuk kembali.`, `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply "Search <product>" to find by name.\nReply 'Menu' to go back.`);
 
             await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
             return NextResponse.json({ success: true });
         } catch (err) {
             console.error('DEBUG: Error in Menu Handler', err);
-            await sendWhatsAppMessage(from, `Error fetching menu. Please try again.`, targetStore.id);
+            await sendWhatsAppMessage(from, l(`Gagal mengambil menu. Coba lagi.`, `Error fetching menu. Please try again.`), targetStore.id);
             return NextResponse.json({ success: true });
         }
       }
@@ -505,7 +637,7 @@ export async function POST(req: NextRequest) {
       if (session.step === 'CATEGORY_SELECTION') {
           const index = parseInt(textBody) - 1;
           if (isNaN(index)) {
-             await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
+             await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Balas dengan angka.`, `Invalid selection. Please reply with a number.`), targetStore.id);
              return NextResponse.json({ success: true });
           }
 
@@ -521,7 +653,7 @@ export async function POST(req: NextRequest) {
               if (index > 0 && index <= categories.length) {
                   selectedCategoryName = categories[index - 1].name;
               } else {
-                  await sendWhatsAppMessage(from, `Invalid selection. Please check the list.`, targetStore.id);
+                  await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Cek daftar lagi ya.`, `Invalid selection. Please check the list.`), targetStore.id);
                   return NextResponse.json({ success: true });
               }
           }
@@ -538,7 +670,7 @@ export async function POST(req: NextRequest) {
           });
 
           if (products.length === 0) {
-             await sendWhatsAppMessage(from, `No in-stock items found in this category.`, targetStore.id);
+             await sendWhatsAppMessage(from, l(`Tidak ada item tersedia di kategori ini.`, `No in-stock items found in this category.`), targetStore.id);
              return NextResponse.json({ success: true });
           }
 
@@ -546,7 +678,7 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: stepValue });
 
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-          let title = selectedCategoryName ? `${selectedCategoryName}` : `All Menu`;
+          let title = selectedCategoryName ? `${selectedCategoryName}` : l(`Semua Menu`, `All Menu`);
           let menuText = `🍽️ *${title}* 🍽️\n\n`;
           
           products.forEach((p, idx) => {
@@ -555,9 +687,9 @@ export async function POST(req: NextRequest) {
                 : new Intl.NumberFormat('id-ID').format(p.price);
              menuText += `${idx + 1}. ${p.name} - ${priceRange}\n`;
           });
-          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
+          menuText += l(`\nBalas "Nomor Qty" (contoh '1 2').\nBalas "Nomor Qty Selesai Qris/Bank" (checkout cepat).\nBalas "Cari <produk>" untuk cari nama.\nBalas 'Menu' untuk kembali.`, `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply "Search <product>" to find by name.\nReply 'Menu' to go back.`);
           
-          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
+          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: l("Pesan via Web", "Order via Web"), buttonUrl: menuUrl });
           return NextResponse.json({ success: true });
       }
 
@@ -581,9 +713,9 @@ export async function POST(req: NextRequest) {
                data: { updatedAt: new Date(), step: 'START' }
              });
           }
-          await sendWhatsAppMessage(from, `✅ Switched to *${selectedStore.name}*.\nReply 'Menu' to order.`, selectedStore.id);
+          await sendWhatsAppMessage(from, l(`✅ Berhasil pindah ke *${selectedStore.name}*.\nBalas 'Menu' untuk pesan.`, `✅ Switched to *${selectedStore.name}*.\nReply 'Menu' to order.`), selectedStore.id);
         } else {
-          await sendWhatsAppMessage(from, `Invalid selection. Please reply with a number.`, targetStore.id);
+          await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Balas dengan angka.`, `Invalid selection. Please reply with a number.`), targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -591,14 +723,14 @@ export async function POST(req: NextRequest) {
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${session.tableNumber}`;
-          await sendWhatsAppMessage(from, `Click the button below to view the menu and order on the web:`, targetStore.id, { buttonText: "View Menu", buttonUrl: menuUrl });
+          await sendWhatsAppMessage(from, l(`Klik tombol di bawah untuk lihat menu dan pesan lewat web:`, `Click the button below to view the menu and order on the web:`), targetStore.id, { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl });
           await updateSession(from, targetStore.id, { step: 'START' });
         } else if (textBody === '2') {
           const categories = await prisma.category.findMany({ where: { storeId: targetStore.id }, orderBy: { name: 'asc' } });
           if (categories.length > 0) {
-            let catText = `🍽️ *${targetStore.name} Menu*\n\nSelect a category:\n1. All Menu\n`;
+            let catText = `🍽️ *${targetStore.name} Menu*\n\n${l(`Pilih kategori:`, `Select a category:`)}\n${l(`1. Semua Menu`, `1. All Menu`)}\n`;
             categories.forEach((c, idx) => { catText += `${idx + 2}. ${c.name}\n`; });
-            catText += `\nReply with number to view items.`;
+            catText += l(`\nBalas angka untuk lihat item.\nAtau cari langsung: "Cari nasi goreng".`, `\nReply with number to view items.\nOr search directly: "Search nasi goreng".`);
             await updateSession(from, targetStore.id, { step: 'CATEGORY_SELECTION' });
             await sendWhatsAppMessage(from, catText, targetStore.id);
             return NextResponse.json({ success: true });
@@ -606,24 +738,24 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: 'ORDERING' });
           const products = await prisma.product.findMany({ where: { storeId: targetStore.id, stock: { gt: 0 } }, take: 10, orderBy: { name: 'asc' } });
           if (products.length === 0) {
-            await sendWhatsAppMessage(from, `Sorry, there are no in-stock products right now.`, targetStore.id);
+            await sendWhatsAppMessage(from, l(`Maaf, saat ini belum ada produk yang tersedia.`, `Sorry, there are no in-stock products right now.`), targetStore.id);
             return NextResponse.json({ success: true });
           }
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n👇 *Order via WhatsApp Text*:\n`;
+          let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n${l(`👇 *Pesan via WhatsApp*:\n`, `👇 *Order via WhatsApp Text*:\n`)}`;
           products.forEach((p, index) => {
             const priceRange = p.variations && Array.isArray(p.variations) && p.variations.length > 0
               ? `${new Intl.NumberFormat('id-ID').format(Math.min(...(p.variations as any[]).map((v:any) => v.price)))} - ${new Intl.NumberFormat('id-ID').format(Math.max(...(p.variations as any[]).map((v:any) => v.price)))}`
               : new Intl.NumberFormat('id-ID').format(p.price);
             menuText += `${index + 1}. ${p.name} - ${priceRange}\n`;
           });
-          menuText += `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply 'Menu' to go back.`;
-          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: "Order via Web", buttonUrl: menuUrl });
+          menuText += l(`\nBalas "Nomor Qty" (contoh '1 2').\nBalas "Nomor Qty Selesai Qris/Bank" (checkout cepat).\nBalas "Cari <produk>" untuk cari nama.\nBalas 'Menu' untuk kembali.`, `\nReply "ItemQty" (e.g. '1 2').\nReply "ItemQty Done Qris/Bank" (Quick Checkout).\nReply "Search <product>" to find by name.\nReply 'Menu' to go back.`);
+          await sendWhatsAppMessage(from, menuText, targetStore.id, { buttonText: l("Pesan via Web", "Order via Web"), buttonUrl: menuUrl });
         } else if (textBody === '3') {
           await updateSession(from, targetStore.id, { step: 'PAYMENT_AMOUNT' });
-          await sendWhatsAppMessage(from, `Please enter the amount you want to pay (e.g. 50000).`, targetStore.id);
+          await sendWhatsAppMessage(from, l(`Masukkan jumlah pembayaran (contoh 50000).`, `Please enter the amount you want to pay (e.g. 50000).`), targetStore.id);
         } else {
-          await sendWhatsAppMessage(from, `Invalid option. Reply 1, 2, or 3.`, targetStore.id);
+          await sendWhatsAppMessage(from, l(`Opsi tidak valid. Balas 1, 2, atau 3.`, `Invalid option. Reply 1, 2, or 3.`), targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -647,13 +779,13 @@ export async function POST(req: NextRequest) {
               }
             });
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-            await sendWhatsAppMessage(from, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
+            await sendWhatsAppMessage(from, l(`Order #${order.id} berhasil dibuat.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`), targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
             await updateSession(from, targetStore.id, { step: 'START' });
           } catch (e) {
-            await sendWhatsAppMessage(from, `Error creating order. Please try again.`, targetStore.id);
+            await sendWhatsAppMessage(from, l(`Gagal membuat order. Coba lagi ya.`, `Error creating order. Please try again.`), targetStore.id);
           }
         } else {
-          await sendWhatsAppMessage(from, `Invalid amount. Please enter a number (e.g. 50000).`, targetStore.id);
+          await sendWhatsAppMessage(from, l(`Nominal tidak valid. Masukkan angka (contoh 50000).`, `Invalid amount. Please enter a number (e.g. 50000).`), targetStore.id);
         }
         return NextResponse.json({ success: true });
       }
@@ -663,15 +795,15 @@ export async function POST(req: NextRequest) {
         const currentCategory = orderingContext.category;
         const searchIds = orderingContext.searchIds;
 
-        if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank') {
+        if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank' || lowerText === 'selesai' || lowerText === 'selesai qris' || lowerText === 'selesai bank') {
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
-            await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
+            await sendWhatsAppMessage(from, l(`Keranjang kamu masih kosong. Balas 'Menu' untuk lihat item.`, `Your cart is empty. Reply 'Menu' to see items.`), targetStore.id);
             return NextResponse.json({ success: true });
           }
           const stockCheck = await validateCartStock(targetStore.id, cart);
           if (!stockCheck.ok) {
-            await sendWhatsAppMessage(from, `Some items are unavailable:\n- ${stockCheck.issues.join('\n- ')}\n\nPlease update your order. Reply 'Menu' to refresh in-stock items.`, targetStore.id);
+            await sendWhatsAppMessage(from, l(`Beberapa item tidak tersedia:\n- ${stockCheck.issues.join('\n- ')}\n\nSilakan ubah order kamu. Balas 'Menu' untuk muat ulang item tersedia.`, `Some items are unavailable:\n- ${stockCheck.issues.join('\n- ')}\n\nPlease update your order. Reply 'Menu' to refresh in-stock items.`), targetStore.id);
             return NextResponse.json({ success: true });
           }
 
@@ -719,7 +851,7 @@ export async function POST(req: NextRequest) {
           });
 
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
-          let summary = "🧾 *Order Summary*\n";
+          let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
           cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
           summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
           if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
@@ -727,7 +859,7 @@ export async function POST(req: NextRequest) {
           if (fee > 0) summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
 
-          await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: "Pay Now", buttonUrl: paymentLink });
+          await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
           await updateSession(from, targetStore.id, { step: 'START', cart: [] });
           return NextResponse.json({ success: true });
         }
@@ -744,7 +876,7 @@ export async function POST(req: NextRequest) {
             }
         }
         
-        const isCheckoutCommand = lowerText.includes('done') || lowerText.includes('checkout');
+        const isCheckoutCommand = lowerText.includes('done') || lowerText.includes('checkout') || lowerText.includes('selesai');
         if (isCheckoutCommand && !quickCheckoutMethod) {
             if (lowerText.includes('qris')) quickCheckoutMethod = 'qris';
             else if (lowerText.includes('bank')) quickCheckoutMethod = 'bank_transfer';
@@ -770,11 +902,11 @@ export async function POST(req: NextRequest) {
               const ids = inStockMatches.map((p) => p.id);
               const nextStep = buildOrderingStep(currentCategory, ids);
               await updateSession(from, targetStore.id, { step: nextStep });
-              let matchText = `I found multiple options for *${query}*:\n`;
+              let matchText = l(`Ada beberapa pilihan untuk *${query}*:\n`, `I found multiple options for *${query}*:\n`);
               inStockMatches.forEach((p, idx) => {
                 matchText += `${idx + 1}. ${p.name}\n`;
               });
-              matchText += `\nReply "ItemQty" (e.g. "1 2") to order.`;
+              matchText += l(`\nBalas "Nomor Qty" (contoh "1 2") untuk pesan.`, `\nReply "ItemQty" (e.g. "1 2") to order.`);
               await sendWhatsAppMessage(from, matchText, targetStore.id);
               return NextResponse.json({ success: true });
             }
@@ -782,7 +914,7 @@ export async function POST(req: NextRequest) {
               const ids = [inStockMatches[0].id];
               const nextStep = buildOrderingStep(currentCategory, ids);
               await updateSession(from, targetStore.id, { step: nextStep });
-              await sendWhatsAppMessage(from, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one, or change quantity as needed.`, targetStore.id);
+              await sendWhatsAppMessage(from, l(`Ditemukan: *${inStockMatches[0].name}*\nBalas "1 1" untuk pesan satu, atau ubah qty sesuai kebutuhan.`, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one, or change quantity as needed.`), targetStore.id);
               return NextResponse.json({ success: true });
             }
             const outOfStockMatches = await prisma.product.findMany({
@@ -791,11 +923,11 @@ export async function POST(req: NextRequest) {
               orderBy: { name: 'asc' }
             });
             if (outOfStockMatches.length > 0) {
-              let outMsg = `Sorry, these products are currently out of stock:\n`;
+              let outMsg = l(`Maaf, produk berikut sedang habis:\n`, `Sorry, these products are currently out of stock:\n`);
               outOfStockMatches.forEach((p) => {
                 outMsg += `- ${p.name}\n`;
               });
-              outMsg += `\nReply 'Menu' to see available items.`;
+              outMsg += l(`\nBalas 'Menu' untuk lihat item yang tersedia.`, `\nReply 'Menu' to see available items.`);
               await sendWhatsAppMessage(from, outMsg, targetStore.id);
               return NextResponse.json({ success: true });
             }
