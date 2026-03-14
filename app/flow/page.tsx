@@ -48,10 +48,10 @@ const translations = {
     phase3_f4: "Auto-update order status",
     phase4_title: "Admin Mastery",
     phase4_subtitle: "Control everything from one place.",
-    phase4_f1: "Real-time order tracking",
-    phase4_f2: "Sales & revenue analytics",
-    phase4_f3: "Customer behavior insights",
-    phase4_f4: "Withdrawal management",
+    phase4_f1: "Integrated POS for cashier operations",
+    phase4_f2: "Inventory and stock management",
+    phase4_f3: "Barcode scan for stock in/out updates",
+    phase4_f4: "Real-time sales and stock insights",
     multiStore: "Multi-Store Support",
     multiStoreDesc: "Manage multiple branches from a single unified super-admin dashboard.",
     security: "Bank-Grade Security",
@@ -89,10 +89,10 @@ const translations = {
     phase3_f4: "Update status pesanan otomatis",
     phase4_title: "Kendali Admin",
     phase4_subtitle: "Kontrol semuanya dari satu tempat.",
-    phase4_f1: "Pelacakan pesanan real-time",
-    phase4_f2: "Analitik penjualan & pendapatan",
-    phase4_f3: "Wawasan perilaku pelanggan",
-    phase4_f4: "Manajemen penarikan dana",
+    phase4_f1: "POS terintegrasi untuk operasional kasir",
+    phase4_f2: "Manajemen inventori dan stok",
+    phase4_f3: "Scan barcode untuk update stok masuk/keluar",
+    phase4_f4: "Insight penjualan dan stok secara real-time",
     multiStore: "Dukungan Multi-Toko",
     multiStoreDesc: "Kelola banyak cabang dari satu dasbor super-admin yang terpadu.",
     security: "Keamanan Standar Bank",
@@ -323,10 +323,10 @@ export default function FlowShowcase() {
             <Zap className="w-5 h-5" />
             <span className="font-black tracking-tighter">GERCEP</span>
           </div>
-          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2026 Gercep Ecosystem. All rights reserved.</p>
           <div className="flex gap-8">
-            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
-            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
+            <Link href="/privacy" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
+            <Link href="/terms" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
           </div>
         </div>
       </footer>

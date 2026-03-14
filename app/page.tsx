@@ -46,7 +46,7 @@ const translations = {
     title_start: "Launch Your",
     title_highlight: "Digital Menu",
     title_end: "in Seconds",
-    description: "One system for your shop, your chat, and your deliveries. Accept orders via WhatsApp, manage your physical store with our POS, and track every shipment effortlessly.",
+    description: "One system for your shop, your chat, and your stock. Accept orders via WhatsApp, manage your physical store with our POS, and master your inventory down to the gram.",
     view_demo: "View Demo Store",
     create_store: "Create Your Store",
     easy_setup: "Easy Setup",
@@ -81,10 +81,10 @@ const translations = {
     phase3_f4: "Auto-update order status",
     phase4_title: "Admin Mastery",
     phase4_subtitle: "Control everything from one place.",
-    phase4_f1: "Real-time order tracking",
-    phase4_f2: "Sales & revenue analytics",
-    phase4_f3: "Customer behavior insights",
-    phase4_f4: "Withdrawal management"
+    phase4_f1: "Integrated POS for cashier operations",
+    phase4_f2: "Inventory and stock management",
+    phase4_f3: "Barcode scan for stock in/out updates",
+    phase4_f4: "Real-time sales and stock insights"
   },
   id: {
     login: "Masuk",
@@ -127,10 +127,10 @@ const translations = {
     phase3_f4: "Update status pesanan otomatis",
     phase4_title: "Kendali Admin",
     phase4_subtitle: "Kontrol semuanya dari satu tempat.",
-    phase4_f1: "Pelacakan pesanan real-time",
-    phase4_f2: "Analitik penjualan & pendapatan",
-    phase4_f3: "Wawasan perilaku pelanggan",
-    phase4_f4: "Manajemen penarikan dana"
+    phase4_f1: "POS terintegrasi untuk operasional kasir",
+    phase4_f2: "Manajemen inventori dan stok",
+    phase4_f3: "Scan barcode untuk update stok masuk/keluar",
+    phase4_f4: "Insight penjualan dan stok secara real-time"
   }
 };
 
@@ -481,10 +481,10 @@ export default function Home() {
             <Zap className="w-5 h-5" />
             <span className="font-black tracking-tighter uppercase">Gercep</span>
           </div>
-          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2024 Gercep Ecosystem. All rights reserved.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 font-medium">© 2026 Gercep Ecosystem. All rights reserved.</p>
           <div className="flex gap-8">
-            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
-            <Link href="#" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
+            <Link href="/privacy" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
+            <Link href="/terms" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
           </div>
         </div>
       </footer>
