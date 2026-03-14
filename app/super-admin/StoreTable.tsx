@@ -83,8 +83,12 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                 </span>
               </td>
               <td className="px-6 py-4">
-                <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                  Active
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                  store.isOpen
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                }`}>
+                  {store.isOpen ? "Active" : "Closed"}
                 </span>
               </td>
               <td className="px-6 py-4 dark:text-gray-300">

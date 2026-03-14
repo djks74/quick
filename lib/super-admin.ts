@@ -22,6 +22,7 @@ export async function getAllStores() {
         id: true,
         name: true,
         slug: true,
+        isOpen: true,
         subscriptionPlan: true,
         balance: true,
         createdAt: true,
