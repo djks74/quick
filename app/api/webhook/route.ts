@@ -163,6 +163,37 @@ async function validateCartStock(storeId: number, cart: any[]) {
   return { ok: issues.length === 0, issues };
 }
 
+function getProductVariations(product: any): Array<{ name: string; price: number }> {
+  if (!product?.variations || !Array.isArray(product.variations)) return [];
+  return (product.variations as any[])
+    .map((v) => ({
+      name: String(v?.name || "").trim(),
+      price: Number(v?.price || 0)
+    }))
+    .filter((v) => v.name && Number.isFinite(v.price) && v.price > 0);
+}
+
+function buildVariationSelectStep(productId: number, qty: number, category: string | null, searchIds: number[] | null) {
+  const encodedCategory = encodeURIComponent(category || "ALL");
+  const searchPart = searchIds && searchIds.length > 0 ? searchIds.join(",") : "NONE";
+  return `VARIATION_SELECT:${productId}:${qty}:${encodedCategory}:${searchPart}`;
+}
+
+function parseVariationSelectStep(step?: string | null) {
+  if (!step || !step.startsWith("VARIATION_SELECT:")) return null;
+  const parts = step.split(":");
+  if (parts.length < 5) return null;
+  const productId = parseInt(parts[1], 10);
+  const qty = parseInt(parts[2], 10);
+  const categoryRaw = decodeURIComponent(parts[3] || "ALL");
+  const category = categoryRaw === "ALL" ? null : categoryRaw;
+  const searchIds = parts[4] && parts[4] !== "NONE"
+    ? parts[4].split(",").map((id) => parseInt(id, 10)).filter((id) => !isNaN(id))
+    : null;
+  if (isNaN(productId) || isNaN(qty) || qty <= 0) return null;
+  return { productId, qty, category, searchIds };
+}
+
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const mode = searchParams.get('hub.mode');
@@ -544,16 +575,34 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: nextStep });
           let msg = l(`Ada beberapa pilihan untuk *${query}*:\n`, `I found multiple options for *${query}*:\n`);
           inStockMatches.forEach((p, idx) => {
-            msg += `${idx + 1}. ${p.name}\n`;
+            const vars = getProductVariations(p);
+            if (vars.length > 0) {
+              msg += `${idx + 1}. ${p.name} (${vars.length} varian)\n`;
+            } else {
+              msg += `${idx + 1}. ${p.name}\n`;
+            }
           });
           msg += l(`\nBalas "Nomor Qty" (contoh "1 1") untuk pesan.`, `\nReply "ItemQty" (e.g. "1 1") to order.`);
           await sendWhatsAppMessage(from, msg, targetStore.id);
           return NextResponse.json({ success: true });
         }
         if (inStockMatches.length === 1) {
-          const nextStep = buildOrderingStep(null, [inStockMatches[0].id]);
-          await updateSession(from, targetStore.id, { step: nextStep });
-          await sendWhatsAppMessage(from, l(`Ditemukan: *${inStockMatches[0].name}*\nBalas "1 1" untuk pesan 1 item.`, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one item.`), targetStore.id);
+          const single = inStockMatches[0];
+          const vars = getProductVariations(single);
+          if (vars.length > 0) {
+            const nextStep = buildVariationSelectStep(single.id, 1, null, [single.id]);
+            await updateSession(from, targetStore.id, { step: nextStep });
+            let varMsg = l(`Ditemukan: *${single.name}*\nPilih varian:\n`, `Found: *${single.name}*\nChoose variation:\n`);
+            vars.forEach((v, idx) => {
+              varMsg += `${idx + 1}. ${v.name} - Rp ${new Intl.NumberFormat('id-ID').format(v.price)}\n`;
+            });
+            varMsg += l(`\nBalas nomor varian (contoh "1").`, `\nReply variation number (e.g. "1").`);
+            await sendWhatsAppMessage(from, varMsg, targetStore.id);
+          } else {
+            const nextStep = buildOrderingStep(null, [single.id]);
+            await updateSession(from, targetStore.id, { step: nextStep });
+            await sendWhatsAppMessage(from, l(`Ditemukan: *${single.name}*\nBalas "1 1" untuk pesan 1 item.`, `Found: *${single.name}*\nReply "1 1" to order one item.`), targetStore.id);
+          }
           return NextResponse.json({ success: true });
         }
         const outOfStockMatches = await prisma.product.findMany({
@@ -637,7 +686,34 @@ export async function POST(req: NextRequest) {
       if (session.step === 'CATEGORY_SELECTION') {
           const index = parseInt(textBody) - 1;
           if (isNaN(index)) {
-             await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Balas dengan angka.`, `Invalid selection. Please reply with a number.`), targetStore.id);
+             const query = textBody.trim();
+             if (query.length >= 2) {
+               const inStockMatches = await prisma.product.findMany({
+                 where: {
+                   storeId: targetStore.id,
+                   name: { contains: query, mode: 'insensitive' },
+                   stock: { gt: 0 }
+                 },
+                 take: 10,
+                 orderBy: { name: 'asc' }
+               });
+               if (inStockMatches.length > 0) {
+                 const ids = inStockMatches.map((p) => p.id);
+                 const nextStep = buildOrderingStep(null, ids);
+                 await updateSession(from, targetStore.id, { step: nextStep });
+                 let msg = l(`Aku temukan beberapa menu untuk *${query}*:\n`, `I found some menu options for *${query}*:\n`);
+                 inStockMatches.forEach((p, idx) => {
+                   const vars = getProductVariations(p);
+                   msg += vars.length > 0
+                     ? `${idx + 1}. ${p.name} (${vars.length} varian)\n`
+                     : `${idx + 1}. ${p.name}\n`;
+                 });
+                 msg += l(`\nBalas "Nomor Qty" (contoh "1 1") untuk pesan.`, `\nReply "ItemQty" (e.g. "1 1") to order.`);
+                 await sendWhatsAppMessage(from, msg, targetStore.id);
+                 return NextResponse.json({ success: true });
+               }
+             }
+             await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Balas angka kategori atau ketik nama menu seperti "nasi".`, `Invalid selection. Reply with category number or type product keyword like "nasi".`), targetStore.id);
              return NextResponse.json({ success: true });
           }
 
@@ -757,6 +833,62 @@ export async function POST(req: NextRequest) {
         } else {
           await sendWhatsAppMessage(from, l(`Opsi tidak valid. Balas 1, 2, atau 3.`, `Invalid option. Reply 1, 2, or 3.`), targetStore.id);
         }
+        return NextResponse.json({ success: true });
+      }
+
+      if (session.step && session.step.startsWith('VARIATION_SELECT:')) {
+        const variationCtx = parseVariationSelectStep(session.step);
+        if (!variationCtx) {
+          await updateSession(from, targetStore.id, { step: 'ORDERING:ALL' });
+          await sendWhatsAppMessage(from, l(`Sesi varian tidak valid. Balas "Menu" lalu pilih lagi.`, `Invalid variation session. Reply "Menu" and choose again.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const product = await prisma.product.findFirst({
+          where: { id: variationCtx.productId, storeId: targetStore.id, stock: { gt: 0 } }
+        });
+        if (!product) {
+          await updateSession(from, targetStore.id, { step: buildOrderingStep(variationCtx.category, variationCtx.searchIds) });
+          await sendWhatsAppMessage(from, l(`Produk tidak tersedia. Balas "Menu" untuk pilih menu lain.`, `Product is not available. Reply "Menu" to pick another item.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const vars = getProductVariations(product);
+        if (vars.length === 0) {
+          const currentCart = (session.cart as any[]) || [];
+          currentCart.push({ productId: product.id, name: product.name, price: product.price, qty: variationCtx.qty });
+          await updateSession(from, targetStore.id, { step: buildOrderingStep(variationCtx.category, variationCtx.searchIds), cart: currentCart });
+          await sendWhatsAppMessage(from, l(`Ditambahkan ke keranjang:\n- ${variationCtx.qty}x ${product.name}\n\nBalas "Selesai" untuk checkout atau lanjut pilih item lain.`, `Added to cart:\n- ${variationCtx.qty}x ${product.name}\n\nReply "Done" to checkout or continue selecting items.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const choice = parseInt(textBody.trim(), 10);
+        if (isNaN(choice) || choice < 1 || choice > vars.length) {
+          let retryMsg = l(`Pilihan varian tidak valid. Pilih angka varian:\n`, `Invalid variation selection. Choose variation number:\n`);
+          vars.forEach((v, idx) => {
+            retryMsg += `${idx + 1}. ${v.name} - Rp ${new Intl.NumberFormat('id-ID').format(v.price)}\n`;
+          });
+          await sendWhatsAppMessage(from, retryMsg, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const selectedVar = vars[choice - 1];
+        const currentCart = (session.cart as any[]) || [];
+        currentCart.push({
+          productId: product.id,
+          name: `${product.name} (${selectedVar.name})`,
+          price: selectedVar.price,
+          qty: variationCtx.qty,
+          variationName: selectedVar.name
+        });
+        await updateSession(from, targetStore.id, {
+          step: buildOrderingStep(variationCtx.category, variationCtx.searchIds),
+          cart: currentCart
+        });
+        await sendWhatsAppMessage(
+          from,
+          l(
+            `Ditambahkan ke keranjang:\n- ${variationCtx.qty}x ${product.name} (${selectedVar.name})\n\nBalas "Selesai Qris/Bank" untuk checkout atau lanjut pilih item.`,
+            `Added to cart:\n- ${variationCtx.qty}x ${product.name} (${selectedVar.name})\n\nReply "Done Qris/Bank" to checkout or continue ordering.`
+          ),
+          targetStore.id
+        );
         return NextResponse.json({ success: true });
       }
 
@@ -904,17 +1036,33 @@ export async function POST(req: NextRequest) {
               await updateSession(from, targetStore.id, { step: nextStep });
               let matchText = l(`Ada beberapa pilihan untuk *${query}*:\n`, `I found multiple options for *${query}*:\n`);
               inStockMatches.forEach((p, idx) => {
-                matchText += `${idx + 1}. ${p.name}\n`;
+                const vars = getProductVariations(p);
+                matchText += vars.length > 0
+                  ? `${idx + 1}. ${p.name} (${vars.length} varian)\n`
+                  : `${idx + 1}. ${p.name}\n`;
               });
               matchText += l(`\nBalas "Nomor Qty" (contoh "1 2") untuk pesan.`, `\nReply "ItemQty" (e.g. "1 2") to order.`);
               await sendWhatsAppMessage(from, matchText, targetStore.id);
               return NextResponse.json({ success: true });
             }
             if (inStockMatches.length === 1) {
-              const ids = [inStockMatches[0].id];
-              const nextStep = buildOrderingStep(currentCategory, ids);
-              await updateSession(from, targetStore.id, { step: nextStep });
-              await sendWhatsAppMessage(from, l(`Ditemukan: *${inStockMatches[0].name}*\nBalas "1 1" untuk pesan satu, atau ubah qty sesuai kebutuhan.`, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one, or change quantity as needed.`), targetStore.id);
+              const single = inStockMatches[0];
+              const vars = getProductVariations(single);
+              if (vars.length > 0) {
+                const nextStep = buildVariationSelectStep(single.id, 1, currentCategory, [single.id]);
+                await updateSession(from, targetStore.id, { step: nextStep });
+                let varMsg = l(`Ditemukan: *${single.name}*\nPilih varian:\n`, `Found: *${single.name}*\nChoose variation:\n`);
+                vars.forEach((v, idx) => {
+                  varMsg += `${idx + 1}. ${v.name} - Rp ${new Intl.NumberFormat('id-ID').format(v.price)}\n`;
+                });
+                varMsg += l(`\nBalas nomor varian (contoh "1").`, `\nReply variation number (e.g. "1").`);
+                await sendWhatsAppMessage(from, varMsg, targetStore.id);
+              } else {
+                const ids = [single.id];
+                const nextStep = buildOrderingStep(currentCategory, ids);
+                await updateSession(from, targetStore.id, { step: nextStep });
+                await sendWhatsAppMessage(from, l(`Ditemukan: *${single.name}*\nBalas "1 1" untuk pesan satu, atau ubah qty sesuai kebutuhan.`, `Found: *${single.name}*\nReply "1 1" to order one, or change quantity as needed.`), targetStore.id);
+              }
               return NextResponse.json({ success: true });
             }
             const outOfStockMatches = await prisma.product.findMany({
@@ -943,6 +1091,7 @@ export async function POST(req: NextRequest) {
           for (const order of validOrders) {
              if (order.index >= 0 && order.index < products.length && order.qty > 0) {
                 const product = products[order.index];
+                const vars = getProductVariations(product);
                 if (Number(product.stock) <= 0) {
                   outOfStockMsg += `- ${product.name} is out of stock\n`;
                   continue;
@@ -950,6 +1099,17 @@ export async function POST(req: NextRequest) {
                 if (order.qty > Number(product.stock)) {
                   outOfStockMsg += `- ${product.name} only has ${product.stock} left\n`;
                   continue;
+                }
+                if (vars.length > 0) {
+                  const nextStep = buildVariationSelectStep(product.id, order.qty, currentCategory, searchIds);
+                  await updateSession(from, targetStore.id, { step: nextStep, cart: currentCart });
+                  let varMsg = l(`*${product.name}* punya beberapa varian.\nPilih varian dulu:\n`, `*${product.name}* has variations.\nPlease choose one first:\n`);
+                  vars.forEach((v, idx) => {
+                    varMsg += `${idx + 1}. ${v.name} - Rp ${new Intl.NumberFormat('id-ID').format(v.price)}\n`;
+                  });
+                  varMsg += l(`\nBalas nomor varian (contoh "1").`, `\nReply variation number (e.g. "1").`);
+                  await sendWhatsAppMessage(from, varMsg, targetStore.id);
+                  return NextResponse.json({ success: true });
                 }
                 currentCart.push({ productId: product.id, name: product.name, price: product.price, qty: order.qty });
                 addedItemsMsg += `- ${order.qty}x ${product.name}\n`;
