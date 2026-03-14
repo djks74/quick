@@ -19,6 +19,8 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
   const settings = await prisma.store.findUnique({ where: { id: order.storeId } });
   const whatsappNumber = settings?.whatsapp || "628123456789";
 
+  const hasExternalPaymentUrl = Boolean(order.paymentUrl);
+
   // Construct message
   const message = `Hello, I have paid for Order #${order.id} with total amount ${formatCurrency(order.totalAmount, "IDR")}. Please process my order.`;
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
@@ -37,23 +39,38 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
             <h2 className="text-3xl font-black text-gray-900">{formatCurrency(order.totalAmount, "IDR")}</h2>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-            <h3 className="font-bold text-gray-900 text-sm">Bank Transfer (Manual)</h3>
-            <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-md flex items-center justify-center text-white font-bold text-xs">BCA</div>
-                <div>
-                  <p className="font-bold text-sm text-gray-900">123 456 7890</p>
-                  <p className="text-xs text-gray-500">Laku Store</p>
+          {hasExternalPaymentUrl ? (
+            <a
+              href={order.paymentUrl || "#"}
+              className="w-full bg-[#2271b1] hover:bg-[#135e96] text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center space-x-2"
+            >
+              <span>Pay Now</span>
+            </a>
+          ) : (
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
+              <h3 className="font-bold text-gray-900 text-sm">Bank Transfer (Manual)</h3>
+              <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-md flex items-center justify-center text-white font-bold text-xs">BCA</div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-900">123 456 7890</p>
+                    <p className="text-xs text-gray-500">Laku Store</p>
+                  </div>
                 </div>
+                <button className="text-xs text-blue-600 font-bold uppercase">Copy</button>
               </div>
-              <button className="text-xs text-blue-600 font-bold uppercase">Copy</button>
             </div>
-          </div>
+          )}
 
           <div className="text-center text-xs text-gray-400">
-            Please transfer the exact amount. <br/>
-            Your order will be processed after confirmation.
+            {hasExternalPaymentUrl ? (
+              <>Tap Pay Now to continue your secure payment flow.</>
+            ) : (
+              <>
+                Please transfer the exact amount. <br />
+                Your order will be processed after confirmation.
+              </>
+            )}
           </div>
 
           <a 

@@ -231,14 +231,16 @@ export async function processPayment(orderId: number, amount: number, customerPh
 
 // Deprecated function kept for backward compatibility (WhatsApp flow)
 export async function createPaymentLink(orderId: number, amount: number, customerPhone: string, storeId: number, specificType?: string) {
+  const appBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click").replace(/\/$/, "");
+  const internalCheckoutUrl = `${appBaseUrl}/checkout/pay/${orderId}`;
   // Default to Midtrans if enabled, else manual mock
   const settings = await prisma.store.findUnique({ where: { id: storeId } });
   
   // Try Midtrans first
   if (settings?.enableMidtrans) {
     try {
-      const res = await processPayment(orderId, amount, customerPhone, 'midtrans', storeId, specificType);
-      return res.paymentUrl;
+      await processPayment(orderId, amount, customerPhone, 'midtrans', storeId, specificType);
+      return internalCheckoutUrl;
     } catch (e) {
       console.error("Failed to generate Midtrans link:", e);
       // Fallback to manual? No, let's return error or fallback to WhatsApp confirmation
@@ -248,8 +250,8 @@ export async function createPaymentLink(orderId: number, amount: number, custome
   // Try Xendit
   if (settings?.enableXendit) {
      try {
-      const res = await processPayment(orderId, amount, customerPhone, 'xendit', storeId, specificType);
-      return res.paymentUrl;
+      await processPayment(orderId, amount, customerPhone, 'xendit', storeId, specificType);
+      return internalCheckoutUrl;
     } catch (e) {
       console.error("Failed to generate Xendit link:", e);
     }
@@ -262,5 +264,5 @@ export async function createPaymentLink(orderId: number, amount: number, custome
       waNumber = '62' + waNumber.substring(1);
   }
   
-  return `https://wa.me/${waNumber}?text=Confirm+Payment+Order+${orderId}`;
+  return internalCheckoutUrl;
 }
