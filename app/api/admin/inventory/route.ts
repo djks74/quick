@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 let ensuredSchema: Promise<void> | null = null;
 
@@ -82,6 +83,32 @@ async function ensureInventorySchema() {
   await ensuredSchema;
 }
 
+async function sendLowStockReminder(storeId: number, item: { name: string; stock: number; minStock: number; unit: string }) {
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    include: { owner: true }
+  });
+  if (!store) return;
+  const merchantPhone = store.whatsapp || store.owner?.phoneNumber;
+  if (!merchantPhone) return;
+  const stockText = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(Math.max(0, Number(item.stock)));
+  const minText = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(Number(item.minStock));
+  const msg = `⚠️ *Low Stock Alert*\n\n${item.name} is low.\nCurrent stock: ${stockText} ${item.unit}\nMinimum stock: ${minText} ${item.unit}\n\nPlease restock soon to avoid stockout.`;
+  await sendWhatsAppMessage(merchantPhone, msg, store.id);
+}
+
+async function sendOutOfStockReminder(storeId: number, item: { name: string; unit: string }) {
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    include: { owner: true }
+  });
+  if (!store) return;
+  const merchantPhone = store.whatsapp || store.owner?.phoneNumber;
+  if (!merchantPhone) return;
+  const msg = `🚨 *Out of Stock (Critical)*\n\n${item.name} (${item.unit}) has reached 0 stock.\nPlease restock immediately.`;
+  await sendWhatsAppMessage(merchantPhone, msg, store.id);
+}
+
 // GET /api/admin/inventory?slug=store-slug&barcode=123
 export async function GET(req: NextRequest) {
   try {
@@ -160,7 +187,7 @@ export async function POST(req: NextRequest) {
       console.log("[INVENTORY_POST] Updating stock for item:", itemId, "amount:", amount);
       const existing = await prisma.inventoryItem.findFirst({
         where: { id: itemId, storeId: store.id },
-        select: { stock: true }
+        select: { stock: true, minStock: true, name: true, unit: true }
       });
 
       if (!existing) {
@@ -175,6 +202,23 @@ export async function POST(req: NextRequest) {
         where: { id: itemId, storeId: store.id },
         data: { stock: { increment: amount } }
       });
+      const wasLow = Number(existing.stock) <= Number(existing.minStock);
+      const isLow = Number(item.stock) <= Number(item.minStock);
+      const becameOutOfStock = Number(existing.stock) > 0 && Number(item.stock) <= 0;
+      if (!wasLow && isLow) {
+        await sendLowStockReminder(store.id, {
+          name: item.name,
+          stock: Number(item.stock),
+          minStock: Number(item.minStock),
+          unit: item.unit || "pcs"
+        });
+      }
+      if (becameOutOfStock) {
+        await sendOutOfStockReminder(store.id, {
+          name: item.name,
+          unit: item.unit || "pcs"
+        });
+      }
       return NextResponse.json(item);
     }
 
@@ -256,6 +300,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid number format" }, { status: 400 });
     }
 
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { id: updatedId, storeId: store.id },
+      select: { stock: true, minStock: true }
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Ingredient not found" }, { status: 404 });
+    }
+
     const updated = await prisma.inventoryItem.update({
       where: { id: updatedId, storeId: store.id },
       data: {
@@ -267,6 +320,23 @@ export async function PUT(req: NextRequest) {
         costPrice: costPrice || 0,
       }
     });
+    const wasLow = Number(existing.stock) <= Number(existing.minStock);
+    const isLow = Number(updated.stock) <= Number(updated.minStock);
+    const becameOutOfStock = Number(existing.stock) > 0 && Number(updated.stock) <= 0;
+    if (!wasLow && isLow) {
+      await sendLowStockReminder(store.id, {
+        name: updated.name,
+        stock: Number(updated.stock),
+        minStock: Number(updated.minStock),
+        unit: updated.unit || "pcs"
+      });
+    }
+    if (becameOutOfStock) {
+      await sendOutOfStockReminder(store.id, {
+        name: updated.name,
+        unit: updated.unit || "pcs"
+      });
+    }
     console.log("[INVENTORY_PUT] Item updated successfully:", updated.id);
     return NextResponse.json(updated);
   } catch (error: any) {

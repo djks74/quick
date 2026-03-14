@@ -27,6 +27,10 @@ export async function ensureWaCreditSchema() {
         ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ;
       `);
       await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ;
+      `);
+      await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "WaUsageLog" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -104,6 +108,7 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
         waBalance: true,
         waPricePerMessage: true,
         waLowCreditAlertSentAt: true,
+        waCriticalCreditAlertSentAt: true,
         whatsapp: true,
         owner: { select: { phoneNumber: true } }
       }
@@ -122,7 +127,7 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
 
     const updated = await tx.store.findUnique({
       where: { id: storeId },
-      select: { waBalance: true, waLowCreditAlertSentAt: true, whatsapp: true, owner: { select: { phoneNumber: true } } }
+      select: { waBalance: true, waLowCreditAlertSentAt: true, waCriticalCreditAlertSentAt: true, whatsapp: true, owner: { select: { phoneNumber: true } } }
     });
     const balanceAfter = Number((updated?.waBalance || 0).toFixed(2));
     const log = await tx.waUsageLog.create({
@@ -137,12 +142,19 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
       }
     });
 
-    const lastAlert = updated?.waLowCreditAlertSentAt;
-    const shouldAlert = balanceAfter <= WA_LOW_CREDIT_THRESHOLD && (!lastAlert || now.getTime() - new Date(lastAlert).getTime() > 6 * 60 * 60 * 1000);
+    const criticalThreshold = cost * 5;
+    const lowLastAlert = updated?.waLowCreditAlertSentAt;
+    const criticalLastAlert = updated?.waCriticalCreditAlertSentAt;
+    const shouldCriticalAlert = balanceAfter <= criticalThreshold && (!criticalLastAlert || now.getTime() - new Date(criticalLastAlert).getTime() > 2 * 60 * 60 * 1000);
+    const shouldLowAlert = balanceAfter <= WA_LOW_CREDIT_THRESHOLD && (!lowLastAlert || now.getTime() - new Date(lowLastAlert).getTime() > 6 * 60 * 60 * 1000);
+    const shouldAlert = shouldCriticalAlert || shouldLowAlert;
     if (shouldAlert) {
       await tx.store.update({
         where: { id: storeId },
-        data: { waLowCreditAlertSentAt: now }
+        data: {
+          waLowCreditAlertSentAt: shouldLowAlert ? now : updated?.waLowCreditAlertSentAt,
+          waCriticalCreditAlertSentAt: shouldCriticalAlert ? now : updated?.waCriticalCreditAlertSentAt
+        }
       });
     }
 
@@ -152,6 +164,7 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
       cost,
       balanceAfter,
       shouldAlert,
+      alertLevel: shouldCriticalAlert ? "CRITICAL" as const : shouldLowAlert ? "LOW" as const : null,
       alertPhone: updated?.whatsapp || updated?.owner?.phoneNumber || null,
       storeSlug: store.slug
     };

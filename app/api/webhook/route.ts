@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
+import { resolvePaymentUrl } from '@/lib/merchant-alerts';
 
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
@@ -35,6 +36,80 @@ async function updateSession(phoneNumber: string, storeId: number, data: any) {
     },
     data
   });
+}
+
+function parseOrderingStep(step?: string | null) {
+  if (!step || !step.startsWith("ORDERING")) {
+    return { category: null as string | null, searchIds: null as number[] | null };
+  }
+  const parts = step.split(":");
+  const category = parts[1] && parts[1] !== "ALL" ? parts[1] : null;
+  let searchIds: number[] | null = null;
+  if (parts[2] === "SEARCH" && parts[3]) {
+    const ids = parts[3]
+      .split(",")
+      .map((id) => parseInt(id, 10))
+      .filter((id) => !isNaN(id));
+    if (ids.length > 0) searchIds = ids;
+  }
+  return { category, searchIds };
+}
+
+function buildOrderingStep(category: string | null, searchIds?: number[] | null) {
+  const base = category ? `ORDERING:${category}` : "ORDERING:ALL";
+  if (searchIds && searchIds.length > 0) {
+    return `${base}:SEARCH:${searchIds.join(",")}`;
+  }
+  return base;
+}
+
+async function getOrderableProducts(storeId: number, category: string | null, searchIds?: number[] | null) {
+  const whereClause: any = {
+    storeId,
+    stock: { gt: 0 }
+  };
+  if (category) {
+    whereClause.category = { equals: category, mode: "insensitive" };
+  }
+  if (searchIds && searchIds.length > 0) {
+    whereClause.id = { in: searchIds };
+  }
+  return prisma.product.findMany({
+    where: whereClause,
+    take: 10,
+    orderBy: { name: "asc" }
+  });
+}
+
+async function validateCartStock(storeId: number, cart: any[]) {
+  const requestedByProduct = new Map<number, { qty: number; name: string }>();
+  cart.forEach((item) => {
+    const current = requestedByProduct.get(item.productId);
+    if (current) {
+      current.qty += Number(item.qty) || 0;
+    } else {
+      requestedByProduct.set(item.productId, { qty: Number(item.qty) || 0, name: item.name || "Item" });
+    }
+  });
+  const productIds = Array.from(requestedByProduct.keys());
+  if (productIds.length === 0) return { ok: true, issues: [] as string[] };
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds }, storeId },
+    select: { id: true, name: true, stock: true }
+  });
+  const stockMap = new Map(products.map((p) => [p.id, p]));
+  const issues: string[] = [];
+  for (const [productId, req] of requestedByProduct.entries()) {
+    const product = stockMap.get(productId);
+    if (!product || Number(product.stock) <= 0) {
+      issues.push(`${req.name}: out of stock`);
+      continue;
+    }
+    if (req.qty > Number(product.stock)) {
+      issues.push(`${product.name}: only ${product.stock} left`);
+    }
+  }
+  return { ok: issues.length === 0, issues };
 }
 
 export async function GET(req: NextRequest) {
@@ -284,6 +359,76 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      const continueMatch = lowerText?.match(/^(continue|lanjut)(?:\s+#?(\d+))?$/i);
+      if (continueMatch) {
+        const requestedOrderId = continueMatch[2] ? parseInt(continueMatch[2], 10) : null;
+        const pendingOrder = await prisma.order.findFirst({
+          where: {
+            storeId: targetStore.id,
+            customerPhone: from,
+            status: "PENDING",
+            ...(requestedOrderId ? { id: requestedOrderId } : {})
+          },
+          orderBy: { createdAt: "desc" }
+        });
+        if (!pendingOrder) {
+          await sendWhatsAppMessage(from, `No pending order found. Reply 'Menu' to create a new order.`, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const paymentUrl = resolvePaymentUrl(pendingOrder.id, pendingOrder.paymentUrl);
+        await sendWhatsAppMessage(
+          from,
+          `🧾 Pending order found: #${pendingOrder.id}\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(pendingOrder.totalAmount)}\n\nTap button below to continue payment.`,
+          targetStore.id,
+          { buttonText: "Continue Payment", buttonUrl: paymentUrl }
+        );
+        return NextResponse.json({ success: true });
+      }
+
+      const cancelMatch = lowerText?.match(/^(cancel|batal)(?:\s+#?(\d+))?$/i);
+      if (cancelMatch) {
+        const requestedOrderId = cancelMatch[2] ? parseInt(cancelMatch[2], 10) : null;
+        const pendingOrder = await prisma.order.findFirst({
+          where: {
+            storeId: targetStore.id,
+            customerPhone: from,
+            status: "PENDING",
+            ...(requestedOrderId ? { id: requestedOrderId } : {})
+          },
+          orderBy: { createdAt: "desc" }
+        });
+        if (!pendingOrder) {
+          await sendWhatsAppMessage(from, `No pending order found to cancel.`, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        await prisma.order.update({
+          where: { id: pendingOrder.id },
+          data: { status: "CANCELLED" }
+        });
+        await createOrderNotification({
+          storeId: targetStore.id,
+          orderId: pendingOrder.id,
+          source: "CUSTOMER_CANCEL",
+          title: `Customer cancelled order #${pendingOrder.id}`,
+          body: `${from} cancelled before payment`,
+          metadata: { channel: "whatsapp" }
+        }).catch(() => null);
+        const storeContact = await prisma.store.findUnique({
+          where: { id: targetStore.id },
+          include: { owner: true }
+        });
+        const merchantPhone = storeContact?.whatsapp || storeContact?.owner?.phoneNumber;
+        if (merchantPhone) {
+          await sendWhatsAppMessage(
+            merchantPhone,
+            `⚠️ Customer cancelled pending order #${pendingOrder.id} before payment.\nCustomer: ${from}`,
+            targetStore.id
+          );
+        }
+        await sendWhatsAppMessage(from, `Order #${pendingOrder.id} has been cancelled.`, targetStore.id);
+        return NextResponse.json({ success: true });
+      }
+
       if (lowerText === 'stores' && isSharedNumber) {
          const stores = await prisma.store.findMany({
            take: 10,
@@ -324,13 +469,13 @@ export async function POST(req: NextRequest) {
 
             await updateSession(from, targetStore.id, { step: 'ORDERING' });
             const products = await prisma.product.findMany({ 
-              where: { storeId: targetStore.id },
+              where: { storeId: targetStore.id, stock: { gt: 0 } },
               take: 10,
               orderBy: { name: 'asc' }
             });
 
             if (products.length === 0) {
-                 await sendWhatsAppMessage(from, `Sorry, this store has no products yet.`, targetStore.id);
+                 await sendWhatsAppMessage(from, `Sorry, there are no in-stock products right now.`, targetStore.id);
                  return NextResponse.json({ success: true });
             }
 
@@ -386,14 +531,14 @@ export async function POST(req: NextRequest) {
               whereClause.category = { equals: selectedCategoryName, mode: 'insensitive' };
           }
 
-          const products = await prisma.product.findMany({ 
-            where: whereClause,
+          const products = await prisma.product.findMany({
+            where: { ...whereClause, stock: { gt: 0 } },
             take: 10,
             orderBy: { name: 'asc' }
           });
 
           if (products.length === 0) {
-             await sendWhatsAppMessage(from, `No items found in this category.`, targetStore.id);
+             await sendWhatsAppMessage(from, `No in-stock items found in this category.`, targetStore.id);
              return NextResponse.json({ success: true });
           }
 
@@ -459,7 +604,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true });
           }
           await updateSession(from, targetStore.id, { step: 'ORDERING' });
-          const products = await prisma.product.findMany({ where: { storeId: targetStore.id }, take: 10, orderBy: { name: 'asc' } });
+          const products = await prisma.product.findMany({ where: { storeId: targetStore.id, stock: { gt: 0 } }, take: 10, orderBy: { name: 'asc' } });
+          if (products.length === 0) {
+            await sendWhatsAppMessage(from, `Sorry, there are no in-stock products right now.`, targetStore.id);
+            return NextResponse.json({ success: true });
+          }
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
           let menuText = `🍽️ *${targetStore.name} Menu* 🍽️\n\n👇 *Order via WhatsApp Text*:\n`;
           products.forEach((p, index) => {
@@ -510,13 +659,19 @@ export async function POST(req: NextRequest) {
       }
 
       if (session.step && session.step.startsWith('ORDERING')) {
-        const stepParts = session.step.split(':');
-        const currentCategory = stepParts.length > 1 && stepParts[1] !== 'ALL' ? stepParts[1] : null;
+        const orderingContext = parseOrderingStep(session.step);
+        const currentCategory = orderingContext.category;
+        const searchIds = orderingContext.searchIds;
 
         if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank') {
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
             await sendWhatsAppMessage(from, `Your cart is empty. Reply 'Menu' to see items.`, targetStore.id);
+            return NextResponse.json({ success: true });
+          }
+          const stockCheck = await validateCartStock(targetStore.id, cart);
+          if (!stockCheck.ok) {
+            await sendWhatsAppMessage(from, `Some items are unavailable:\n- ${stockCheck.issues.join('\n- ')}\n\nPlease update your order. Reply 'Menu' to refresh in-stock items.`, targetStore.id);
             return NextResponse.json({ success: true });
           }
 
@@ -596,16 +751,74 @@ export async function POST(req: NextRequest) {
         }
         if (quickCheckoutMethod === 'bank') quickCheckoutMethod = 'bank_transfer';
 
+        if (validOrders.length === 0 && !isCheckoutCommand) {
+          const query = textBody.trim();
+          if (query.length >= 2) {
+            const searchWhere: any = {
+              storeId: targetStore.id,
+              name: { contains: query, mode: 'insensitive' }
+            };
+            if (currentCategory) {
+              searchWhere.category = { equals: currentCategory, mode: 'insensitive' };
+            }
+            const inStockMatches = await prisma.product.findMany({
+              where: { ...searchWhere, stock: { gt: 0 } },
+              take: 10,
+              orderBy: { name: 'asc' }
+            });
+            if (inStockMatches.length > 1) {
+              const ids = inStockMatches.map((p) => p.id);
+              const nextStep = buildOrderingStep(currentCategory, ids);
+              await updateSession(from, targetStore.id, { step: nextStep });
+              let matchText = `I found multiple options for *${query}*:\n`;
+              inStockMatches.forEach((p, idx) => {
+                matchText += `${idx + 1}. ${p.name}\n`;
+              });
+              matchText += `\nReply "ItemQty" (e.g. "1 2") to order.`;
+              await sendWhatsAppMessage(from, matchText, targetStore.id);
+              return NextResponse.json({ success: true });
+            }
+            if (inStockMatches.length === 1) {
+              const ids = [inStockMatches[0].id];
+              const nextStep = buildOrderingStep(currentCategory, ids);
+              await updateSession(from, targetStore.id, { step: nextStep });
+              await sendWhatsAppMessage(from, `Found: *${inStockMatches[0].name}*\nReply "1 1" to order one, or change quantity as needed.`, targetStore.id);
+              return NextResponse.json({ success: true });
+            }
+            const outOfStockMatches = await prisma.product.findMany({
+              where: { ...searchWhere, stock: { lte: 0 } },
+              take: 5,
+              orderBy: { name: 'asc' }
+            });
+            if (outOfStockMatches.length > 0) {
+              let outMsg = `Sorry, these products are currently out of stock:\n`;
+              outOfStockMatches.forEach((p) => {
+                outMsg += `- ${p.name}\n`;
+              });
+              outMsg += `\nReply 'Menu' to see available items.`;
+              await sendWhatsAppMessage(from, outMsg, targetStore.id);
+              return NextResponse.json({ success: true });
+            }
+          }
+        }
+
         if (validOrders.length > 0) {
-          const whereClause: any = { storeId: targetStore.id };
-          if (currentCategory) whereClause.category = { equals: currentCategory, mode: 'insensitive' };
-          const products = await prisma.product.findMany({ where: whereClause, take: 10, orderBy: { name: 'asc' } });
+          const products = await getOrderableProducts(targetStore.id, currentCategory, searchIds);
           const currentCart = (session.cart as any[]) || [];
           let addedItemsMsg = "";
+          let outOfStockMsg = "";
 
           for (const order of validOrders) {
              if (order.index >= 0 && order.index < products.length && order.qty > 0) {
                 const product = products[order.index];
+                if (Number(product.stock) <= 0) {
+                  outOfStockMsg += `- ${product.name} is out of stock\n`;
+                  continue;
+                }
+                if (order.qty > Number(product.stock)) {
+                  outOfStockMsg += `- ${product.name} only has ${product.stock} left\n`;
+                  continue;
+                }
                 currentCart.push({ productId: product.id, name: product.name, price: product.price, qty: order.qty });
                 addedItemsMsg += `- ${order.qty}x ${product.name}\n`;
              }
@@ -614,6 +827,11 @@ export async function POST(req: NextRequest) {
           if (addedItemsMsg) {
              await updateSession(from, targetStore.id, { cart: currentCart });
              if (isCheckoutCommand) {
+                 const stockCheck = await validateCartStock(targetStore.id, currentCart);
+                 if (!stockCheck.ok) {
+                     await sendWhatsAppMessage(from, `Some items are unavailable:\n- ${stockCheck.issues.join('\n- ')}\n\nPlease update your order. Reply 'Menu' to refresh in-stock items.`, targetStore.id);
+                     return NextResponse.json({ success: true });
+                 }
                  const total = currentCart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
                  const taxAmount = total * (targetStore.taxPercent / 100);
                  const serviceCharge = total * (targetStore.serviceChargePercent / 100);
@@ -664,10 +882,17 @@ export async function POST(req: NextRequest) {
                  await updateSession(from, targetStore.id, { step: 'START', cart: [] });
                  return NextResponse.json({ success: true });
              } else {
-                 await sendWhatsAppMessage(from, `Added to cart:\n${addedItemsMsg}\nReply with more items, or "Done Qris/Bank" to checkout.\nReply 'Menu' to go back.`, targetStore.id);
+                 let addMsg = `Added to cart:\n${addedItemsMsg}`;
+                 if (outOfStockMsg) addMsg += `\nNot added:\n${outOfStockMsg}`;
+                 addMsg += `\nReply with more items, or "Done Qris/Bank" to checkout.\nReply 'Menu' to go back.`;
+                 await sendWhatsAppMessage(from, addMsg, targetStore.id);
              }
           } else {
-             await sendWhatsAppMessage(from, `Invalid item number(s). Please check the menu.`, targetStore.id);
+             if (outOfStockMsg) {
+               await sendWhatsAppMessage(from, `Unable to add item(s):\n${outOfStockMsg}\nReply 'Menu' to see available products.`, targetStore.id);
+             } else {
+               await sendWhatsAppMessage(from, `Invalid item number(s). Please check the menu.`, targetStore.id);
+             }
           }
         } else if (isCheckoutCommand) {
              const cart = (session.cart as any[]) || [];

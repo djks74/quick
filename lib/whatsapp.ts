@@ -100,6 +100,7 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   let usageLogId: number | null = null;
   let lowCreditAlertPhone: string | null = null;
   let lowCreditAlertUrl = "";
+  let lowCreditAlertLevel: "LOW" | "CRITICAL" | null = null;
 
   if (isBillable) {
     const reserve = await reserveWaCreditForMessage(
@@ -118,6 +119,7 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     usageLogId = reserve.logId;
     if (reserve.shouldAlert && reserve.alertPhone) {
       lowCreditAlertPhone = reserve.alertPhone;
+      lowCreditAlertLevel = reserve.alertLevel || null;
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
       lowCreditAlertUrl = reserve.storeSlug && baseUrl ? `${baseUrl.replace(/\/$/, "")}/${reserve.storeSlug}/admin/finance/ledger` : "";
     }
@@ -141,9 +143,17 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       await finalizeWaMessageLog(usageLogId, result.messageId, "sent");
     }
     if (lowCreditAlertPhone) {
-      const alertText = lowCreditAlertUrl
-        ? `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending: ${lowCreditAlertUrl}`
-        : `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending.`;
+      const alertText = lowCreditAlertLevel === "CRITICAL"
+        ? (
+            lowCreditAlertUrl
+              ? `🚨 Your Mythoz WA balance is almost empty. Top up immediately to avoid message interruption: ${lowCreditAlertUrl}`
+              : `🚨 Your Mythoz WA balance is almost empty. Top up immediately to avoid message interruption.`
+          )
+        : (
+            lowCreditAlertUrl
+              ? `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending: ${lowCreditAlertUrl}`
+              : `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending.`
+          );
       await dispatchWhatsAppMessage(
         lowCreditAlertPhone.replace(/\D/g, "").replace(/^0/, "62"),
         alertText,

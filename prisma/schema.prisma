@@ -67,6 +67,7 @@ model Store {
   waBalance               Float     @default(50000.0)
   waPricePerMessage       Float     @default(350.0)
   waLowCreditAlertSentAt  DateTime?
+  waCriticalCreditAlertSentAt DateTime?
   
   // Relations
   products                Product[]
