@@ -639,7 +639,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    style={selectedVariation?.name === v.name ? { borderColor: themeColor, backgroundColor: `${themeColor}08` } : {}}
                  >
                    <span className="font-black text-gray-900 dark:text-white">{v.name}</span>
-                   <span className="font-black text-primary" style={{ color: themeColor }}>{formatPrice(v.price)}</span>
+                   <span className="font-black text-[var(--theme-color)] dark:text-white">{formatPrice(v.price)}</span>
                  </button>
                ))}
             </div>
@@ -674,7 +674,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+              <div className="flex-1 overflow-y-auto">
+                 <div className="p-8 space-y-6">
                  {cart.map((item, idx) => (
                     <div key={idx} className="flex gap-4 items-center animate-in slide-in-from-right duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
                        <div className="w-16 h-16 rounded-2xl bg-gray-50 dark:bg-gray-800 overflow-hidden border border-gray-100 dark:border-gray-800 flex-shrink-0 relative">
@@ -692,7 +693,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex-1">
                           <h4 className="font-black text-gray-900 dark:text-white text-sm">{item.name}{item.selectedVariation && <span className="text-gray-400 dark:text-gray-500 font-bold text-[10px] block uppercase">Variation: {item.selectedVariation.name}</span>}</h4>
-                          <p className="text-xs font-black text-primary mt-1" style={{ color: themeColor }}>{formatPrice(item.price)}</p>
+                          <p className="text-xs font-black text-[var(--theme-color)] dark:text-white mt-1">{formatPrice(item.price)}</p>
                        </div>
                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 p-1 rounded-xl">
                           <button 
@@ -713,9 +714,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                     </div>
                  ))}
-              </div>
+                 </div>
 
-              <div className="p-8 bg-gray-50/50 dark:bg-[#0F1113]/50 rounded-t-[40px] space-y-6">
+                 <div className="p-8 bg-gray-50/50 dark:bg-[#0F1113]/50 rounded-t-[40px] space-y-6">
                  <div className="space-y-3">
                     <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">WhatsApp Number</label>
                     <input
@@ -882,6 +883,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                      The store is currently closed. Checkout is disabled.
                    </p>
                  )}
+              </div>
               </div>
            </div>
         </div>
