@@ -219,6 +219,10 @@ function parseTakeawayAddressStep(step?: string | null) {
   return { provider, method };
 }
 
+function isShippingConfigured(store: any) {
+  return !!(store?.enableTakeawayDelivery && (store?.shippingEnableJne || (store?.shippingEnableGosend && !store?.shippingJneOnly)));
+}
+
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const mode = searchParams.get('hub.mode');
@@ -465,7 +469,7 @@ export async function POST(req: NextRequest) {
       
       if (checkInMatch) {
         const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
-        const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+        const shippingConfigured = isShippingConfigured(targetStore);
         await updateSession(from, targetStore.id, { tableNumber: tableNum, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION', cart: [] });
 
         const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
@@ -484,6 +488,34 @@ export async function POST(req: NextRequest) {
             : l(
                 `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\nBalas "Menu" untuk mulai pesan.\nIngin English? balas: EN`,
                 `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\nReply "Menu" to start ordering.\nWant Indonesian again? reply: ID`
+              ),
+          targetStore.id,
+          { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
+        );
+        return NextResponse.json({ success: true });
+      }
+
+      const orderIntentMatch = textBody.match(/(?:i['’`]?d like to order|would like to order|ingin pesan|mau pesan|start order|mulai pesan|order via whatsapp)/i);
+      if (orderIntentMatch) {
+        const tableFromText = textBody.match(/(?:table|meja)\s*#?\s*([a-zA-Z0-9\-]+)/i)?.[1] || session.tableNumber || null;
+        const shippingConfigured = isShippingConfigured(targetStore);
+        await updateSession(from, targetStore.id, {
+          tableNumber: tableFromText,
+          step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION',
+          cart: (session.cart as any[]) || []
+        });
+
+        const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${tableFromText ? `?table=${tableFromText}` : ''}`;
+        await sendWhatsAppMessage(
+          from,
+          shippingConfigured
+            ? l(
+                `👋 Selamat datang di *${targetStore.name}*${tableFromText ? ` meja *${tableFromText}*` : ""}!\n\nPilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\nSetelah pilih, balas "Menu" untuk mulai pesan.`,
+                `👋 Welcome to *${targetStore.name}*${tableFromText ? ` at Table *${tableFromText}*` : ""}!\n\nChoose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\nAfter selecting, reply "Menu" to start ordering.`
+              )
+            : l(
+                `👋 Selamat datang di *${targetStore.name}*${tableFromText ? ` meja *${tableFromText}*` : ""}!\n\nBalas "Menu" untuk mulai pesan.`,
+                `👋 Welcome to *${targetStore.name}*${tableFromText ? ` at Table *${tableFromText}*` : ""}!\n\nReply "Menu" to start ordering.`
               ),
           targetStore.id,
           { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
@@ -723,6 +755,18 @@ export async function POST(req: NextRequest) {
       }
 
       if (lowerText === 'menu') {
+        if (session.step === 'START' && isShippingConfigured(targetStore)) {
+          await updateSession(from, targetStore.id, { step: 'SERVICE_TYPE_SELECTION' });
+          await sendWhatsAppMessage(
+            from,
+            l(
+              `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
+              `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\nAfter selecting, reply "Menu" to continue.`
+            ),
+            targetStore.id
+          );
+          return NextResponse.json({ success: true });
+        }
         try {
             const categories = await prisma.category.findMany({
                 where: { storeId: targetStore.id },
@@ -892,7 +936,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (session.step === 'SERVICE_TYPE_SELECTION') {
-        const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+        const shippingConfigured = isShippingConfigured(targetStore);
         if (!shippingConfigured) {
           await updateSession(from, targetStore.id, { step: 'MENU_SELECTION' });
           await sendWhatsAppMessage(from, l(`Balas "Menu" untuk mulai pesan.`, `Reply "Menu" to start ordering.`), targetStore.id);
@@ -1175,7 +1219,7 @@ export async function POST(req: NextRequest) {
           const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
           let method = lowerText.includes('qris') ? 'qris' : lowerText.includes('bank') ? 'bank_transfer' : undefined;
 
-          const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+          const shippingConfigured = isShippingConfigured(targetStore);
           if (!session.tableNumber && shippingConfigured) {
             await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(method), cart });
             await sendWhatsAppMessage(
@@ -1462,28 +1506,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (textBody?.toLowerCase().includes("would like to order")) {
-        const totalMatch = textBody.match(/Total:\s*\*?Rp\s*([\d.]+)/i);
-        if (totalMatch) {
-           const amount = parseInt(totalMatch[1].replace(/\./g, ''));
-           const order = await prisma.order.create({
-            data: { storeId: targetStore.id, customerPhone: from, totalAmount: amount, status: 'PENDING', items: { create: [] } }
-          });
-          await createOrderNotification({
-            storeId: targetStore.id,
-            orderId: order.id,
-            source: "WHATSAPP",
-            title: `New WhatsApp order #${order.id}`,
-            body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
-            metadata: {
-              totalAmount: amount
-            }
-          });
-          const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-          await sendWhatsAppMessage(from, `Order #${order.id} received!\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, targetStore.id, {
-              buttonText: "Pay Now",
-              buttonUrl: paymentLink
-          });
-        }
+        await sendWhatsAppMessage(from, l(`Balas "Menu" untuk mulai order ya.`, `Reply "Menu" to start ordering.`), targetStore.id);
       }
     }
     return NextResponse.json({ success: true });

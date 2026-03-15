@@ -150,7 +150,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           });
           
           const data = await res.json();
-          const fallbackMessage = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*. (Phone: ${customerPhone})`;
+          const fallbackMessage = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
           const fallbackPhone = data.fallbackPhone || store.whatsapp || siteConfig.whatsappNumber;
           const whatsappUrl = `https://wa.me/${fallbackPhone}?text=${encodeURIComponent(fallbackMessage)}`;
           setCheckInFallbackUrl(whatsappUrl);
@@ -172,7 +172,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           console.error("Check-in trigger failed:", e);
           // Fallback if API fails
           if (choice === 'whatsapp') {
-              const message = `Hello ${store.name}, I'm checking in from *Table ${tableNumber || 'Walking'}*.`;
+              const message = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
               const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
               window.open(whatsappUrl, '_blank');
           }
@@ -247,16 +247,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     let fee = isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
     const finalTotal = totalPrice + fee;
 
-    let message = `Hello ${store?.name}, I'd like to order`;
-    if (tableNumber) message += ` for *Table ${tableNumber}*`;
-    message += `:\n\n`;
-    cart.forEach(item => {
-      message += `- ${item.quantity}x ${item.name}${item.selectedVariation ? ` (${item.selectedVariation.name})` : ''} @ ${formatPrice(item.price)}\n`;
-    });
-    if (tax > 0) message += `Tax (${taxPercent}%): ${formatPrice(tax)}\n`;
-    if (serviceCharge > 0) message += `Service Charge (${servicePercent}%): ${formatPrice(serviceCharge)}\n`;
-    if (fee > 0) message += `Fee: ${formatPrice(fee)}\n`;
-    message += `\nTotal: *${formatPrice(finalTotal)}*`;
+    let message = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
+    message += method === "qris" ? `\n\nsaya mau bayar qris` : `\n\nsaya mau bayar bank`;
     const whatsappUrl = `https://wa.me/${store?.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };

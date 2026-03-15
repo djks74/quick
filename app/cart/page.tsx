@@ -40,12 +40,7 @@ export default function CartPage() {
 
   const handleWhatsAppCheckout = () => {
     const phone = settings?.whatsapp || "628123456789";
-    let message = `Halo, saya ingin memesan:\n\n`;
-    cartItems.forEach(item => {
-      message += `- ${item.name} x${item.quantity} (${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)})\n`;
-    });
-    message += `\nTotal: ${new Intl.NumberFormat('id-ID').format(total)}`;
-    
+    const message = `menu`;
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };

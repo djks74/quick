@@ -17,6 +17,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
+    const shippingConfigured = !!(store.enableTakeawayDelivery && (store.shippingEnableJne || (store.shippingEnableGosend && !store.shippingJneOnly)));
+
     // Create or Update Session
     const existingSession = await prisma.whatsAppSession.findUnique({
       where: {
@@ -30,7 +32,7 @@ export async function POST(req: Request) {
     if (existingSession) {
       await prisma.whatsAppSession.update({
         where: { id: existingSession.id },
-        data: { tableNumber: tableNumber?.toString() || null, step: 'START' }
+        data: { tableNumber: tableNumber?.toString() || null, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'START' }
       });
     } else {
       await prisma.whatsAppSession.create({
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
           phoneNumber: phone,
           storeId: storeId,
           tableNumber: tableNumber?.toString() || null,
-          step: 'START'
+          step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'START'
         }
       });
     }
@@ -58,7 +60,9 @@ export async function POST(req: Request) {
     message += `!\n\n`;
     
     if (type === 'whatsapp') {
-        message += `You can order directly via the button below, or reply with "Menu" to order here on WhatsApp. 🍽️`;
+        message += shippingConfigured
+          ? `Reply with:\n1 for Dine In\n2 for Takeaway/Delivery\n\nThen reply "Menu" to start ordering. 🍽️`
+          : `You can order directly via the button below, or reply with "Menu" to order here on WhatsApp. 🍽️`;
     } else {
         message += `You are currently viewing our Digital Menu on the web. Enjoy! 🌐`;
     }
