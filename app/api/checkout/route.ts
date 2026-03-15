@@ -4,6 +4,7 @@ import { processPayment } from '@/lib/payment';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,14 +16,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Store ID is required' }, { status: 400 });
     }
 
-    // Create Order
-    const order = await prisma.order.create({
+    const shippingProvider = customerInfo?.shippingProvider ? String(customerInfo.shippingProvider).toUpperCase() : null;
+    const shippingService = customerInfo?.shippingService ? String(customerInfo.shippingService) : null;
+    const shippingAddress = customerInfo?.shippingAddress ? String(customerInfo.shippingAddress) : null;
+    const shippingCost = customerInfo?.shippingCost ? Number(customerInfo.shippingCost) : 0;
+    const shippingEta = customerInfo?.shippingEta ? String(customerInfo.shippingEta) : null;
+
+    let order = await prisma.order.create({
       data: {
         storeId: parseInt(storeId),
         customerPhone: customerInfo?.phone || 'GUEST',
         tableNumber: customerInfo?.tableNumber,
         totalAmount: total,
         status: 'PENDING',
+        orderType: shippingProvider && shippingAddress ? 'TAKEAWAY' : 'DINE_IN',
+        shippingProvider: shippingProvider || undefined,
+        shippingService: shippingService || undefined,
+        shippingAddress: shippingAddress || undefined,
+        shippingCost: Number.isFinite(shippingCost) ? shippingCost : 0,
+        shippingEta: shippingEta || undefined,
+        shippingStatus: shippingProvider && shippingAddress ? 'QUOTE_READY' : undefined,
         items: {
           create: items.map((item: any) => ({
             productId: item.id,
@@ -32,6 +45,29 @@ export async function POST(req: NextRequest) {
         }
       }
     });
+
+    const store = await prisma.store.findUnique({ where: { id: parseInt(storeId) } });
+    if (store && order.orderType === "TAKEAWAY" && order.shippingProvider && order.shippingAddress) {
+      const draft = await createBiteshipDraftForPendingOrder({
+        store,
+        order,
+        items: (items || []).map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      });
+      if (draft?.ok && draft?.draftOrderId) {
+        const pendingDraft = draft as any;
+        order = await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            biteshipOrderId: pendingDraft.draftOrderId,
+            shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+          }
+        });
+      }
+    }
 
     await createOrderNotification({
       storeId: parseInt(storeId),

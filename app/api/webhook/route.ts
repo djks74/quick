@@ -6,7 +6,7 @@ import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
 import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
-import { getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
+import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 
 type WaLang = "id" | "en";
 
@@ -1042,7 +1042,7 @@ export async function POST(req: NextRequest) {
         }
         const shippingCost = Number(selected?.fee || 0);
         const finalTotal = subtotalWithTaxService + fee + shippingCost;
-        const order = await prisma.order.create({
+        let order = await prisma.order.create({
           data: {
             storeId: targetStore.id,
             customerPhone: from,
@@ -1061,6 +1061,26 @@ export async function POST(req: NextRequest) {
             items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
           }
         });
+        const draft = await createBiteshipDraftForPendingOrder({
+          store: targetStore,
+          order,
+          items: cart.map((item) => ({
+            name: item.name,
+            quantity: item.qty,
+            price: item.price
+          }))
+        });
+        if (draft?.ok && draft?.draftOrderId) {
+          const pendingDraft = draft as any;
+          order = await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: pendingDraft.draftOrderId,
+              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+            }
+          });
+        }
+
         await createOrderNotification({
           storeId: targetStore.id,
           orderId: order.id,

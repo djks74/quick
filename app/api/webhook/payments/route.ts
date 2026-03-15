@@ -105,6 +105,24 @@ export async function POST(req: NextRequest) {
       }).catch(() => null);
     }
 
+    if (status === 'PENDING') {
+      const shouldNotifyMerchant = await acquireNotificationLock(`PAYMENT_PENDING_${order.id}_${normalizedStatus || "pending"}`);
+      if (shouldNotifyMerchant) {
+        await sendMerchantWhatsApp(
+          order.storeId,
+          `🕒 *Pembayaran Pending*\nOrder #${order.id} masih menunggu pembayaran.\nCustomer: ${order.customerPhone}\nStatus Gateway: ${normalizedStatus || "pending"}\n\nSilakan monitor pembayaran di dashboard.`
+        ).catch(() => null);
+      }
+      await createOrderNotification({
+        storeId: order.storeId,
+        orderId: order.id,
+        source: "PAYMENT_PENDING",
+        title: `Pembayaran pending untuk order #${order.id}`,
+        body: `${order.customerPhone} • ${normalizedStatus || "pending"}`,
+        metadata: { status: normalizedStatus || "pending" }
+      }).catch(() => null);
+    }
+
     // Send WhatsApp Notification if PAID
     if (status === 'PAID') {
       // Update Store Balance (Net Amount)
@@ -127,12 +145,13 @@ export async function POST(req: NextRequest) {
       const providerCode = String(order.shippingProvider || "").toUpperCase();
       const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";
 
+      const canContinueDraft = ["draft_created", "courier_selected"].includes(String(order.shippingStatus || "").toLowerCase());
       if (
         store &&
         order.orderType === "TAKEAWAY" &&
         isProviderBookable &&
         !!order.shippingAddress &&
-        !order.biteshipOrderId
+        (!order.biteshipOrderId || canContinueDraft)
       ) {
         const booking = await createBiteshipOrderForPaidOrder({
           store,
@@ -145,12 +164,13 @@ export async function POST(req: NextRequest) {
         });
 
         if (booking.ok) {
+          const booked = booking as any;
           order = await prisma.order.update({
             where: { id: order.id },
             data: {
-              biteshipOrderId: booking.biteshipOrderId || undefined,
-              shippingTrackingNo: booking.trackingNo || order.shippingTrackingNo || null,
-              shippingStatus: booking.shippingStatus || order.shippingStatus || "confirmed"
+              biteshipOrderId: booked.biteshipOrderId || undefined,
+              shippingTrackingNo: booked.trackingNo || order.shippingTrackingNo || null,
+              shippingStatus: booked.shippingStatus || order.shippingStatus || "confirmed"
             }
           });
         } else {
@@ -188,11 +208,6 @@ export async function POST(req: NextRequest) {
 
       // 2. Notify Merchant
       if (store) {
-          let merchantPhone = store.whatsapp;
-          if (!merchantPhone && store.owner) {
-              merchantPhone = store.owner.phoneNumber;
-          }
-
           const items = await prisma.orderItem.findMany({
               where: { orderId: order.id },
               include: { 

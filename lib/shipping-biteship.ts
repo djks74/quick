@@ -195,46 +195,48 @@ function resolveCourierCompany(provider?: string) {
   return "jne";
 }
 
-function resolveCourierType(pricing: any[], preferredProvider?: string, preferredService?: string) {
+function matchCourierCompany(item: any, company: string) {
+  const raw = String(item?.courier_company || item?.courier_name || item?.courier_code || "").toLowerCase();
+  if (!raw) return false;
+  if (company === "gojek") return raw.includes("gojek") || raw.includes("gosend") || raw.includes("go-send") || raw.includes("go");
+  return raw.includes("jne");
+}
+
+function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
   const company = resolveCourierCompany(preferredProvider);
-  const byCompany = pricing.filter((x) => String(x?.courier_company || "").toLowerCase() === company);
-  
-  console.log(`[BITESHIP_DEBUG] Pricing count: ${pricing.length}, By Company (${company}): ${byCompany.length}`);
-  
-  if (byCompany.length === 0) {
-    console.warn(`[BITESHIP_WARN] No couriers found for company: ${company}. Available:`, pricing.map(p => p.courier_company).join(', '));
-    return null;
-  }
+  const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
+  const targetPool = byCompany.length > 0 ? byCompany : pricing;
+  if (targetPool.length === 0) return null;
 
-  const preferred = String(preferredService || "").toLowerCase();
-  console.log(`[BITESHIP_DEBUG] Preferred Service: ${preferred}`);
-
+  const preferred = String(preferredService || "").toLowerCase().trim();
   if (preferred) {
-    // Try exact match or partial match in courier_type or courier_service_name
-    const match = byCompany.find((x) => {
+    const preferredMatch = targetPool.find((x) => {
       const type = String(x?.courier_type || "").toLowerCase();
-      const name = String(x?.courier_service_name || "").toLowerCase();
+      const name = String(x?.courier_service_name || x?.courier_type || "").toLowerCase();
       return type.includes(preferred) || preferred.includes(type) || name.includes(preferred) || preferred.includes(name);
     });
-    if (match) {
-      console.log(`[BITESHIP_DEBUG] Found match: ${match.courier_type}`);
-      return String(match.courier_type || "");
+    if (preferredMatch) {
+      return {
+        company: resolveCourierCompany(preferredProvider || preferredMatch?.courier_company || preferredMatch?.courier_name || preferredMatch?.courier_code),
+        type: String(preferredMatch?.courier_type || "")
+      };
     }
   }
 
-  console.log(`[BITESHIP_DEBUG] No preferred match, falling back to: ${byCompany[0]?.courier_type}`);
-  return String(byCompany[0]?.courier_type || "");
+  const fallback = targetPool[0];
+  return {
+    company: resolveCourierCompany(preferredProvider || fallback?.courier_company || fallback?.courier_name || fallback?.courier_code),
+    type: String(fallback?.courier_type || "")
+  };
 }
 
-export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrderInput) {
+async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
   const { store, order, items } = input;
   const apiKey = await getApiKey(store);
-  if (!apiKey) return { ok: false, error: "BITESHIP_KEY_MISSING" };
-
-  console.log(`[BITESHIP_DEBUG] Creating order for #${order.id}, provider: ${order.shippingProvider}, service: ${order.shippingService}`);
+  if (!apiKey) return { ok: false, error: "BITESHIP_KEY_MISSING" as const };
 
   const destinationAddress = String(order?.shippingAddress || "").trim();
-  if (!destinationAddress) return { ok: false, error: "DESTINATION_ADDRESS_MISSING" };
+  if (!destinationAddress) return { ok: false, error: "DESTINATION_ADDRESS_MISSING" as const };
 
   const destinationPostalMatch = destinationAddress.match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
   const destinationPostalCode = destinationPostalMatch ? Number(destinationPostalMatch[1]) : undefined;
@@ -246,8 +248,7 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
   const customerPhone = String(order?.customerPhone || "").trim();
 
   if (!senderPhone || !senderAddress || !senderPostalCode) {
-    console.error(`[BITESHIP_ERROR] Sender info incomplete for store ${store.id}`);
-    return { ok: false, error: "SENDER_ADDRESS_INCOMPLETE" };
+    return { ok: false, error: "SENDER_ADDRESS_INCOMPLETE" as const };
   }
 
   const payload = {
@@ -271,7 +272,6 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
   };
 
   try {
-    console.log(`[BITESHIP_DEBUG] Creating draft order...`);
     const createDraft = await fetch("https://api.biteship.com/v1/draft_orders", {
       method: "POST",
       headers: {
@@ -283,62 +283,84 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
     const createDraftData = await createDraft.json();
     const draftOrderId = createDraftData?.id || createDraftData?.draft_order_id;
     if (!createDraft.ok || !draftOrderId) {
-      console.error(`[BITESHIP_ERROR] Draft creation failed:`, createDraftData);
       return { ok: false, error: createDraftData?.error || "DRAFT_CREATE_FAILED", code: createDraftData?.code || createDraft.status };
     }
+    return { ok: true as const, draftOrderId: String(draftOrderId), apiKey };
+  } catch (error) {
+    return { ok: false, error: "BITESHIP_DRAFT_EXCEPTION", detail: error instanceof Error ? error.message : String(error) };
+  }
+}
 
-    console.log(`[BITESHIP_DEBUG] Draft created: ${draftOrderId}. Fetching rates...`);
-    const ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
-      method: "GET",
-      headers: { Authorization: apiKey }
-    });
-    const ratesData = await ratesRes.json();
-    const pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : [];
-    
-    const courierType = resolveCourierType(pricing, order?.shippingProvider, order?.shippingService);
-    if (!courierType) {
-      console.error(`[BITESHIP_ERROR] Courier not available for ${order?.shippingProvider}`);
-      return { ok: false, error: "COURIER_NOT_AVAILABLE" };
+async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: any, preferredProvider?: string, preferredService?: string) {
+  const ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
+    method: "GET",
+    headers: { Authorization: apiKey }
+  });
+  const ratesData = await ratesRes.json().catch(() => ({}));
+  const pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+  const selection = resolveCourierSelection(pricing, preferredProvider || order?.shippingProvider, preferredService || order?.shippingService);
+  if (!selection?.type) {
+    return { ok: false, error: "COURIER_NOT_AVAILABLE" as const };
+  }
+
+  const setCourierRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: apiKey
+    },
+    body: JSON.stringify({
+      courier_company: selection.company,
+      courier_type: selection.type,
+      origin_collection_method: "pickup"
+    })
+  });
+  const setCourierData = await setCourierRes.json().catch(() => ({}));
+  if (!setCourierRes.ok) {
+    return { ok: false, error: setCourierData?.error || "SET_COURIER_FAILED", code: setCourierData?.code || setCourierRes.status };
+  }
+  return { ok: true as const };
+}
+
+export async function createBiteshipDraftForPendingOrder(input: BiteshipCreateOrderInput) {
+  const created = await createBiteshipDraftOrder(input);
+  if (!created.ok) return created;
+  const draft = created as any;
+  const applied = await applyCourierToDraft(draft.apiKey, draft.draftOrderId, input.order, input.order?.shippingProvider, input.order?.shippingService);
+  if (!applied.ok) {
+    return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "draft_created" as const };
+  }
+  return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "courier_selected" as const };
+}
+
+export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrderInput) {
+  const { store, order, items } = input;
+  const apiKey = await getApiKey(store);
+  if (!apiKey) return { ok: false, error: "BITESHIP_KEY_MISSING" };
+
+  try {
+    let draftOrderId = String(order?.biteshipOrderId || "").trim();
+    if (!draftOrderId || normalizeBiteshipStatus(order?.shippingStatus || "") === "cancelled") {
+      const created = await createBiteshipDraftOrder({ store, order, items });
+      if (!created.ok) return created;
+      draftOrderId = String((created as any).draftOrderId || "");
     }
+    const applied = await applyCourierToDraft(apiKey, draftOrderId, order, order?.shippingProvider, order?.shippingService);
+    if (!applied.ok) return applied;
 
-    const courierCompany = resolveCourierCompany(order?.shippingProvider);
-    console.log(`[BITESHIP_DEBUG] Setting courier: ${courierCompany} - ${courierType}`);
-
-    const setCourierRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey
-      },
-      body: JSON.stringify({
-        courier_company: courierCompany,
-        courier_type: courierType,
-        origin_collection_method: "pickup"
-      })
-    });
-    const setCourierData = await setCourierRes.json();
-    if (!setCourierRes.ok) {
-      console.error(`[BITESHIP_ERROR] Set courier failed:`, setCourierData);
-      return { ok: false, error: setCourierData?.error || "SET_COURIER_FAILED", code: setCourierData?.code || setCourierRes.status };
-    }
-
-    console.log(`[BITESHIP_DEBUG] Confirming draft order...`);
     const confirmRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/confirm`, {
       method: "POST",
       headers: { Authorization: apiKey }
     });
-    const confirmData = await confirmRes.json();
+    const confirmData = await confirmRes.json().catch(() => ({}));
     const biteshipOrderId = confirmData?.id || confirmData?.order_id || confirmData?.order?.id || null;
     if (!confirmRes.ok || !biteshipOrderId) {
-      console.error(`[BITESHIP_ERROR] Confirmation failed:`, confirmData);
       return { ok: false, error: confirmData?.error || "CONFIRM_FAILED", code: confirmData?.code || confirmRes.status };
     }
 
     const courier = confirmData?.courier || confirmData?.order?.courier || {};
     const trackingNo = courier?.tracking_id || courier?.waybill_id || courier?.courier_waybill_id || null;
     const status = normalizeBiteshipStatus(confirmData?.status || confirmData?.order?.status || "confirmed");
-
-    console.log(`[BITESHIP_SUCCESS] Order #${order.id} confirmed: ${biteshipOrderId}, tracking: ${trackingNo}`);
 
     return {
       ok: true,
@@ -347,7 +369,6 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
       shippingStatus: status
     };
   } catch (error) {
-    console.error(`[BITESHIP_EXCEPTION]`, error);
     return {
       ok: false,
       error: "BITESHIP_ORDER_EXCEPTION",

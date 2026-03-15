@@ -59,12 +59,14 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
     const providerCode = String(order.shippingProvider || "").toUpperCase();
     const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";
 
+    const canContinueDraft = ["draft_created", "courier_selected"].includes(String(order.shippingStatus || "").toLowerCase());
+
     if (
       store &&
       order.orderType === "TAKEAWAY" &&
       isProviderBookable &&
       !!order.shippingAddress &&
-      !order.biteshipOrderId
+      (!order.biteshipOrderId || canContinueDraft)
     ) {
       const booking = await createBiteshipOrderForPaidOrder({
         store,
@@ -77,12 +79,13 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       });
 
       if (booking.ok) {
+        const booked = booking as any;
         const updated = await prisma.order.update({
           where: { id: order.id },
           data: {
-            biteshipOrderId: booking.biteshipOrderId || undefined,
-            shippingTrackingNo: booking.trackingNo || order.shippingTrackingNo || null,
-            shippingStatus: booking.shippingStatus || order.shippingStatus || "confirmed"
+            biteshipOrderId: booked.biteshipOrderId || undefined,
+            shippingTrackingNo: booked.trackingNo || order.shippingTrackingNo || null,
+            shippingStatus: booked.shippingStatus || order.shippingStatus || "confirmed"
           }
         });
 
@@ -98,10 +101,25 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
         });
       }
 
-      return NextResponse.json(
-        { error: booking.error || "Failed to book shipment", code: (booking as any).code || null },
-        { status: 400 }
-      );
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          shippingStatus: order.shippingStatus || "booking_failed"
+        }
+      }).catch(() => null);
+
+      return NextResponse.json({
+        success: true,
+        order: {
+          id: order.id,
+          status: order.status,
+          biteshipOrderId: order.biteshipOrderId,
+          shippingTrackingNo: order.shippingTrackingNo,
+          shippingStatus: order.shippingStatus
+        },
+        bookingError: booking.error || "Failed to book shipment",
+        bookingCode: (booking as any).code || null
+      });
     }
 
     return NextResponse.json({
