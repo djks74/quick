@@ -49,16 +49,61 @@ const statusColors: Record<string, string> = {
   'pending': 'bg-orange-100 text-orange-700',
 };
 
-export default function OrdersTable({ initialOrders, slug }: { initialOrders: any[], slug: string }) {
+export default function OrdersTable({ initialOrders, slug, canForcePaid = false }: { initialOrders: any[], slug: string, canForcePaid?: boolean }) {
+  const [orders, setOrders] = useState<any[]>(initialOrders);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
-  const filteredOrders = initialOrders.filter(order => 
+  const filteredOrders = orders.filter(order => 
     order.customerPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
     order.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleForceMarkPaid = async (orderId: string) => {
+    if (processingOrderId) return;
+    setProcessingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/mark-paid`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        alert(data?.error || "Failed to mark order as paid");
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: "paid",
+                biteshipOrderId: data?.order?.biteshipOrderId ?? o.biteshipOrderId,
+                shippingTrackingNo: data?.order?.shippingTrackingNo ?? o.shippingTrackingNo,
+                shippingStatus: data?.order?.shippingStatus ?? o.shippingStatus
+              }
+            : o
+        )
+      );
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                status: "paid",
+                biteshipOrderId: data?.order?.biteshipOrderId ?? prev.biteshipOrderId,
+                shippingTrackingNo: data?.order?.shippingTrackingNo ?? prev.shippingTrackingNo,
+                shippingStatus: data?.order?.shippingStatus ?? prev.shippingStatus
+              }
+            : prev
+        );
+      }
+    } catch {
+      alert("Failed to mark order as paid");
+    } finally {
+      setProcessingOrderId(null);
+    }
+  };
 
   const handleViewOrder = async (order: any) => {
     setSelectedOrder(order);
@@ -138,6 +183,16 @@ export default function OrdersTable({ initialOrders, slug }: { initialOrders: an
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {canForcePaid && order.status === "pending" && (
+                          <button
+                            onClick={() => handleForceMarkPaid(order.id)}
+                            disabled={processingOrderId === order.id}
+                            className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Mark as Paid"
+                          >
+                            {processingOrderId === order.id ? "Processing..." : "Mark Paid"}
+                          </button>
+                        )}
                         <button 
                           onClick={() => handleViewOrder(order)}
                           className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400 transition-colors" 

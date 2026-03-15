@@ -171,6 +171,24 @@ export async function getBiteshipOrderStatus(store: any, biteshipOrderId: string
   }
 }
 
+export async function cancelBiteshipOrder(store: any, biteshipOrderId: string) {
+  const apiKey = await getApiKey(store);
+  if (!apiKey || !biteshipOrderId) return { ok: false, error: "MISSING_PARAMS" };
+  try {
+    const res = await fetch(`https://api.biteship.com/v1/orders/${encodeURIComponent(biteshipOrderId)}`, {
+      method: "DELETE",
+      headers: { Authorization: apiKey }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: data?.error || "CANCEL_FAILED", detail: data };
+    }
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "CANCEL_EXCEPTION" };
+  }
+}
+
 function resolveCourierCompany(provider?: string) {
   const p = String(provider || "").toLowerCase();
   if (p.includes("go")) return "gojek";
