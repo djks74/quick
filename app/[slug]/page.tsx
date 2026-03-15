@@ -66,6 +66,10 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     enableMidtrans: store.enableMidtrans,
     enableXendit: store.enableXendit,
     enableManualTransfer: store.enableManualTransfer,
+    enableTakeawayDelivery: store.enableTakeawayDelivery,
+    shippingEnableJne: store.shippingEnableJne,
+    shippingEnableGosend: store.shippingEnableGosend,
+    shippingJneOnly: store.shippingJneOnly,
     isOpen: store.isOpen
   };
 

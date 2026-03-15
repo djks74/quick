@@ -111,6 +111,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkInFallbackUrl, setCheckInFallbackUrl] = useState("");
+  const [checkoutPhone, setCheckoutPhone] = useState("");
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>(tableNumber ? 'DINE_IN' : 'TAKEAWAY');
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [shippingQuotes, setShippingQuotes] = useState<any[]>([]);
+  const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
+  const [isFetchingQuotes, setIsFetchingQuotes] = useState(false);
   
   useEffect(() => {
     setMounted(true);
@@ -124,6 +130,22 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
         }
     }
   }, [tableNumber]);
+
+  useEffect(() => {
+    if (customerPhone) {
+      setCheckoutPhone(customerPhone);
+      return;
+    }
+    const stored = localStorage.getItem('customerPhone');
+    if (stored) setCheckoutPhone(stored);
+  }, [customerPhone]);
+
+  useEffect(() => {
+    if (orderType !== 'TAKEAWAY') {
+      setShippingQuotes([]);
+      setSelectedQuote(null);
+    }
+  }, [orderType]);
 
   const handleCheckIn = () => {
     if (!customerPhone) return;
@@ -251,6 +273,125 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     message += method === "qris" ? `\n\nsaya mau bayar qris` : `\n\nsaya mau bayar bank`;
     const whatsappUrl = `https://wa.me/${store?.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  const getEnabledShippingProviders = () => {
+    const options: string[] = [];
+    if (store.shippingEnableJne) options.push("JNE");
+    if (store.shippingEnableGosend && !store.shippingJneOnly) options.push("GOSEND");
+    return options;
+  };
+
+  const fetchShippingQuotes = async () => {
+    if (!store.enableTakeawayDelivery || orderType !== 'TAKEAWAY') return;
+    if (!deliveryAddress.trim()) {
+      setShippingQuotes([]);
+      setSelectedQuote(null);
+      return;
+    }
+    setIsFetchingQuotes(true);
+    try {
+      const res = await fetch('/api/shipping/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          destinationAddress: deliveryAddress.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success || !Array.isArray(data?.options)) {
+        setShippingQuotes([]);
+        setSelectedQuote(null);
+        return;
+      }
+
+      const enabledProviders = getEnabledShippingProviders();
+      const filtered = data.options.filter((opt: any) => enabledProviders.includes(String(opt.provider || "").toUpperCase()));
+      setShippingQuotes(filtered);
+      setSelectedQuote(filtered[0] || null);
+    } catch {
+      setShippingQuotes([]);
+      setSelectedQuote(null);
+    } finally {
+      setIsFetchingQuotes(false);
+    }
+  };
+
+  const handleWebCheckout = async (method: 'qris' | 'bank') => {
+    if (cart.length === 0) return;
+    if (!store.isOpen) {
+      alert("Sorry, the store is currently closed and not accepting orders.");
+      return;
+    }
+    if (!checkoutPhone.trim()) {
+      alert("Please fill your WhatsApp number first.");
+      return;
+    }
+
+    if (orderType === 'TAKEAWAY') {
+      if (!store.enableTakeawayDelivery) {
+        alert("Takeaway delivery is not enabled for this store.");
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        alert("Please fill delivery address.");
+        return;
+      }
+      if (!selectedQuote) {
+        alert("Please select a shipping option.");
+        return;
+      }
+    }
+
+    setIsProcessing(true);
+    try {
+      const payload = {
+        storeId: store.id,
+        items: cart.map(item => ({
+          id: item.id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        total: totalPrice + (isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0) + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0),
+        customerInfo: {
+          phone: checkoutPhone.trim(),
+          tableNumber: tableNumber || undefined,
+          shippingProvider: orderType === 'TAKEAWAY' ? selectedQuote?.provider : undefined,
+          shippingService: orderType === 'TAKEAWAY' ? selectedQuote?.service : undefined,
+          shippingAddress: orderType === 'TAKEAWAY' ? deliveryAddress.trim() : undefined,
+          shippingCost: orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0,
+          shippingEta: orderType === 'TAKEAWAY' ? selectedQuote?.etd || selectedQuote?.eta : undefined
+        },
+        paymentMethod: "midtrans",
+        specificType: method === 'qris' ? 'qris' : 'bank_transfer'
+      };
+
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        alert(data?.error || "Checkout failed");
+        return;
+      }
+      const paymentUrl = data?.paymentResult?.paymentUrl || data?.paymentResult?.invoiceUrl || data?.paymentResult?.redirect_url;
+      if (paymentUrl) {
+        window.location.href = paymentUrl;
+        return;
+      }
+      if (data?.order?.id) {
+        window.location.href = `/checkout/pay/${data.order.id}`;
+        return;
+      }
+      alert("Payment link unavailable. Please try again.");
+    } catch {
+      alert("Checkout failed. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -572,6 +713,85 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
               </div>
 
               <div className="p-8 bg-gray-50/50 dark:bg-[#0F1113]/50 rounded-t-[40px] space-y-6">
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">WhatsApp Number</label>
+                    <input
+                      type="tel"
+                      value={checkoutPhone}
+                      onChange={(e) => setCheckoutPhone(e.target.value)}
+                      placeholder="e.g. 62812xxxxxxx"
+                      className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                 </div>
+
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Order Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setOrderType('DINE_IN')}
+                        className={cn(
+                          "py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border",
+                          orderType === 'DINE_IN'
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                        )}
+                      >
+                        Dine In
+                      </button>
+                      <button
+                        onClick={() => setOrderType('TAKEAWAY')}
+                        disabled={!store.enableTakeawayDelivery}
+                        className={cn(
+                          "py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border disabled:opacity-40",
+                          orderType === 'TAKEAWAY'
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                        )}
+                      >
+                        Takeaway
+                      </button>
+                    </div>
+                 </div>
+
+                 {orderType === 'TAKEAWAY' && (
+                   <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
+                      <textarea
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="Masukkan alamat lengkap + kode pos"
+                        className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[84px]"
+                      />
+                      <button
+                        onClick={fetchShippingQuotes}
+                        disabled={isFetchingQuotes || !deliveryAddress.trim()}
+                        className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
+                        style={{ backgroundColor: themeColor }}
+                      >
+                        {isFetchingQuotes ? "Checking Courier..." : "Check Shipping Options"}
+                      </button>
+                      {shippingQuotes.length > 0 && (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Courier</label>
+                          <select
+                            value={selectedQuote ? `${selectedQuote.provider}|${selectedQuote.service}|${selectedQuote.price}` : ""}
+                            onChange={(e) => {
+                              const next = shippingQuotes.find((opt: any) => `${opt.provider}|${opt.service}|${opt.price}` === e.target.value) || null;
+                              setSelectedQuote(next);
+                            }}
+                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none"
+                          >
+                            {shippingQuotes.map((opt: any, idx: number) => (
+                              <option key={`${opt.provider}-${opt.service}-${idx}`} value={`${opt.provider}|${opt.service}|${opt.price}`}>
+                                {opt.provider} - {opt.service} • {formatPrice(Number(opt.price || 0))} • ETA {opt.etd || opt.eta || "-"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                   </div>
+                 )}
+
                  <div className="space-y-2">
                     <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
                        <span>Subtotal</span>
@@ -589,25 +809,31 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span>{formatPrice(serviceCharge)}</span>
                        </div>
                     )}
+                    {orderType === 'TAKEAWAY' && selectedQuote && (
+                       <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
+                          <span>Shipping ({selectedQuote.provider} {selectedQuote.service})</span>
+                          <span>{formatPrice(Number(selectedQuote.price || 0))}</span>
+                       </div>
+                    )}
                     <div className="flex justify-between items-end pt-4 border-t border-gray-100 dark:border-gray-800">
                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total Amount</span>
-                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice)}</span>
+                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}</span>
                     </div>
                  </div>
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button 
-                      onClick={() => handleWhatsAppCheckout('qris')}
-                      disabled={!store.isOpen}
+                      onClick={() => handleWebCheckout('qris')}
+                      disabled={!store.isOpen || isProcessing}
                       className="py-3 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                     >
                        <div className="flex items-center gap-2">
                           <MessageCircle className="w-4 h-4" />
-                          <span className="text-xs">Pay via QRIS</span>
+                          <span className="text-xs">{isProcessing ? "Processing..." : "Pay via QRIS"}</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('qris'))}
+                             {formatPrice(totalPrice + calculatePlatformFee('qris') + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
@@ -615,17 +841,17 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                     </button>
                     <button 
-                      onClick={() => handleWhatsAppCheckout('bank')}
-                      disabled={!store.isOpen}
+                      onClick={() => handleWebCheckout('bank')}
+                      disabled={!store.isOpen || isProcessing}
                       className="py-3 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
                     >
                        <div className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4" />
-                          <span className="text-xs">Bank Transfer</span>
+                         <span className="text-xs">{isProcessing ? "Processing..." : "Bank Transfer"}</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('transfer'))}
+                             {formatPrice(totalPrice + calculatePlatformFee('transfer') + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}
                           </span>
                           {calculatePlatformFee('transfer') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
@@ -633,6 +859,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                     </button>
                  </div>
+                 <button
+                   onClick={() => handleWhatsAppCheckout('qris')}
+                   className="w-full py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400"
+                 >
+                   Fallback: Continue via WhatsApp
+                 </button>
                  {!store.isOpen && (
                    <p className="text-[10px] text-red-500 font-black text-center uppercase tracking-widest">
                      The store is currently closed. Checkout is disabled.

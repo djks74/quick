@@ -23,7 +23,9 @@ export async function getMerchantPhone(storeId: number) {
 export async function sendMerchantWhatsApp(storeId: number, text: string) {
   const { store, phone } = await getMerchantPhone(storeId);
   if (!store || !phone) return false;
-  return sendWhatsAppMessage(phone, text, store.id);
+  const sent = await sendWhatsAppMessage(phone, text, store.id);
+  if (sent) return true;
+  return sendWhatsAppMessage(phone, text, 0);
 }
 
 export function resolvePaymentUrl(orderId: number, paymentUrl?: string | null) {

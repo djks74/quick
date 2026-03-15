@@ -59,14 +59,16 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
     const providerCode = String(order.shippingProvider || "").toUpperCase();
     const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";
 
-    const canContinueDraft = ["draft_created", "courier_selected"].includes(String(order.shippingStatus || "").toLowerCase());
+    const shippingStatus = String(order.shippingStatus || "").toLowerCase();
+    const finalShippingStates = ["confirmed", "allocated", "picking_up", "on_going", "delivered", "cancelled"];
+    const shouldAttemptBooking = !order.biteshipOrderId || !finalShippingStates.includes(shippingStatus);
 
     if (
       store &&
       order.orderType === "TAKEAWAY" &&
       isProviderBookable &&
       !!order.shippingAddress &&
-      (!order.biteshipOrderId || canContinueDraft)
+      shouldAttemptBooking
     ) {
       const booking = await createBiteshipOrderForPaidOrder({
         store,
