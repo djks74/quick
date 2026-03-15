@@ -177,13 +177,25 @@ export async function updateStoreSettings(storeId: number, data: any) {
           feePaidBy: data.feePaidBy,
           posGridColumns: data.posGridColumns,
           posPaymentMethods: Array.isArray(data.posPaymentMethods) ? data.posPaymentMethods : [],
+          shippingEnableJne: data.shippingEnableJne ?? false,
+          shippingEnableGosend: data.shippingEnableGosend ?? false,
+          shippingJneOnly: data.shippingJneOnly ?? false,
+          enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
+          biteshipOriginAreaId: data.biteshipOriginAreaId || null,
+          biteshipOriginLat: data.biteshipOriginLat !== undefined && data.biteshipOriginLat !== null && data.biteshipOriginLat !== "" ? Number(data.biteshipOriginLat) : null,
+          biteshipOriginLng: data.biteshipOriginLng !== undefined && data.biteshipOriginLng !== null && data.biteshipOriginLng !== "" ? Number(data.biteshipOriginLng) : null,
+          shippingSenderName: data.shippingSenderName || null,
+          shippingSenderPhone: data.shippingSenderPhone || null,
+          shippingSenderAddress: data.shippingSenderAddress || null,
+          shippingSenderPostalCode: data.shippingSenderPostalCode || null,
           ...(canUseOwnIntegrationConfig
             ? {
                 whatsappToken: data.whatsappToken,
                 whatsappPhoneId: data.whatsappPhoneId,
                 paymentGatewaySecret: data.paymentGatewaySecret,
                 paymentGatewayClientKey: data.paymentGatewayClientKey,
-                bankAccount: data.bankAccount
+                bankAccount: data.bankAccount,
+                biteshipApiKey: data.biteshipApiKey
               }
             : {})
         }
@@ -992,6 +1004,15 @@ export async function getOrders(storeId: number) {
         paymentFee: true,
         transactionFee: true,
         tableNumber: true,
+        orderType: true,
+        biteshipOrderId: true,
+        shippingProvider: true,
+        shippingService: true,
+        shippingStatus: true,
+        shippingTrackingNo: true,
+        shippingAddress: true,
+        shippingCost: true,
+        shippingEta: true,
         _count: {
           select: { items: true }
         }
@@ -1014,7 +1035,16 @@ export async function getOrders(storeId: number) {
       serviceCharge: o.serviceCharge,
       paymentFee: o.paymentFee,
       transactionFee: o.transactionFee,
-      tableNumber: o.tableNumber
+      tableNumber: o.tableNumber,
+      orderType: o.orderType,
+      biteshipOrderId: o.biteshipOrderId,
+      shippingProvider: o.shippingProvider,
+      shippingService: o.shippingService,
+      shippingStatus: o.shippingStatus,
+      shippingTrackingNo: o.shippingTrackingNo,
+      shippingAddress: o.shippingAddress,
+      shippingCost: o.shippingCost,
+      shippingEta: o.shippingEta
     }));
   } catch (error) {
     console.error('Error fetching orders:', error);

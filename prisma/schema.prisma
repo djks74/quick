@@ -36,6 +36,18 @@ model Store {
   whatsappToken           String?
   whatsappPhoneId         String?
   customDomain            String?   // Custom domain for QR codes
+  biteshipApiKey          String?
+  biteshipOriginAreaId    String?
+  biteshipOriginLat       Float?
+  biteshipOriginLng       Float?
+  shippingSenderName      String?
+  shippingSenderPhone     String?
+  shippingSenderAddress   String?
+  shippingSenderPostalCode String?
+  shippingEnableJne       Boolean   @default(false)
+  shippingEnableGosend    Boolean   @default(false)
+  shippingJneOnly         Boolean   @default(false)
+  enableTakeawayDelivery  Boolean   @default(true)
   
   // Payment Config
   enableWhatsApp          Boolean   @default(true)
@@ -166,6 +178,15 @@ model Order {
   discountAmount Float     @default(0.0)
   tipAmount     Float      @default(0.0)
   paymentFee    Float      @default(0.0) // Fee charged to customer if applicable
+  orderType     String      @default("DINE_IN")
+  biteshipOrderId String?
+  shippingProvider String?
+  shippingService String?
+  shippingStatus String?
+  shippingTrackingNo String?
+  shippingAddress String?
+  shippingCost Float       @default(0.0)
+  shippingEta String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]
@@ -274,6 +295,7 @@ model PlatformSettings {
   midtransServerKey  String?
   midtransClientKey  String?
   xenditSecretKey    String?
+  biteshipApiKey     String?
   bankName           String?
   bankAccountNumber  String?
   bankAccountName    String?

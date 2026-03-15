@@ -12,6 +12,7 @@ type PlatformSettings = {
   midtransServerKey?: string | null;
   midtransClientKey?: string | null;
   xenditSecretKey?: string | null;
+  biteshipApiKey?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountName?: string | null;
@@ -28,6 +29,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
       midtransServerKey: initialSettings?.midtransServerKey || "",
       midtransClientKey: initialSettings?.midtransClientKey || "",
       xenditSecretKey: initialSettings?.xenditSecretKey || "",
+      biteshipApiKey: initialSettings?.biteshipApiKey || "",
       bankName: initialSettings?.bankName || "",
       bankAccountNumber: initialSettings?.bankAccountNumber || "",
       bankAccountName: initialSettings?.bankAccountName || "",
@@ -41,16 +43,11 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  console.log("Current Form State:", form);
-  console.log("Initial Defaults:", defaults);
-
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
-    console.log("Attempting to save with form:", form);
     try {
       const res = await updatePlatformSettings(form);
-      console.log("Update response:", res);
       if (res.success) {
         setSaveMessage("Settings saved successfully.");
         router.refresh();
@@ -124,18 +121,21 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Xendit</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Used when a store enables Xendit.</p>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Biteship</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default shipping API key for stores without own key.</p>
         </div>
         <div className="md:col-span-2 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Secret Key</label>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Biteship API Key</label>
             <input
               type="password"
               className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
-              value={form.xenditSecretKey}
-              onChange={(e) => setForm({ ...form, xenditSecretKey: e.target.value })}
+              value={form.biteshipApiKey}
+              onChange={(e) => setForm({ ...form, biteshipApiKey: e.target.value })}
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              If empty, system falls back to BITESHIP_API_KEY from environment variables.
+            </p>
           </div>
         </div>
       </div>
@@ -221,4 +221,3 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
     </div>
   );
 }
-

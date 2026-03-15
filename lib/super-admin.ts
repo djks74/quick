@@ -5,6 +5,22 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+let ensuredPlatformSettingsSchema: Promise<void> | null = null;
+
+async function ensurePlatformSettingsSchema() {
+  if (!ensuredPlatformSettingsSchema) {
+    ensuredPlatformSettingsSchema = (async () => {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "PlatformSettings"
+        ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT;
+      `);
+    })().catch((error) => {
+      console.error("ensurePlatformSettingsSchema error:", error);
+    });
+  }
+  await ensuredPlatformSettingsSchema;
+}
+
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
   const user = (session as any)?.user;
@@ -99,6 +115,7 @@ export async function getAllUsers() {
 export async function getPlatformSettings() {
   try {
     await requireSuperAdmin();
+    await ensurePlatformSettingsSchema();
     return await prisma.platformSettings.findUnique({ where: { key: "default" } });
   } catch (error) {
     console.error("Error fetching platform settings:", error);
@@ -112,6 +129,7 @@ export async function updatePlatformSettings(data: {
   midtransServerKey?: string;
   midtransClientKey?: string;
   xenditSecretKey?: string;
+  biteshipApiKey?: string;
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
@@ -120,7 +138,7 @@ export async function updatePlatformSettings(data: {
 }) {
   try {
     await requireSuperAdmin();
-    console.log('[PLATFORM_SETTINGS] Updating with data:', { ...data, midtransServerKey: '***', xenditSecretKey: '***', subscriptionServerKey: '***' });
+    await ensurePlatformSettingsSchema();
     
     const updated = await prisma.platformSettings.upsert({
       where: { key: "default" },
@@ -130,6 +148,7 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         xenditSecretKey: data.xenditSecretKey || null,
+        biteshipApiKey: data.biteshipApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,
         bankAccountName: data.bankAccountName || null,
@@ -143,6 +162,7 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         xenditSecretKey: data.xenditSecretKey || null,
+        biteshipApiKey: data.biteshipApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,
         bankAccountName: data.bankAccountName || null,

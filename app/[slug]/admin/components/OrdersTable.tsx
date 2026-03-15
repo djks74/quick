@@ -219,12 +219,24 @@ export default function OrdersTable({ initialOrders, slug }: { initialOrders: an
                                 <span className="text-[10px] font-black uppercase tracking-widest">Service Info</span>
                              </div>
                              <p className="text-sm font-bold text-gray-900 dark:text-white">
-                                {selectedOrder.tableNumber ? `Table: ${selectedOrder.tableNumber}` : "Direct Order / POS"}
+                                {selectedOrder.orderType === "TAKEAWAY"
+                                  ? "Takeaway / Delivery"
+                                  : selectedOrder.tableNumber
+                                    ? `Table: ${selectedOrder.tableNumber}`
+                                    : "Direct Order / POS"}
                              </p>
                              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 <CreditCard className="w-3 h-3" />
                                 <span className="capitalize">{selectedOrder.paymentMethod || "Manual"}</span>
                              </div>
+                             {selectedOrder.shippingProvider && (
+                                <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
+                                  <p>Courier: <span className="font-bold">{selectedOrder.shippingProvider} {selectedOrder.shippingService || ""}</span></p>
+                                  <p>Status: <span className="font-bold">{selectedOrder.shippingStatus || "-"}</span></p>
+                                  <p>Biteship ID: <span className="font-bold">{selectedOrder.biteshipOrderId || "-"}</span></p>
+                                  <p>Resi: <span className="font-bold">{selectedOrder.shippingTrackingNo || "-"}</span></p>
+                                </div>
+                             )}
                           </div>
                        </div>
 
@@ -275,6 +287,12 @@ export default function OrdersTable({ initialOrders, slug }: { initialOrders: an
                              <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                                 <span>Payment Fee</span>
                                 <span className="text-orange-600 dark:text-orange-400">+{formatCurrency(selectedOrder.paymentFee, "IDR")}</span>
+                             </div>
+                          )}
+                          {selectedOrder.shippingCost > 0 && (
+                             <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                                <span>Shipping</span>
+                                <span>+{formatCurrency(selectedOrder.shippingCost, "IDR")}</span>
                              </div>
                           )}
                           <div className="flex justify-between text-lg font-black text-gray-900 dark:text-white pt-2 transition-colors">

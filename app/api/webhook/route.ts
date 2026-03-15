@@ -6,6 +6,7 @@ import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
 import { resolvePaymentUrl } from '@/lib/merchant-alerts';
+import { getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 
 type WaLang = "id" | "en";
 
@@ -192,6 +193,30 @@ function parseVariationSelectStep(step?: string | null) {
     : null;
   if (isNaN(productId) || isNaN(qty) || qty <= 0) return null;
   return { productId, qty, category, searchIds };
+}
+
+function buildTakeawayDeliveryStep(method?: string) {
+  return `TAKEAWAY_DELIVERY_SELECT:${method || "none"}`;
+}
+
+function parseTakeawayDeliveryStep(step?: string | null) {
+  if (!step || !step.startsWith("TAKEAWAY_DELIVERY_SELECT:")) return { method: undefined as string | undefined };
+  const method = step.split(":")[1];
+  if (!method || method === "none") return { method: undefined as string | undefined };
+  return { method };
+}
+
+function buildTakeawayAddressStep(provider: "JNE" | "GOSEND" | "PICKUP", method?: string) {
+  return `TAKEAWAY_ADDRESS:${provider}:${method || "none"}`;
+}
+
+function parseTakeawayAddressStep(step?: string | null) {
+  if (!step || !step.startsWith("TAKEAWAY_ADDRESS:")) return null;
+  const parts = step.split(":");
+  if (parts.length < 3) return null;
+  const provider = parts[1] as "JNE" | "GOSEND" | "PICKUP";
+  const method = parts[2] && parts[2] !== "none" ? parts[2] : undefined;
+  return { provider, method };
 }
 
 export async function GET(req: NextRequest) {
@@ -440,20 +465,26 @@ export async function POST(req: NextRequest) {
       
       if (checkInMatch) {
         const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
-        await updateSession(from, targetStore.id, { tableNumber: tableNum, step: 'MENU_SELECTION' });
+        const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+        await updateSession(from, targetStore.id, { tableNumber: tableNum, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION', cart: [] });
 
         const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
         await sendWhatsAppMessage(from, 
-          l(
-            `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
-            `Lihat menu digital lewat tombol di bawah, atau balas "Menu" untuk pesan via WhatsApp.\n` +
-            `Cari produk: "Cari nasi goreng".\n` +
-            `Ingin English? balas: EN`,
-            `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
-            `You can view our full digital menu and order directly via the button below, or reply with "Menu" to order via WhatsApp text.\n` +
-            `You can also search by name: "Search nasi goreng".\n` +
-            `Want Indonesian again? reply: ID`
-          ),
+          shippingConfigured
+            ? l(
+                `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
+                  `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\n` +
+                  `Setelah pilih, kamu bisa lanjut pesan via WhatsApp.\n` +
+                  `Ingin English? balas: EN`,
+                `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
+                  `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\n` +
+                  `After selecting, continue ordering via WhatsApp.\n` +
+                  `Want Indonesian again? reply: ID`
+              )
+            : l(
+                `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\nBalas "Menu" untuk mulai pesan.\nIngin English? balas: EN`,
+                `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\nReply "Menu" to start ordering.\nWant Indonesian again? reply: ID`
+              ),
           targetStore.id,
           { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
         );
@@ -533,6 +564,70 @@ export async function POST(req: NextRequest) {
           );
         }
         await sendWhatsAppMessage(from, `Order #${pendingOrder.id} has been cancelled.`, targetStore.id);
+        return NextResponse.json({ success: true });
+      }
+
+      const resiMatch = textBody.match(/^(?:cek\s*resi|check\s*resi|track(?:ing)?)\s*(?:#?(\d+))?$/i);
+      if (resiMatch) {
+        const requestedOrderId = resiMatch[1] ? parseInt(resiMatch[1], 10) : null;
+        const order = await prisma.order.findFirst({
+          where: {
+            storeId: targetStore.id,
+            customerPhone: from,
+            ...(requestedOrderId ? { id: requestedOrderId } : {})
+          },
+          orderBy: { createdAt: "desc" }
+        });
+        if (!order) {
+          await sendWhatsAppMessage(from, l(`Order tidak ditemukan.`, `Order not found.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        if (!order.shippingProvider || (!order.shippingTrackingNo && !order.biteshipOrderId)) {
+          await sendWhatsAppMessage(
+            from,
+            l(
+              `Order #${order.id} belum punya nomor resi.\nStatus: ${order.status}\nBalas "Menu" untuk buat order baru.`,
+              `Order #${order.id} does not have a tracking number yet.\nStatus: ${order.status}\nReply "Menu" to create a new order.`
+            ),
+            targetStore.id
+          );
+          return NextResponse.json({ success: true });
+        }
+        const trackingData = order.shippingTrackingNo
+          ? await trackShipmentWithBiteship(targetStore, order.shippingTrackingNo, order.shippingProvider.toLowerCase())
+          : null;
+        const orderData = order.biteshipOrderId ? await getBiteshipOrderStatus(targetStore, order.biteshipOrderId) : null;
+        const latestTrackingNo =
+          trackingData?.tracking?.waybill_id ||
+          trackingData?.tracking?.tracking_id ||
+          trackingData?.data?.tracking_id ||
+          orderData?.courier?.tracking_id ||
+          orderData?.courier?.waybill_id ||
+          order.shippingTrackingNo ||
+          null;
+        const latestStatus =
+          trackingData?.tracking?.status ||
+          trackingData?.data?.status ||
+          trackingData?.status ||
+          orderData?.status ||
+          order.shippingStatus ||
+          "ON_PROCESS";
+        const normalizedShippingStatus = normalizeBiteshipStatus(String(latestStatus));
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            shippingStatus: normalizedShippingStatus,
+            shippingTrackingNo: latestTrackingNo || order.shippingTrackingNo
+          }
+        }).catch(() => null);
+        await sendWhatsAppMessage(
+          from,
+          l(
+            `📦 *Status Pengiriman*\nOrder #${order.id}\nKurir: ${order.shippingProvider}\nLayanan: ${order.shippingService || "-"}\nBiteship ID: ${order.biteshipOrderId || "-"}\nResi: ${latestTrackingNo || "-"}\nStatus: ${normalizedShippingStatus}`,
+            `📦 *Shipment Status*\nOrder #${order.id}\nCourier: ${order.shippingProvider}\nService: ${order.shippingService || "-"}\nBiteship ID: ${order.biteshipOrderId || "-"}\nTracking: ${latestTrackingNo || "-"}\nStatus: ${normalizedShippingStatus}`
+          ),
+          targetStore.id
+        );
         return NextResponse.json({ success: true });
       }
 
@@ -796,6 +891,144 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      if (session.step === 'SERVICE_TYPE_SELECTION') {
+        const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+        if (!shippingConfigured) {
+          await updateSession(from, targetStore.id, { step: 'MENU_SELECTION' });
+          await sendWhatsAppMessage(from, l(`Balas "Menu" untuk mulai pesan.`, `Reply "Menu" to start ordering.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        if (textBody.trim() === "1") {
+          await updateSession(from, targetStore.id, { step: 'MENU_SELECTION' });
+          await sendWhatsAppMessage(from, l(`✅ Dine In dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Dine In selected. Reply "Menu" to start ordering.`), targetStore.id);
+        } else if (textBody.trim() === "2") {
+          await updateSession(from, targetStore.id, { tableNumber: null, step: 'MENU_SELECTION' });
+          await sendWhatsAppMessage(from, l(`✅ Takeaway/Pengiriman dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Takeaway/Delivery selected. Reply "Menu" to start ordering.`), targetStore.id);
+        } else {
+          await sendWhatsAppMessage(from, l(`Balas 1 untuk Dine In atau 2 untuk Takeaway/Pengiriman.`, `Reply 1 for Dine In or 2 for Takeaway/Delivery.`), targetStore.id);
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      if (session.step && session.step.startsWith('TAKEAWAY_DELIVERY_SELECT:')) {
+        const ctx = parseTakeawayDeliveryStep(session.step);
+        const input = textBody.trim();
+        if (input === "1") {
+          await updateSession(from, targetStore.id, {
+            step: 'ORDERING:ALL',
+            cart: (session.cart as any[]) || []
+          });
+          await sendWhatsAppMessage(from, l(`✅ Pickup dipilih. Balas "Selesai" untuk checkout sekarang.`, `✅ Pickup selected. Reply "Done" to checkout now.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        if (input === "2") {
+          if (!targetStore.shippingEnableJne) {
+            await sendWhatsAppMessage(from, l(`JNE belum diaktifkan oleh merchant.`, `JNE is not enabled by merchant.`), targetStore.id);
+            return NextResponse.json({ success: true });
+          }
+          await updateSession(from, targetStore.id, { step: buildTakeawayAddressStep("JNE", ctx.method) });
+          await sendWhatsAppMessage(from, l(`Kirim alamat lengkap untuk pengiriman JNE.`, `Please send full delivery address for JNE shipment.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        if (input === "3") {
+          if (!targetStore.shippingEnableGosend || targetStore.shippingJneOnly) {
+            await sendWhatsAppMessage(from, l(`GoSend belum tersedia untuk toko ini.`, `GoSend is not available for this store.`), targetStore.id);
+            return NextResponse.json({ success: true });
+          }
+          await updateSession(from, targetStore.id, { step: buildTakeawayAddressStep("GOSEND", ctx.method) });
+          await sendWhatsAppMessage(from, l(`Kirim alamat lengkap untuk pengiriman GoSend.`, `Please send full delivery address for GoSend delivery.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        await sendWhatsAppMessage(
+          from,
+          l(
+            `Pilihan tidak valid.\n1. Pickup\n2. JNE\n3. GoSend`,
+            `Invalid choice.\n1. Pickup\n2. JNE\n3. GoSend`
+          ),
+          targetStore.id
+        );
+        return NextResponse.json({ success: true });
+      }
+
+      if (session.step && session.step.startsWith('TAKEAWAY_ADDRESS:')) {
+        const ctx = parseTakeawayAddressStep(session.step);
+        if (!ctx) {
+          await updateSession(from, targetStore.id, { step: 'ORDERING:ALL' });
+          await sendWhatsAppMessage(from, l(`Sesi pengiriman tidak valid, balas "Menu".`, `Invalid shipping session, reply "Menu".`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const cart = (session.cart as any[]) || [];
+        if (cart.length === 0) {
+          await updateSession(from, targetStore.id, { step: 'START' });
+          await sendWhatsAppMessage(from, l(`Keranjang kosong. Balas "Menu" untuk pesan lagi.`, `Your cart is empty. Reply "Menu" to order again.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const addressText = textBody.trim();
+        if (addressText.length < 8) {
+          await sendWhatsAppMessage(from, l(`Alamat terlalu singkat. Mohon kirim alamat lengkap.`, `Address is too short. Please provide full address.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        const shippingOptions = await getShippingQuoteFromBiteship({
+          store: targetStore,
+          destinationAddress: addressText
+        });
+        const selected = shippingOptions.find((opt) => opt.provider === ctx.provider) || shippingOptions[0];
+        const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        const taxAmount = total * (targetStore.taxPercent / 100);
+        const serviceCharge = total * (targetStore.serviceChargePercent / 100);
+        const subtotalWithTaxService = total + taxAmount + serviceCharge;
+        let fee = 0;
+        if (targetStore.feePaidBy === 'CUSTOMER') {
+          if (ctx.method === 'qris' && targetStore.qrisFeePercent) fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
+          else if (ctx.method === 'bank_transfer' && targetStore.manualTransferFee) fee = Number(targetStore.manualTransferFee);
+        }
+        const shippingCost = Number(selected?.fee || 0);
+        const finalTotal = subtotalWithTaxService + fee + shippingCost;
+        const order = await prisma.order.create({
+          data: {
+            storeId: targetStore.id,
+            customerPhone: from,
+            totalAmount: finalTotal,
+            taxAmount,
+            serviceCharge,
+            paymentFee: fee,
+            status: 'PENDING',
+            orderType: 'TAKEAWAY',
+            shippingProvider: selected?.provider || ctx.provider,
+            shippingService: selected?.service || "-",
+            shippingStatus: 'QUOTE_READY',
+            shippingAddress: addressText,
+            shippingCost,
+            shippingEta: selected?.eta || "-",
+            items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
+          }
+        });
+        await createOrderNotification({
+          storeId: targetStore.id,
+          orderId: order.id,
+          source: "WHATSAPP",
+          title: `New Takeaway order #${order.id}`,
+          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+          metadata: { orderType: "TAKEAWAY", shippingProvider: selected?.provider || ctx.provider, shippingCost, shippingAddress: addressText }
+        }).catch(() => null);
+        const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
+        let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
+        cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
+        summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+        if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+        if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
+        if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+        summary += `${l("Ongkir", "Shipping")} (${selected?.provider || ctx.provider} ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
+        summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
+        summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+        await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
+        await updateSession(from, targetStore.id, { step: 'START', cart: [] });
+        return NextResponse.json({ success: true });
+      }
+
       if (session.step === 'MENU_SELECTION') {
         if (textBody === '1') {
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${session.tableNumber}`;
@@ -942,6 +1175,20 @@ export async function POST(req: NextRequest) {
           const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
           let method = lowerText.includes('qris') ? 'qris' : lowerText.includes('bank') ? 'bank_transfer' : undefined;
 
+          const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+          if (!session.tableNumber && shippingConfigured) {
+            await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(method), cart });
+            await sendWhatsAppMessage(
+              from,
+              l(
+                `Pilih metode pengiriman:\n1. Pickup\n2. JNE (Reguler)\n3. GoSend (Instant)\n\nBalas angka pilihan kamu.`,
+                `Choose delivery method:\n1. Pickup\n2. JNE (Regular)\n3. GoSend (Instant)\n\nReply with your option number.`
+              ),
+              targetStore.id
+            );
+            return NextResponse.json({ success: true });
+          }
+
           const taxAmount = total * (targetStore.taxPercent / 100);
           const serviceCharge = total * (targetStore.serviceChargePercent / 100);
           const subtotalWithTaxService = total + taxAmount + serviceCharge;
@@ -962,6 +1209,7 @@ export async function POST(req: NextRequest) {
               serviceCharge: serviceCharge,
               paymentFee: fee,
               status: 'PENDING',
+              orderType: session.tableNumber ? 'DINE_IN' : 'TAKEAWAY',
               tableNumber: session.tableNumber,
               items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
             }
@@ -1125,6 +1373,19 @@ export async function POST(req: NextRequest) {
                      return NextResponse.json({ success: true });
                  }
                  const total = currentCart.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+                 const shippingConfigured = targetStore.enableTakeawayDelivery && (targetStore.shippingEnableJne || (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly));
+                 if (!session.tableNumber && shippingConfigured) {
+                     await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(quickCheckoutMethod), cart: currentCart });
+                     await sendWhatsAppMessage(
+                       from,
+                       l(
+                         `Pilih metode pengiriman:\n1. Pickup\n2. JNE (Reguler)\n3. GoSend (Instant)\n\nBalas angka pilihan kamu.`,
+                         `Choose delivery method:\n1. Pickup\n2. JNE (Regular)\n3. GoSend (Instant)\n\nReply with your option number.`
+                       ),
+                       targetStore.id
+                     );
+                     return NextResponse.json({ success: true });
+                 }
                  const taxAmount = total * (targetStore.taxPercent / 100);
                  const serviceCharge = total * (targetStore.serviceChargePercent / 100);
                  const subtotalWithTaxService = total + taxAmount + serviceCharge;
@@ -1143,6 +1404,7 @@ export async function POST(req: NextRequest) {
                       serviceCharge: serviceCharge,
                       paymentFee: fee,
                       status: 'PENDING',
+                      orderType: session.tableNumber ? 'DINE_IN' : 'TAKEAWAY',
                       tableNumber: session.tableNumber,
                       items: { create: currentCart.map((item: any) => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
                     }

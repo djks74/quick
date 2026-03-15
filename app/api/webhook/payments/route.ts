@@ -4,6 +4,8 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { applyWaTopup, grantBundleCredit } from '@/lib/wa-credit';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { acquireNotificationLock, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
+import { createBiteshipOrderForPaidOrder } from '@/lib/shipping-biteship';
 
 type IngredientUOM = 'gram' | 'kg' | 'pcs';
 
@@ -24,6 +26,7 @@ const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit:
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureStoreSettingsSchema();
     const body = await req.json();
     console.log('PAYMENT_WEBHOOK:', JSON.stringify(body, null, 2));
 
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update Order
-    const order = await prisma.order.update({
+    let order = await prisma.order.update({
       where: { id },
       data: { status }
     });
@@ -111,19 +114,62 @@ export async function POST(req: NextRequest) {
         data: { balance: { increment: netAmount } }
       });
 
+      const store = await prisma.store.findUnique({
+        where: { id: order.storeId },
+        include: { owner: true }
+      });
+
+      const itemsForShipping = await prisma.orderItem.findMany({
+        where: { orderId: order.id },
+        include: { product: true }
+      });
+
+      if (
+        store &&
+        order.orderType === "TAKEAWAY" &&
+        !!order.shippingProvider &&
+        !!order.shippingAddress &&
+        !order.biteshipOrderId
+      ) {
+        const booking = await createBiteshipOrderForPaidOrder({
+          store,
+          order,
+          items: itemsForShipping.map((item) => ({
+            name: item.product?.name,
+            quantity: item.quantity,
+            price: item.price
+          }))
+        });
+
+        if (booking.ok) {
+          order = await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: booking.biteshipOrderId || undefined,
+              shippingTrackingNo: booking.trackingNo || order.shippingTrackingNo || null,
+              shippingStatus: booking.shippingStatus || order.shippingStatus || "confirmed"
+            }
+          });
+        } else {
+          await sendMerchantWhatsApp(
+            order.storeId,
+            `⚠️ *Booking Pengiriman Gagal*\nOrder #${order.id}\nAlasan: ${booking.error || "unknown"}\n\nCek konfigurasi alamat pengirim dan API Biteship.`
+          );
+        }
+      }
+
       // 1. Notify Customer
       await sendWhatsAppMessage(
         order.customerPhone,
-        `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\nTerima kasih! Pesanan sedang kami siapkan.`,
+        `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n` +
+          `${order.orderType === 'TAKEAWAY' ? `\nTipe: Takeaway / Delivery\nKurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` : `\nTipe: Dine In`}` +
+          `${order.biteshipOrderId ? `\nBiteship ID: ${order.biteshipOrderId}` : ``}` +
+          `${order.shippingTrackingNo ? `\nResi: ${order.shippingTrackingNo}` : ``}` +
+          `\n\nTerima kasih! Pesanan sedang kami siapkan.`,
         order.storeId
       );
 
       // 2. Notify Merchant
-      const store = await prisma.store.findUnique({
-          where: { id: order.storeId },
-          include: { owner: true }
-      });
-
       if (store) {
           let merchantPhone = store.whatsapp;
           if (!merchantPhone && store.owner) {
@@ -204,6 +250,23 @@ export async function POST(req: NextRequest) {
               if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
               msg += `👤 Customer: ${order.customerPhone}\n`;
               msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
+              msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
+              if (order.orderType === 'TAKEAWAY') {
+                msg += `🚚 Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n`;
+                msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
+                msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
+                msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
+                if (order.biteshipOrderId) {
+                  msg += `🆔 Biteship: ${order.biteshipOrderId}\n`;
+                }
+                if (order.shippingTrackingNo) {
+                  msg += `🔎 Resi: ${order.shippingTrackingNo}\n`;
+                }
+                if (order.shippingStatus) {
+                  msg += `📮 Status: ${order.shippingStatus}\n`;
+                }
+                msg += `\n`;
+              }
               msg += `*Item:*\n`;
               
               items.forEach(item => {

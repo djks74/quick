@@ -48,7 +48,9 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `2. *Tambah Produk*: "Tambah produk [Nama] [Nominal]"\n` +
       `   Contoh: "Tambah produk Es Teh 5000"\n` +
       `3. *Daftar Produk*: "Daftar produk"\n` +
-      `4. *Ganti Bahasa*: ketik "EN" atau "ID"`,
+      `4. *Update Resi*: "Update resi [OrderID] [NoResi] [Kurir] [Service]"\n` +
+      `   Contoh: "Update resi 123 JX123456789 JNE REG"\n` +
+      `5. *Ganti Bahasa*: ketik "EN" atau "ID"`,
       store.id
     );
     return;
@@ -63,6 +65,46 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
     let msg = `📦 *Produk (${store.name})*\n`;
     products.forEach(p => msg += `- ${p.name}: ${p.price}\n`);
     await sendWhatsAppMessage(from, msg, store.id);
+    return;
+  }
+
+  const updateResiMatch = commandText.match(/(?:update|set|ubah)\s+resi\s+#?(\d+)\s+([A-Za-z0-9\-_.\/]+)(?:\s+([A-Za-z]+))?(?:\s+([A-Za-z0-9\-_.\/]+))?/i);
+  if (updateResiMatch) {
+    const orderId = parseInt(updateResiMatch[1], 10);
+    const trackingNo = updateResiMatch[2];
+    const providerInput = (updateResiMatch[3] || "").toUpperCase();
+    const serviceInput = updateResiMatch[4] || "";
+    const provider = providerInput === "GOSEND" || providerInput === "GOJEK" ? "GOSEND" : providerInput === "JNE" ? "JNE" : undefined;
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, storeId: store.id }
+    });
+    if (!order) {
+      await sendWhatsAppMessage(from, `❌ Order #${orderId} tidak ditemukan untuk toko ini.`, store.id);
+      return;
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        shippingTrackingNo: trackingNo,
+        shippingProvider: provider || order.shippingProvider || null,
+        shippingService: serviceInput || order.shippingService || null,
+        shippingStatus: "SHIPPED"
+      }
+    });
+
+    await sendWhatsAppMessage(
+      from,
+      `✅ Resi untuk order #${orderId} berhasil diupdate.\nKurir: ${updated.shippingProvider || "-"} ${updated.shippingService || ""}\nResi: ${updated.shippingTrackingNo}`,
+      store.id
+    );
+
+    await sendWhatsAppMessage(
+      updated.customerPhone,
+      `📦 Update Pengiriman Order #${orderId}\nKurir: ${updated.shippingProvider || "-"} ${updated.shippingService || ""}\nResi: ${updated.shippingTrackingNo}\n\nBalas "Cek Resi ${orderId}" kapan saja untuk lihat status terbaru.`,
+      store.id
+    );
     return;
   }
 

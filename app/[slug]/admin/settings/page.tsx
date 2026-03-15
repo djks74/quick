@@ -70,7 +70,19 @@ export default function AdminSettings() {
     posGridColumns: 4,
     posPaymentMethods: [] as PosPaymentMethod[],
     paymentGatewaySecret: "",
-    paymentGatewayClientKey: ""
+    paymentGatewayClientKey: "",
+    shippingEnableJne: false,
+    shippingEnableGosend: false,
+    shippingJneOnly: false,
+    enableTakeawayDelivery: true,
+    biteshipApiKey: "",
+    biteshipOriginAreaId: "",
+    biteshipOriginLat: "",
+    biteshipOriginLng: "",
+    shippingSenderName: "",
+    shippingSenderPhone: "",
+    shippingSenderAddress: "",
+    shippingSenderPostalCode: ""
   });
 
   const [bankAccount, setBankAccount] = useState({
@@ -128,7 +140,19 @@ export default function AdminSettings() {
                 .filter((item: PosPaymentMethod) => item.name.length > 0)
             : [],
           paymentGatewaySecret: data.paymentGatewaySecret || "",
-          paymentGatewayClientKey: data.paymentGatewayClientKey || ""
+          paymentGatewayClientKey: data.paymentGatewayClientKey || "",
+          shippingEnableJne: data.shippingEnableJne ?? false,
+          shippingEnableGosend: data.shippingEnableGosend ?? false,
+          shippingJneOnly: data.shippingJneOnly ?? false,
+          enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
+          biteshipApiKey: data.biteshipApiKey || "",
+          biteshipOriginAreaId: data.biteshipOriginAreaId || "",
+          biteshipOriginLat: data.biteshipOriginLat !== null && data.biteshipOriginLat !== undefined ? String(data.biteshipOriginLat) : "",
+          biteshipOriginLng: data.biteshipOriginLng !== null && data.biteshipOriginLng !== undefined ? String(data.biteshipOriginLng) : "",
+          shippingSenderName: data.shippingSenderName || "",
+          shippingSenderPhone: data.shippingSenderPhone || "",
+          shippingSenderAddress: data.shippingSenderAddress || "",
+          shippingSenderPostalCode: data.shippingSenderPostalCode || ""
         });
         
         if (data.bankAccount) {
@@ -163,6 +187,8 @@ export default function AdminSettings() {
         qrisFeePercent: parseFloat(settings.qrisFeePercent.toString().replace(',', '.')) || 0,
         manualTransferFee: parseFloat(settings.manualTransferFee.toString().replace(',', '.')) || 0,
         posPaymentMethods: settings.posPaymentMethods,
+        biteshipOriginLat: settings.biteshipOriginLat ? parseFloat(settings.biteshipOriginLat.toString().replace(',', '.')) : null,
+        biteshipOriginLng: settings.biteshipOriginLng ? parseFloat(settings.biteshipOriginLng.toString().replace(',', '.')) : null,
         bankAccount: bankAccount
       });
 
@@ -234,7 +260,7 @@ export default function AdminSettings() {
   return (
     <div className="space-y-6">
       <div className="flex border-b border-[#ccd0d4] mb-6 overflow-x-auto">
-        {["General", "Payments", "Tax & Fees", "Appearance"].map((tab) => (
+        {["General", "Payments", "Shipping", "Tax & Fees", "Appearance"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -643,6 +669,150 @@ export default function AdminSettings() {
                  </div>
               </div>
            </div>
+        )}
+
+        {activeTab === "Shipping" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Takeaway and Delivery</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable shipping flows after WhatsApp checkout.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.enableTakeawayDelivery}
+                    onChange={(e) => setSettings({ ...settings, enableTakeawayDelivery: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium dark:text-gray-300">Enable takeaway delivery flow</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.shippingEnableJne}
+                    onChange={(e) => setSettings({ ...settings, shippingEnableJne: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium dark:text-gray-300">Enable JNE</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.shippingEnableGosend}
+                    onChange={(e) => setSettings({ ...settings, shippingEnableGosend: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium dark:text-gray-300">Enable GoSend</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.shippingJneOnly}
+                    onChange={(e) => setSettings({ ...settings, shippingJneOnly: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium dark:text-gray-300">JNE only mode (non-instant)</label>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Biteship Integration</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use Biteship API for quote and resi checks.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                {!isEnterprise && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm flex items-center border border-blue-100 dark:border-blue-800 transition-colors">
+                    <Lock className="w-4 h-4 mr-2" />
+                    Use platform env BITESHIP_API_KEY or upgrade to Enterprise to save your own key.
+                  </div>
+                )}
+                <div className={cn(!canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Biteship API Key</label>
+                    <input
+                      type="password"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.biteshipApiKey}
+                      onChange={(e) => setSettings({ ...settings, biteshipApiKey: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Origin Area ID (Optional)</label>
+                  <input
+                    type="text"
+                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                    value={settings.biteshipOriginAreaId}
+                    onChange={(e) => setSettings({ ...settings, biteshipOriginAreaId: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Origin Latitude (Optional)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.biteshipOriginLat}
+                      onChange={(e) => setSettings({ ...settings, biteshipOriginLat: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Origin Longitude (Optional)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.biteshipOriginLng}
+                      onChange={(e) => setSettings({ ...settings, biteshipOriginLng: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="border border-[#ccd0d4] dark:border-gray-800 rounded-md p-3 space-y-3">
+                  <h4 className="text-sm font-semibold dark:text-gray-300">Merchant Sender Address</h4>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Sender Name</label>
+                    <input
+                      type="text"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.shippingSenderName}
+                      onChange={(e) => setSettings({ ...settings, shippingSenderName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Sender Phone</label>
+                    <input
+                      type="text"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.shippingSenderPhone}
+                      onChange={(e) => setSettings({ ...settings, shippingSenderPhone: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Sender Full Address</label>
+                    <textarea
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white min-h-20"
+                      value={settings.shippingSenderAddress}
+                      onChange={(e) => setSettings({ ...settings, shippingSenderAddress: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Sender Postal Code</label>
+                    <input
+                      type="text"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.shippingSenderPostalCode}
+                      onChange={(e) => setSettings({ ...settings, shippingSenderPostalCode: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === "Appearance" && (
