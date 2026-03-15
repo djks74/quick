@@ -262,56 +262,55 @@ export async function POST(req: NextRequest) {
               }
           }
 
-          if (merchantPhone) {
-              let msg = `💰 *Pembayaran Masuk untuk Order #${order.id}*\n`;
-              if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
-              msg += `👤 Customer: ${order.customerPhone}\n`;
-              msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
-              msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
-              if (order.orderType === 'TAKEAWAY') {
-                msg += `🚚 Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n`;
-                msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
-                msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
-                msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
-                if (order.biteshipOrderId) {
-                  msg += `🆔 Biteship: ${order.biteshipOrderId}\n`;
-                }
-                if (order.shippingTrackingNo) {
-                  msg += `🔎 Resi: ${order.shippingTrackingNo}\n`;
-                }
-                if (order.shippingStatus) {
-                  msg += `📮 Status: ${order.shippingStatus}\n`;
-                }
-                msg += `\n`;
-              }
-              msg += `*Item:*\n`;
-              
-              items.forEach(item => {
-                  msg += `${item.quantity}x ${item.product.name}\n`;
+          // Notify Merchant
+          let msg = `💰 *Pembayaran Masuk untuk Order #${order.id}*\n`;
+          if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
+          msg += `👤 Customer: ${order.customerPhone}\n`;
+          msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
+          msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
+          if (order.orderType === 'TAKEAWAY') {
+            msg += `🚚 Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n`;
+            msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
+            msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
+            msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
+            if (order.biteshipOrderId) {
+              msg += `🆔 Biteship: ${order.biteshipOrderId}\n`;
+            }
+            if (order.shippingTrackingNo) {
+              msg += `🔎 Resi: ${order.shippingTrackingNo}\n`;
+            }
+            if (order.shippingStatus) {
+              msg += `📮 Status: ${order.shippingStatus}\n`;
+            }
+            msg += `\n`;
+          }
+          msg += `*Item:*\n`;
+          
+          items.forEach(item => {
+              msg += `${item.quantity}x ${item.product.name}\n`;
+          });
+          
+          msg += `\n⚠️ Mohon segera proses pesanan ini!`;
+
+          await sendMerchantWhatsApp(order.storeId, msg).catch(() => null);
+
+          if (lowStockAlerts.length > 0) {
+              let lowMsg = `⚠️ *Peringatan Stok Menipis*\n\n`;
+              lowStockAlerts.forEach((it) => {
+                  const safeStock = Math.max(0, Number(it.stock));
+                  lowMsg += `- ${it.name}: ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(safeStock)} ${it.unit} (min ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(it.minStock)} ${it.unit})\n`;
               });
-              
-              msg += `\n⚠️ Mohon segera proses pesanan ini!`;
+              lowMsg += `\nSegera restock agar tidak kehabisan.`;
+              await sendMerchantWhatsApp(order.storeId, lowMsg).catch(() => null);
+          }
 
-              await sendWhatsAppMessage(merchantPhone, msg, store.id);
-
-              if (lowStockAlerts.length > 0) {
-                  let lowMsg = `⚠️ *Peringatan Stok Menipis*\n\n`;
-                  lowStockAlerts.forEach((it) => {
-                      const safeStock = Math.max(0, Number(it.stock));
-                      lowMsg += `- ${it.name}: ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(safeStock)} ${it.unit} (min ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(it.minStock)} ${it.unit})\n`;
-                  });
-                  lowMsg += `\nSegera restock agar tidak kehabisan.`;
-                  await sendWhatsAppMessage(merchantPhone, lowMsg, store.id);
-              }
-
-              if (outOfStockAlerts.length > 0) {
-                  let outMsg = `🚨 *Stok Habis (Kritis)*\n\n`;
-                  outOfStockAlerts.forEach((it) => {
-                    outMsg += `- ${it.name} (${it.unit})\n`;
-                  });
-                  outMsg += `\nMohon restock secepatnya.`;
-                  await sendWhatsAppMessage(merchantPhone, outMsg, store.id);
-              }
+          if (outOfStockAlerts.length > 0) {
+              let outMsg = `🚨 *Stok Habis (Kritis)*\n\n`;
+              outOfStockAlerts.forEach((it) => {
+                outMsg += `- ${it.name} (${it.unit})\n`;
+              });
+              outMsg += `\nMohon restock secepatnya.`;
+              await sendMerchantWhatsApp(order.storeId, outMsg).catch(() => null);
           }
       }
     }

@@ -105,6 +105,36 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
     }
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm("Are you sure you want to cancel this order? This will also attempt to cancel the order on Biteship.")) return;
+    if (processingOrderId) return;
+    setProcessingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        alert(data?.error || "Failed to cancel order");
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, status: "cancelled" }
+            : o
+        )
+      );
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev: any) =>
+          prev ? { ...prev, status: "cancelled" } : prev
+        );
+      }
+    } catch {
+      alert("Failed to cancel order");
+    } finally {
+      setProcessingOrderId(null);
+    }
+  };
+
   const handleViewOrder = async (order: any) => {
     setSelectedOrder(order);
     setLoadingDetails(true);
@@ -184,13 +214,33 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
                     <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {canForcePaid && order.status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => handleForceMarkPaid(order.id)}
+                              disabled={processingOrderId === order.id}
+                              className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                              title="Mark as Paid"
+                            >
+                              {processingOrderId === order.id ? "Processing..." : "Mark Paid"}
+                            </button>
+                            <button
+                              onClick={() => handleCancelOrder(order.id)}
+                              disabled={processingOrderId === order.id}
+                              className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                              title="Cancel Order"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        {canForcePaid && order.status === "paid" && (
                           <button
-                            onClick={() => handleForceMarkPaid(order.id)}
+                            onClick={() => handleCancelOrder(order.id)}
                             disabled={processingOrderId === order.id}
-                            className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                            title="Mark as Paid"
+                            className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Cancel Order"
                           >
-                            {processingOrderId === order.id ? "Processing..." : "Mark Paid"}
+                            Cancel
                           </button>
                         )}
                         <button 
