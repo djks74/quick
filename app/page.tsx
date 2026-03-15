@@ -485,6 +485,8 @@ export default function Home() {
           <div className="flex gap-8">
             <Link href="/privacy" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Privacy</Link>
             <Link href="/terms" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Terms</Link>
+            <Link href="/faq" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">FAQ</Link>
+            <Link href="/documentation" className="text-sm text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white font-bold transition-colors">Documentation</Link>
           </div>
         </div>
       </footer>
