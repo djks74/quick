@@ -23,9 +23,21 @@ export async function getMerchantPhone(storeId: number) {
 export async function sendMerchantWhatsApp(storeId: number, text: string) {
   const { store, phone } = await getMerchantPhone(storeId);
   if (!store || !phone) return false;
-  const sent = await sendWhatsAppMessage(phone, text, store.id);
+  
+  // 1. Try sending using store config (if billable)
+  let sent = await sendWhatsAppMessage(phone, text, store.id);
   if (sent) return true;
-  return sendWhatsAppMessage(phone, text, 0);
+
+  // 2. If failed, try sending using platform config (storeId 0)
+  sent = await sendWhatsAppMessage(phone, text, 0);
+  if (sent) return true;
+
+  // 3. If failed and owner phone is different, try sending to owner using platform config
+  if (store.owner?.phoneNumber && store.owner.phoneNumber !== phone) {
+    return sendWhatsAppMessage(store.owner.phoneNumber, text, 0);
+  }
+
+  return false;
 }
 
 export function resolvePaymentUrl(orderId: number, paymentUrl?: string | null) {

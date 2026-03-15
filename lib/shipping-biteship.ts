@@ -223,6 +223,15 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
     }
   }
 
+  // Fallback: If no exact service match, try to find ANY service from the same provider (e.g. any JNE service if JNE requested)
+  if (byCompany.length > 0) {
+    const fallback = byCompany[0];
+    return {
+      company: resolveCourierCompany(preferredProvider || fallback?.courier_company || fallback?.courier_name || fallback?.courier_code),
+      type: String(fallback?.courier_type || "")
+    };
+  }
+
   const fallback = targetPool[0];
   return {
     company: resolveCourierCompany(preferredProvider || fallback?.courier_company || fallback?.courier_name || fallback?.courier_code),
