@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
-import { resolvePaymentUrl } from '@/lib/merchant-alerts';
+import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 
 type WaLang = "id" | "en";
