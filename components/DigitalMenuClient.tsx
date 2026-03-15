@@ -318,6 +318,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }
   };
 
+  const currentShippingCost = orderType === 'TAKEAWAY' ? Number(selectedQuote?.fee || selectedQuote?.price || 0) : 0;
+  const finalTotalAmount = totalPrice + (isCustomerPaysFee ? (calculatePlatformFee('qris') || calculatePlatformFee('transfer')) : 0) + currentShippingCost;
+
   const handleWebCheckout = async (method: 'qris' | 'bank') => {
     if (cart.length === 0) return;
     if (!store.isOpen) {
@@ -353,14 +356,14 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           quantity: item.quantity,
           price: item.price
         })),
-        total: totalPrice + (isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0) + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0),
+        total: totalPrice + (isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0) + currentShippingCost,
         customerInfo: {
           phone: checkoutPhone.trim(),
           tableNumber: tableNumber || undefined,
           shippingProvider: orderType === 'TAKEAWAY' ? selectedQuote?.provider : undefined,
           shippingService: orderType === 'TAKEAWAY' ? selectedQuote?.service : undefined,
           shippingAddress: orderType === 'TAKEAWAY' ? deliveryAddress.trim() : undefined,
-          shippingCost: orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0,
+          shippingCost: orderType === 'TAKEAWAY' ? currentShippingCost : 0,
           shippingEta: orderType === 'TAKEAWAY' ? selectedQuote?.etd || selectedQuote?.eta : undefined
         },
         paymentMethod: "midtrans",
@@ -773,20 +776,29 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       {shippingQuotes.length > 0 && (
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Courier</label>
-                          <select
-                            value={selectedQuote ? `${selectedQuote.provider}|${selectedQuote.service}|${selectedQuote.price}` : ""}
-                            onChange={(e) => {
-                              const next = shippingQuotes.find((opt: any) => `${opt.provider}|${opt.service}|${opt.price}` === e.target.value) || null;
-                              setSelectedQuote(next);
-                            }}
-                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none"
-                          >
-                            {shippingQuotes.map((opt: any, idx: number) => (
-                              <option key={`${opt.provider}-${opt.service}-${idx}`} value={`${opt.provider}|${opt.service}|${opt.price}`}>
-                                {opt.provider} - {opt.service} • {formatPrice(Number(opt.price || 0))} • ETA {opt.etd || opt.eta || "-"}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="relative">
+                            <select
+                              value={selectedQuote ? `${selectedQuote.provider}|${selectedQuote.service}|${selectedQuote.fee || selectedQuote.price}` : ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const next = shippingQuotes.find((opt: any) => `${opt.provider}|${opt.service}|${opt.fee || opt.price}` === val) || null;
+                                setSelectedQuote(next);
+                              }}
+                              className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none appearance-none pr-10"
+                            >
+                              {shippingQuotes.map((opt: any, idx: number) => (
+                                <option key={`${opt.provider}-${opt.service}-${idx}`} value={`${opt.provider}|${opt.service}|${opt.fee || opt.price}`}>
+                                  {opt.provider} - {opt.service} • {formatPrice(Number(opt.fee || opt.price || 0))}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          </div>
+                          {selectedQuote && (
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium px-1">
+                              ETA: {selectedQuote.etd || selectedQuote.eta || "-"}
+                            </p>
+                          )}
                         </div>
                       )}
                    </div>
