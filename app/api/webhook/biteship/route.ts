@@ -30,12 +30,27 @@ function extractBiteshipEvent(payload: any) {
   return { orderId, statusRaw, trackingNo };
 }
 
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody || !rawBody.trim()) {
+      return NextResponse.json({ ok: true, installed: true });
+    }
+
+    let payload: any = {};
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ ok: true, installed: true, ignored: "INVALID_JSON" });
+    }
+
     const { orderId, statusRaw, trackingNo } = extractBiteshipEvent(payload);
     if (!orderId) {
-      return NextResponse.json({ success: false, reason: "ORDER_ID_MISSING" }, { status: 400 });
+      return NextResponse.json({ ok: true, ignored: "ORDER_ID_MISSING" });
     }
 
     const status = normalizeBiteshipStatus(statusRaw || "confirmed");
@@ -44,7 +59,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!order) {
-      return NextResponse.json({ success: true, ignored: true });
+      return NextResponse.json({ ok: true, ignored: true });
     }
 
     const prevStatus = normalizeBiteshipStatus(order.shippingStatus || "");
@@ -76,9 +91,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Biteship webhook error:", error);
-    return NextResponse.json({ success: false }, { status: 500 });
+    return NextResponse.json({ ok: true, accepted: false });
   }
 }

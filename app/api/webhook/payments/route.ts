@@ -124,10 +124,13 @@ export async function POST(req: NextRequest) {
         include: { product: true }
       });
 
+      const providerCode = String(order.shippingProvider || "").toUpperCase();
+      const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";
+
       if (
         store &&
         order.orderType === "TAKEAWAY" &&
-        !!order.shippingProvider &&
+        isProviderBookable &&
         !!order.shippingAddress &&
         !order.biteshipOrderId
       ) {
@@ -151,11 +154,25 @@ export async function POST(req: NextRequest) {
             }
           });
         } else {
+          console.error("BITESHIP_BOOKING_FAILED", {
+            orderId: order.id,
+            provider: order.shippingProvider,
+            error: booking.error,
+            code: (booking as any).code,
+            detail: (booking as any).detail
+          });
           await sendMerchantWhatsApp(
             order.storeId,
             `⚠️ *Booking Pengiriman Gagal*\nOrder #${order.id}\nAlasan: ${booking.error || "unknown"}\n\nCek konfigurasi alamat pengirim dan API Biteship.`
           );
         }
+      } else if (store && order.orderType === "TAKEAWAY" && !order.biteshipOrderId) {
+        console.log("BITESHIP_BOOKING_SKIPPED", {
+          orderId: order.id,
+          provider: order.shippingProvider,
+          hasAddress: !!order.shippingAddress,
+          isProviderBookable
+        });
       }
 
       // 1. Notify Customer
