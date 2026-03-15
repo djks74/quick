@@ -143,3 +143,165 @@ export async function getStoreAvailableBalance(storeId: number) {
     return 0;
   }
 }
+
+type IngredientUOM = "gram" | "kg" | "pcs";
+
+const normalizeUOM = (value?: string): IngredientUOM => {
+  const v = (value || "").toLowerCase();
+  if (v === "gram" || v === "gr" || v === "g") return "gram";
+  if (v === "kg" || v === "kilogram") return "kg";
+  return "pcs";
+};
+
+const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit: IngredientUOM, conversionFactor: number) => {
+  const gramsPerPcs = Math.max(0.000001, Number.isFinite(conversionFactor) ? conversionFactor : 1);
+  const qty = Number.isFinite(quantity) ? quantity : 0;
+  const grams = quantityUnit === "gram" ? qty : quantityUnit === "kg" ? qty * 1000 : qty * gramsPerPcs;
+  const baseQty = baseUnit === "gram" ? grams : baseUnit === "kg" ? grams / 1000 : grams / gramsPerPcs;
+  return Number(baseQty.toFixed(6));
+};
+
+const roundTwo = (value: number) => Number((Number.isFinite(value) ? value : 0).toFixed(2));
+
+export async function getStoreProfitAnalytics(storeId: number) {
+  try {
+    await requireMerchant(storeId);
+
+    const orders = await prisma.order.findMany({
+      where: {
+        storeId,
+        status: { in: ['PAID', 'COMPLETED', 'paid', 'completed'] }
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        items: {
+          select: {
+            quantity: true,
+            price: true,
+            product: {
+              select: {
+                id: true,
+                name: true,
+                ingredients: {
+                  select: {
+                    quantity: true,
+                    quantityUnit: true,
+                    baseUnit: true,
+                    conversionFactor: true,
+                    inventoryItem: {
+                      select: {
+                        costPrice: true,
+                        unit: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const productMap = new Map<number, {
+      productId: number;
+      productName: string;
+      quantitySold: number;
+      revenue: number;
+      estimatedCogs: number;
+      estimatedProfit: number;
+      estimatedMargin: number;
+    }>();
+
+    let grossRevenue = 0;
+    let totalFees = 0;
+    let estimatedCogs = 0;
+    let totalItemsSold = 0;
+
+    for (const order of orders) {
+      grossRevenue += Number(order.totalAmount || 0);
+      totalFees += Number(order.paymentFee || 0) + Number(order.transactionFee || 0);
+
+      for (const item of order.items) {
+        const itemQty = Number(item.quantity || 0);
+        const itemRevenue = Number(item.price || 0) * itemQty;
+        totalItemsSold += itemQty;
+
+        const productCostPerUnit = (item.product?.ingredients || []).reduce((sum, ingredient) => {
+          const inventoryUnit = normalizeUOM(ingredient.inventoryItem?.unit);
+          const baseUnit = normalizeUOM(ingredient.baseUnit || inventoryUnit);
+          const quantityUnit = normalizeUOM(ingredient.quantityUnit || baseUnit);
+          const conversionFactor = Math.max(0.000001, Number(ingredient.conversionFactor) || 1);
+          const baseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
+          const ingredientCost = (Number(ingredient.inventoryItem?.costPrice) || 0) * baseQty;
+          return sum + ingredientCost;
+        }, 0);
+
+        const itemCogs = productCostPerUnit * itemQty;
+        estimatedCogs += itemCogs;
+
+        const existing = productMap.get(item.product.id) || {
+          productId: item.product.id,
+          productName: item.product.name,
+          quantitySold: 0,
+          revenue: 0,
+          estimatedCogs: 0,
+          estimatedProfit: 0,
+          estimatedMargin: 0
+        };
+
+        existing.quantitySold += itemQty;
+        existing.revenue += itemRevenue;
+        existing.estimatedCogs += itemCogs;
+        existing.estimatedProfit = existing.revenue - existing.estimatedCogs;
+        existing.estimatedMargin = existing.revenue > 0 ? (existing.estimatedProfit / existing.revenue) * 100 : 0;
+        productMap.set(item.product.id, existing);
+      }
+    }
+
+    const netAfterFees = grossRevenue - totalFees;
+    const estimatedNetProfit = netAfterFees - estimatedCogs;
+    const estimatedMargin = grossRevenue > 0 ? (estimatedNetProfit / grossRevenue) * 100 : 0;
+    const avgOrderValue = orders.length > 0 ? grossRevenue / orders.length : 0;
+
+    const topProducts = Array.from(productMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10)
+      .map((item) => ({
+        ...item,
+        revenue: roundTwo(item.revenue),
+        estimatedCogs: roundTwo(item.estimatedCogs),
+        estimatedProfit: roundTwo(item.estimatedProfit),
+        estimatedMargin: roundTwo(item.estimatedMargin)
+      }));
+
+    return {
+      totalOrders: orders.length,
+      totalItemsSold,
+      grossRevenue: roundTwo(grossRevenue),
+      totalFees: roundTwo(totalFees),
+      netAfterFees: roundTwo(netAfterFees),
+      estimatedCogs: roundTwo(estimatedCogs),
+      estimatedNetProfit: roundTwo(estimatedNetProfit),
+      estimatedMargin: roundTwo(estimatedMargin),
+      avgOrderValue: roundTwo(avgOrderValue),
+      topProducts,
+      generatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error fetching profit analytics:', error);
+    return {
+      totalOrders: 0,
+      totalItemsSold: 0,
+      grossRevenue: 0,
+      totalFees: 0,
+      netAfterFees: 0,
+      estimatedCogs: 0,
+      estimatedNetProfit: 0,
+      estimatedMargin: 0,
+      avgOrderValue: 0,
+      topProducts: [],
+      generatedAt: new Date().toISOString()
+    };
+  }
+}

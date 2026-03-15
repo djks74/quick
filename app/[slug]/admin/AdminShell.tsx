@@ -98,6 +98,7 @@ export default function AdminShell({
       icon: Wallet,
       children: [
         { name: "Report", href: `${baseUrl}/finance/ledger` },
+        { name: "Analytics", href: `${baseUrl}/finance/profit` },
         { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
       ]
     },
