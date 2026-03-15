@@ -49,6 +49,19 @@ const statusColors: Record<string, string> = {
   'pending': 'bg-orange-100 text-orange-700',
 };
 
+const shipmentStatusColors: Record<string, string> = {
+  quote_ready: "bg-blue-100 text-blue-700",
+  draft_created: "bg-indigo-100 text-indigo-700",
+  courier_selected: "bg-purple-100 text-purple-700",
+  booking_failed: "bg-red-100 text-red-700",
+  confirmed: "bg-green-100 text-green-700",
+  allocated: "bg-cyan-100 text-cyan-700",
+  picking_up: "bg-yellow-100 text-yellow-700",
+  on_going: "bg-amber-100 text-amber-700",
+  delivered: "bg-emerald-100 text-emerald-700",
+  cancelled: "bg-gray-100 text-gray-700"
+};
+
 export default function OrdersTable({ initialOrders, slug, canForcePaid = false }: { initialOrders: any[], slug: string, canForcePaid?: boolean }) {
   const [orders, setOrders] = useState<any[]>(initialOrders);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,6 +69,17 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+
+  const formatShipmentStatus = (value?: string | null) => {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return "-";
+    return raw.replace(/_/g, " ");
+  };
+
+  const shipmentStatusClass = (value?: string | null) => {
+    const raw = String(value || "").trim().toLowerCase();
+    return shipmentStatusColors[raw] || "bg-gray-100 text-gray-700";
+  };
 
   const filteredOrders = orders.filter(order => 
     order.customerPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -200,13 +224,23 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
                       {new Date(order.date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-4">
-                      <span className={cn(
-                        "inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium",
-                        statusColors[order.status]
-                      )}>
-                        <StatusIcon className="w-3 h-3 mr-1" />
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        <span className={cn(
+                          "inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium w-fit",
+                          statusColors[order.status]
+                        )}>
+                          <StatusIcon className="w-3 h-3 mr-1" />
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                        {order.shippingProvider && (
+                          <span className={cn(
+                            "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider w-fit",
+                            shipmentStatusClass(order.shippingStatus)
+                          )}>
+                            Ship: {formatShipmentStatus(order.shippingStatus)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4 font-medium dark:text-gray-200">
                       {formatCurrency(order.total, "IDR")}
@@ -283,6 +317,14 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
                        )}>
                           {selectedOrder.status}
                        </span>
+                       {selectedOrder.shippingProvider && (
+                         <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
+                            shipmentStatusClass(selectedOrder.shippingStatus)
+                         )}>
+                            Ship: {formatShipmentStatus(selectedOrder.shippingStatus)}
+                         </span>
+                       )}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">Placed on {new Date(selectedOrder.date).toLocaleString()}</p>
                  </div>
@@ -337,7 +379,15 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
                              {selectedOrder.shippingProvider && (
                                 <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
                                   <p>Courier: <span className="font-bold">{selectedOrder.shippingProvider} {selectedOrder.shippingService || ""}</span></p>
-                                  <p>Status: <span className="font-bold">{selectedOrder.shippingStatus || "-"}</span></p>
+                                  <p>
+                                    Status:
+                                    <span className={cn(
+                                      "ml-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                                      shipmentStatusClass(selectedOrder.shippingStatus)
+                                    )}>
+                                      {formatShipmentStatus(selectedOrder.shippingStatus)}
+                                    </span>
+                                  </p>
                                   <p>Biteship ID: <span className="font-bold">{selectedOrder.biteshipOrderId || "-"}</span></p>
                                   <p>Resi: <span className="font-bold">{selectedOrder.shippingTrackingNo || "-"}</span></p>
                                 </div>
