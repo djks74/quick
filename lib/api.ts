@@ -100,6 +100,32 @@ export async function getStoreSettings(storeId: number | string) {
     const settings = await prisma.store.findUnique({
       where: where as any
     });
+    if (!settings) return null;
+
+    const canUseOwnIntegrationConfig =
+      settings.subscriptionPlan === "ENTERPRISE" &&
+      settings.slug !== "demo";
+
+    if (!canUseOwnIntegrationConfig) {
+      const platform = await prisma.platformSettings.findUnique({
+        where: { key: "default" },
+        select: {
+          whatsappToken: true,
+          whatsappPhoneId: true,
+          midtransServerKey: true,
+          midtransClientKey: true
+        }
+      });
+
+      return {
+        ...settings,
+        whatsappToken: platform?.whatsappToken ?? settings.whatsappToken,
+        whatsappPhoneId: platform?.whatsappPhoneId ?? settings.whatsappPhoneId,
+        paymentGatewaySecret: platform?.midtransServerKey ?? settings.paymentGatewaySecret,
+        paymentGatewayClientKey: platform?.midtransClientKey ?? settings.paymentGatewayClientKey
+      };
+    }
+
     return settings;
   } catch (error) {
     console.error('Error fetching store settings:', error);
