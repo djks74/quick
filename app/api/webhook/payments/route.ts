@@ -208,78 +208,13 @@ export async function POST(req: NextRequest) {
         order.storeId
       );
 
-      // 2. Notify Merchant
+      // 2. Notify Merchant (IMMEDIATELY)
       if (store) {
           const items = await prisma.orderItem.findMany({
               where: { orderId: order.id },
-              include: { 
-                product: {
-                  include: {
-                    ingredients: true
-                  }
-                }
-              }
+              include: { product: true }
           });
 
-          const ingredientUsage = new Map<number, number>();
-          const lowStockAlerts: Array<{ name: string; stock: number; minStock: number; unit: string }> = [];
-          const outOfStockAlerts: Array<{ name: string; unit: string }> = [];
-
-          // Reduce Inventory for each item
-          for (const item of items) {
-              // 1. Reduce finished product stock if managed
-              if (item.product.stock > 0) {
-                  await prisma.product.update({
-                      where: { id: item.productId },
-                      data: { stock: { decrement: item.quantity } }
-                  });
-              }
-
-              // 2. Reduce raw ingredients stock if recipe exists
-              if (item.product.ingredients && item.product.ingredients.length > 0) {
-                  for (const ingredient of item.product.ingredients) {
-                      const baseUnit = normalizeUOM((ingredient as any).baseUnit);
-                      const quantityUnit = normalizeUOM((ingredient as any).quantityUnit || baseUnit);
-                      const conversionFactor = Math.max(0.000001, Number((ingredient as any).conversionFactor) || 1);
-                      const recipeBaseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
-                      const decrementAmount = Number((recipeBaseQty * item.quantity).toFixed(6));
-                      const current = ingredientUsage.get(ingredient.inventoryItemId) || 0;
-                      ingredientUsage.set(ingredient.inventoryItemId, Number((current + decrementAmount).toFixed(6)));
-                  }
-              }
-          }
-
-          for (const [inventoryItemId, decrementAmount] of ingredientUsage.entries()) {
-              const before = await prisma.inventoryItem.findUnique({
-                  where: { id: inventoryItemId },
-                  select: { id: true, name: true, stock: true, minStock: true, unit: true }
-              });
-              if (!before) continue;
-              const after = await prisma.inventoryItem.update({
-                  where: { id: inventoryItemId },
-                  data: { stock: { decrement: decrementAmount } },
-                  select: { stock: true, minStock: true, name: true, unit: true }
-              });
-              const wasLow = Number(before.stock) <= Number(before.minStock);
-              const isLow = Number(after.stock) <= Number(after.minStock);
-              const becameOutOfStock = Number(before.stock) > 0 && Number(after.stock) <= 0;
-              if (!wasLow && isLow) {
-                  lowStockAlerts.push({
-                      name: after.name,
-                      stock: Number(after.stock),
-                      minStock: Number(after.minStock),
-                      unit: after.unit || "pcs"
-                  });
-              }
-              if (becameOutOfStock) {
-                  outOfStockAlerts.push({
-                    name: after.name,
-                    unit: after.unit || "pcs"
-                  });
-              }
-          }
-
-          // Notify Merchant
           let msg = `💰 *Pembayaran Masuk untuk Order #${order.id}*\n`;
           if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
           msg += `👤 Customer: ${order.customerPhone}\n`;
@@ -302,32 +237,102 @@ export async function POST(req: NextRequest) {
             msg += `\n`;
           }
           msg += `*Item:*\n`;
-          
           items.forEach(item => {
               msg += `${item.quantity}x ${item.product.name}\n`;
           });
-          
           msg += `\n⚠️ Mohon segera proses pesanan ini!`;
 
-          await sendMerchantWhatsApp(order.storeId, msg).catch(() => null);
+          // Send notification and don't wait for inventory logic
+          sendMerchantWhatsApp(order.storeId, msg).catch((e) => console.error("MERCHANT_NOTIF_FAILED", e));
 
-          if (lowStockAlerts.length > 0) {
-              let lowMsg = `⚠️ *Peringatan Stok Menipis*\n\n`;
-              lowStockAlerts.forEach((it) => {
-                  const safeStock = Math.max(0, Number(it.stock));
-                  lowMsg += `- ${it.name}: ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(safeStock)} ${it.unit} (min ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(it.minStock)} ${it.unit})\n`;
+          // 3. Update Inventory (Async / Non-blocking for notification)
+          try {
+             const itemsWithIngredients = await prisma.orderItem.findMany({
+                  where: { orderId: order.id },
+                  include: { 
+                    product: {
+                      include: { ingredients: true }
+                    }
+                  }
               });
-              lowMsg += `\nSegera restock agar tidak kehabisan.`;
-              await sendMerchantWhatsApp(order.storeId, lowMsg).catch(() => null);
-          }
 
-          if (outOfStockAlerts.length > 0) {
-              let outMsg = `🚨 *Stok Habis (Kritis)*\n\n`;
-              outOfStockAlerts.forEach((it) => {
-                outMsg += `- ${it.name} (${it.unit})\n`;
-              });
-              outMsg += `\nMohon restock secepatnya.`;
-              await sendMerchantWhatsApp(order.storeId, outMsg).catch(() => null);
+              const ingredientUsage = new Map<number, number>();
+              const lowStockAlerts: Array<{ name: string; stock: number; minStock: number; unit: string }> = [];
+              const outOfStockAlerts: Array<{ name: string; unit: string }> = [];
+
+              for (const item of itemsWithIngredients) {
+                  // Reduce finished product stock
+                  if (item.product.stock > 0) {
+                      await prisma.product.update({
+                          where: { id: item.productId },
+                          data: { stock: { decrement: item.quantity } }
+                      });
+                  }
+                  // Reduce raw ingredients
+                  if (item.product.ingredients && item.product.ingredients.length > 0) {
+                      for (const ingredient of item.product.ingredients) {
+                          const baseUnit = normalizeUOM((ingredient as any).baseUnit);
+                          const quantityUnit = normalizeUOM((ingredient as any).quantityUnit || baseUnit);
+                          const conversionFactor = Math.max(0.000001, Number((ingredient as any).conversionFactor) || 1);
+                          const recipeBaseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
+                          const decrementAmount = Number((recipeBaseQty * item.quantity).toFixed(6));
+                          const current = ingredientUsage.get(ingredient.inventoryItemId) || 0;
+                          ingredientUsage.set(ingredient.inventoryItemId, Number((current + decrementAmount).toFixed(6)));
+                      }
+                  }
+              }
+
+              for (const [inventoryItemId, decrementAmount] of ingredientUsage.entries()) {
+                  const before = await prisma.inventoryItem.findUnique({
+                      where: { id: inventoryItemId },
+                      select: { id: true, name: true, stock: true, minStock: true, unit: true }
+                  });
+                  if (!before) continue;
+                  const after = await prisma.inventoryItem.update({
+                      where: { id: inventoryItemId },
+                      data: { stock: { decrement: decrementAmount } },
+                      select: { stock: true, minStock: true, name: true, unit: true }
+                  });
+                  const wasLow = Number(before.stock) <= Number(before.minStock);
+                  const isLow = Number(after.stock) <= Number(after.minStock);
+                  const becameOutOfStock = Number(before.stock) > 0 && Number(after.stock) <= 0;
+                  if (!wasLow && isLow) {
+                      lowStockAlerts.push({
+                          name: after.name,
+                          stock: Number(after.stock),
+                          minStock: Number(after.minStock),
+                          unit: after.unit || "pcs"
+                      });
+                  }
+                  if (becameOutOfStock) {
+                      outOfStockAlerts.push({
+                        name: after.name,
+                        unit: after.unit || "pcs"
+                      });
+                  }
+              }
+
+              if (lowStockAlerts.length > 0) {
+                  let lowMsg = `⚠️ *Peringatan Stok Menipis*\n\n`;
+                  lowStockAlerts.forEach((it) => {
+                      const safeStock = Math.max(0, Number(it.stock));
+                      lowMsg += `- ${it.name}: ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(safeStock)} ${it.unit} (min ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(it.minStock)} ${it.unit})\n`;
+                  });
+                  lowMsg += `\nSegera restock agar tidak kehabisan.`;
+                  sendMerchantWhatsApp(order.storeId, lowMsg).catch(() => null);
+              }
+
+              if (outOfStockAlerts.length > 0) {
+                  let outMsg = `🚨 *Stok Habis (Kritis)*\n\n`;
+                  outOfStockAlerts.forEach((it) => {
+                    outMsg += `- ${it.name} (${it.unit})\n`;
+                  });
+                  outMsg += `\nMohon restock secepatnya.`;
+                  sendMerchantWhatsApp(order.storeId, outMsg).catch(() => null);
+              }
+          } catch (invError) {
+             console.error("INVENTORY_UPDATE_ERROR", invError);
+             // Don't fail the webhook, just log it.
           }
       }
     }

@@ -349,20 +349,34 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
 
   try {
     let draftOrderId = String(order?.biteshipOrderId || "").trim();
-    if (!draftOrderId || normalizeBiteshipStatus(order?.shippingStatus || "") === "cancelled") {
+    const currentStatus = normalizeBiteshipStatus(order?.shippingStatus || "");
+    
+    // 1. If no draft or cancelled, create new draft
+    if (!draftOrderId || currentStatus === "cancelled") {
       const created = await createBiteshipDraftOrder({ store, order, items });
       if (!created.ok) return created;
       draftOrderId = String((created as any).draftOrderId || "");
     }
-    const applied = await applyCourierToDraft(apiKey, draftOrderId, order, order?.shippingProvider, order?.shippingService);
-    if (!applied.ok) return applied;
 
+    // 2. Apply courier if not yet selected
+    // If status is 'courier_selected', we assume courier is already set correctly on the draft
+    // from the pending stage. We only re-apply if we suspect it's missing.
+    if (currentStatus !== "courier_selected") {
+       const applied = await applyCourierToDraft(apiKey, draftOrderId, order, order?.shippingProvider, order?.shippingService);
+       if (!applied.ok) {
+         // If applying courier fails, we can't proceed to confirm
+         return applied;
+       }
+    }
+
+    // 3. Confirm the order (Book it)
     const confirmRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/confirm`, {
       method: "POST",
       headers: { Authorization: apiKey }
     });
     const confirmData = await confirmRes.json().catch(() => ({}));
     const biteshipOrderId = confirmData?.id || confirmData?.order_id || confirmData?.order?.id || null;
+    
     if (!confirmRes.ok || !biteshipOrderId) {
       return { ok: false, error: confirmData?.error || "CONFIRM_FAILED", code: confirmData?.code || confirmRes.status };
     }
