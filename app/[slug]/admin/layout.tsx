@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import { getStoreBySlug } from "@/lib/api";
 import AdminShell from "./AdminShell";
+import { Suspense } from "react";
+import AdminSpinner from "./components/AdminSpinner";
 
 export default async function AdminLayout({ children, params }: { children: React.ReactNode, params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -31,5 +33,9 @@ export default async function AdminLayout({ children, params }: { children: Reac
     }
   }
 
-  return <AdminShell store={store} isSuperAdmin={isSuperAdmin}>{children}</AdminShell>;
+  return (
+    <AdminShell store={store} isSuperAdmin={isSuperAdmin}>
+      <Suspense fallback={<AdminSpinner label="Loading..." />}>{children}</Suspense>
+    </AdminShell>
+  );
 }

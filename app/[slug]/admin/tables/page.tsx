@@ -6,6 +6,7 @@ import { Printer, Plus, Trash2, ExternalLink, Globe, Save, Loader2 } from "lucid
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getTables, createTable, deleteTable, getStoreBySlug, updateStoreDomain } from "@/lib/api";
+import AdminSpinner from "../components/AdminSpinner";
 
 export default function AdminTables() {
   const { slug } = useParams();
@@ -99,7 +100,7 @@ export default function AdminTables() {
     return `${cleanOrigin}/${slug}?table=${encodeURIComponent(identifier)}`;
   };
 
-  if (isLoading) return <div className="p-8 text-center">Loading tables...</div>;
+  if (isLoading) return <AdminSpinner label="Loading tables..." />;
 
   return (
     <div className="space-y-8">

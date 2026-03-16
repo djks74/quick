@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { unstable_cache } from "next/cache";
 
 async function requireMerchant(storeId: number) {
   const session = await getServerSession(authOptions);
@@ -163,45 +164,79 @@ const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit:
 
 const roundTwo = (value: number) => Number((Number.isFinite(value) ? value : 0).toFixed(2));
 
-export async function getStoreProfitAnalytics(storeId: number) {
-  try {
-    await requireMerchant(storeId);
+const PROFIT_STATUSES = ['PAID', 'COMPLETED', 'paid', 'completed'] as const;
 
-    const orders = await prisma.order.findMany({
-      where: {
-        storeId,
-        status: { in: ['PAID', 'COMPLETED', 'paid', 'completed'] }
-      },
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        items: {
-          select: {
-            quantity: true,
-            price: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                ingredients: {
-                  select: {
-                    quantity: true,
-                    quantityUnit: true,
-                    baseUnit: true,
-                    conversionFactor: true,
-                    inventoryItem: {
-                      select: {
-                        costPrice: true,
-                        unit: true
-                      }
-                    }
-                  }
+async function computeStoreProfitAnalytics(storeId: number) {
+  const orders = await prisma.order.findMany({
+    where: {
+      storeId,
+      status: { in: [...PROFIT_STATUSES] }
+    },
+    select: {
+      totalAmount: true,
+      paymentFee: true,
+      transactionFee: true,
+      items: {
+        select: {
+          quantity: true,
+          price: true,
+          productId: true,
+          product: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const productIds = Array.from(
+    new Set(
+      orders
+        .flatMap((o) => o.items.map((i) => Number(i.productId)))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
+  );
+
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: {
+          id: true,
+          name: true,
+          ingredients: {
+            select: {
+              quantity: true,
+              quantityUnit: true,
+              baseUnit: true,
+              conversionFactor: true,
+              inventoryItem: {
+                select: {
+                  costPrice: true,
+                  unit: true
                 }
               }
             }
           }
         }
-      }
-    });
+      })
+    : [];
+
+  const productCostPerUnit = new Map<number, number>();
+  for (const product of products) {
+    const unitCost = (product.ingredients || []).reduce((sum, ingredient) => {
+      const inventoryUnit = normalizeUOM(ingredient.inventoryItem?.unit);
+      const baseUnit = normalizeUOM(ingredient.baseUnit || inventoryUnit);
+      const quantityUnit = normalizeUOM(ingredient.quantityUnit || baseUnit);
+      const conversionFactor = Math.max(0.000001, Number(ingredient.conversionFactor) || 1);
+      const baseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
+      const ingredientCost = (Number(ingredient.inventoryItem?.costPrice) || 0) * baseQty;
+      return sum + ingredientCost;
+    }, 0);
+    productCostPerUnit.set(product.id, unitCost);
+  }
 
     const productMap = new Map<number, {
       productId: number;
@@ -227,22 +262,14 @@ export async function getStoreProfitAnalytics(storeId: number) {
         const itemRevenue = Number(item.price || 0) * itemQty;
         totalItemsSold += itemQty;
 
-        const productCostPerUnit = (item.product?.ingredients || []).reduce((sum, ingredient) => {
-          const inventoryUnit = normalizeUOM(ingredient.inventoryItem?.unit);
-          const baseUnit = normalizeUOM(ingredient.baseUnit || inventoryUnit);
-          const quantityUnit = normalizeUOM(ingredient.quantityUnit || baseUnit);
-          const conversionFactor = Math.max(0.000001, Number(ingredient.conversionFactor) || 1);
-          const baseQty = toBaseQuantity(Number(ingredient.quantity) || 0, quantityUnit, baseUnit, conversionFactor);
-          const ingredientCost = (Number(ingredient.inventoryItem?.costPrice) || 0) * baseQty;
-          return sum + ingredientCost;
-        }, 0);
-
-        const itemCogs = productCostPerUnit * itemQty;
+        const pid = Number(item.productId);
+        const unitCost = productCostPerUnit.get(pid) || 0;
+        const itemCogs = unitCost * itemQty;
         estimatedCogs += itemCogs;
 
-        const existing = productMap.get(item.product.id) || {
-          productId: item.product.id,
-          productName: item.product.name,
+        const existing = productMap.get(pid) || {
+          productId: pid,
+          productName: item.product?.name || products.find((p) => p.id === pid)?.name || `Product #${pid}`,
           quantitySold: 0,
           revenue: 0,
           estimatedCogs: 0,
@@ -255,7 +282,7 @@ export async function getStoreProfitAnalytics(storeId: number) {
         existing.estimatedCogs += itemCogs;
         existing.estimatedProfit = existing.revenue - existing.estimatedCogs;
         existing.estimatedMargin = existing.revenue > 0 ? (existing.estimatedProfit / existing.revenue) * 100 : 0;
-        productMap.set(item.product.id, existing);
+        productMap.set(pid, existing);
       }
     }
 
@@ -288,6 +315,18 @@ export async function getStoreProfitAnalytics(storeId: number) {
       topProducts,
       generatedAt: new Date().toISOString()
     };
+}
+
+const computeStoreProfitAnalyticsCached = unstable_cache(
+  async (storeId: number) => computeStoreProfitAnalytics(storeId),
+  ["store-profit-analytics"],
+  { revalidate: 60 }
+);
+
+export async function getStoreProfitAnalytics(storeId: number) {
+  try {
+    await requireMerchant(storeId);
+    return await computeStoreProfitAnalyticsCached(storeId);
   } catch (error) {
     console.error('Error fetching profit analytics:', error);
     return {

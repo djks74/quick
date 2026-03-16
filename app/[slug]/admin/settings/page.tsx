@@ -8,6 +8,7 @@ import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername } from "@/lib/api";
 import { Check, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AdminSpinner from "../components/AdminSpinner";
 
 type PosPaymentMethod = {
   id: string;
@@ -246,14 +247,7 @@ export default function AdminSettings() {
   
   // Early return ONLY after hooks are defined
   if (status === "loading" || isDataLoading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm font-bold uppercase tracking-widest">Loading settings...</span>
-        </div>
-      </div>
-    );
+    return <AdminSpinner label="Loading settings..." />;
   }
   if (!session || !canAccess) return null;
 

@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { getStoreBySlug, getStoreCashiers, createStoreCashier, deleteStoreCashier } from "@/lib/api";
+import AdminSpinner from "../components/AdminSpinner";
 
 interface StoreUser {
   id: number;
@@ -127,7 +128,7 @@ export default function AdminUsers() {
   };
 
   if (isLoading) {
-    return <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+    return <AdminSpinner label="Loading users..." />;
   }
 
   if (action === "new") {
