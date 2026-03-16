@@ -83,7 +83,7 @@ const translations = {
     phase4_subtitle: "Reach your customers anywhere.",
     phase4_f1: "Real-time rates calculation",
     phase4_f2: "GoSend Instant for local delivery",
-    phase4_f3: "JNE for out-of-city shipments",
+    phase4_f3: "JNE for Nationwide Shipping",
     phase4_f4: "Automatic Resi generation",
     phase5_title: "Admin Mastery",
     phase5_subtitle: "Control everything from one place.",
