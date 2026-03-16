@@ -88,9 +88,15 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
   const apiKey = await getApiKey(store);
   if (!apiKey) return getFallbackOptions(store);
 
+  let postal = input.destinationPostalCode;
+  if (!postal) {
+    const match = String(input.destinationAddress || "").match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
+    if (match) postal = match[1];
+  }
+
   const payload = {
     origin_area_id: store?.biteshipOriginAreaId || undefined,
-    destination_postal_code: input.destinationPostalCode || undefined,
+    destination_postal_code: postal || undefined,
     destination_address: input.destinationAddress,
     couriers: [store?.shippingEnableJne ? "jne" : null, store?.shippingEnableGosend && !store?.shippingJneOnly ? "gojek" : null].filter(Boolean).join(","),
     items: [
@@ -99,7 +105,7 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
         description: "WhatsApp Order",
         value: 10000,
         quantity: 1,
-        weight: Number(input.weightGrams || 1000)
+        weight: Number(input.weightGrams || 200) // Consistent default
       }
     ]
   };
@@ -211,13 +217,15 @@ function matchCourierCompany(item: any, company: string) {
 }
 
 function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
+  if (!pricing || pricing.length === 0) return null;
+
   const company = resolveCourierCompany(preferredProvider);
   const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
   const targetPool = byCompany.length > 0 ? byCompany : pricing;
   if (targetPool.length === 0) return null;
 
   const preferred = String(preferredService || "").toLowerCase().trim();
-  if (preferred) {
+  if (preferred && preferred !== "-") {
     const preferredMatch = targetPool.find((x) => {
       const type = String(x?.courier_type || "").toLowerCase();
       const name = String(x?.courier_service_name || x?.courier_type || "").toLowerCase();
@@ -231,7 +239,7 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
     }
   }
 
-  // Fallback: If no exact service match, try to find ANY service from the same provider (e.g. any JNE service if JNE requested)
+  // Fallback 1: If no exact service match, try to find ANY service from the same provider (e.g. any JNE service if JNE requested)
   if (byCompany.length > 0) {
     const fallback = byCompany[0];
     return {
@@ -240,9 +248,10 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
     };
   }
 
+  // Fallback 2: Any available service at all
   const fallback = targetPool[0];
   return {
-    company: resolveCourierCompany(preferredProvider || fallback?.courier_company || fallback?.courier_name || fallback?.courier_code),
+    company: resolveCourierCompany(fallback?.courier_company || fallback?.courier_name || fallback?.courier_code || "jne"),
     type: String(fallback?.courier_type || "")
   };
 }
@@ -284,7 +293,7 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
       description: "WhatsApp Order",
       value: Number(item?.price || 0),
       quantity: Math.max(1, Number(item?.quantity || 1)),
-      weight: 1000
+      weight: 200 // Use more realistic weight (200g per item)
     }))
   };
 
@@ -329,7 +338,8 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
 
   const selection = resolveCourierSelection(pricing, preferredProvider || order?.shippingProvider, preferredService || order?.shippingService);
   if (!selection?.type) {
-    return { ok: false, error: "COURIER_NOT_AVAILABLE" as const };
+    const errorMsg = pricing.length === 0 ? "NO_RATES_FOR_ADDRESS" : "COURIER_NOT_AVAILABLE";
+    return { ok: false, error: errorMsg as any };
   }
 
   const setCourierRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}`, {
