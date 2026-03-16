@@ -176,16 +176,17 @@ export async function POST(req: NextRequest) {
             }
           });
         } else {
+          const bookingFailed = booking as any;
           console.error("BITESHIP_BOOKING_FAILED", {
             orderId: order.id,
             provider: order.shippingProvider,
-            error: booking.error,
-            code: (booking as any).code,
-            detail: (booking as any).detail
+            error: bookingFailed.error,
+            code: bookingFailed.code,
+            detail: bookingFailed.detail
           });
           await sendMerchantWhatsApp(
             order.storeId,
-            `⚠️ *Booking Pengiriman Gagal*\nOrder #${order.id}\nAlasan: ${booking.error || "unknown"}\n\nCek konfigurasi alamat pengirim dan API Biteship.`
+            `⚠️ *Booking Pengiriman Gagal*\nOrder #${order.id}\nAlasan: ${bookingFailed.error || "unknown"}\n\nCek konfigurasi alamat pengirim dan API Biteship.`
           );
         }
       } else if (store && order.orderType === "TAKEAWAY" && !order.biteshipOrderId) {

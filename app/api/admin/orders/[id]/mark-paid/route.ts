@@ -110,11 +110,12 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
         }
       }).catch(() => null);
 
+      const bookingFailed = booking as any;
       return NextResponse.json({
         success: false,
-        error: `Booking Failed: ${booking.error || "Unknown error"}. Check store address & courier availability.`,
-        bookingError: booking.error,
-        bookingCode: (booking as any).code || null
+        error: `Booking Failed: ${bookingFailed.error || "Unknown error"}. Check store address & courier availability.`,
+        bookingError: bookingFailed.error,
+        bookingCode: bookingFailed.code || null
       });
     }
 
