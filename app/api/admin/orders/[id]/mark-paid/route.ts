@@ -106,20 +106,14 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       await prisma.order.update({
         where: { id: order.id },
         data: {
-          shippingStatus: order.shippingStatus || "booking_failed"
+          shippingStatus: "booking_failed"
         }
       }).catch(() => null);
 
       return NextResponse.json({
-        success: true,
-        order: {
-          id: order.id,
-          status: order.status,
-          biteshipOrderId: order.biteshipOrderId,
-          shippingTrackingNo: order.shippingTrackingNo,
-          shippingStatus: order.shippingStatus
-        },
-        bookingError: booking.error || "Failed to book shipment",
+        success: false,
+        error: `Booking Failed: ${booking.error || "Unknown error"}. Check store address & courier availability.`,
+        bookingError: booking.error,
         bookingCode: (booking as any).code || null
       });
     }

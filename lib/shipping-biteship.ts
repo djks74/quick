@@ -36,7 +36,15 @@ function parseEta(item: any) {
 }
 
 function normalizeBiteshipStatus(value?: string) {
-  return String(value || "confirmed").trim().toLowerCase().replace(/\s+/g, "_");
+  const s = String(value || "").trim().toLowerCase();
+  if (!s) return "pending";
+  if (s === "confirmed" || s === "allocated" || s === "picking_up" || s === "picking up") return "confirmed";
+  if (s === "on_going" || s === "on going" || s === "picked_up" || s === "picked up" || s === "dropping_off" || s === "dropping off") return "on_going";
+  if (s === "delivered" || s === "completed") return "delivered";
+  if (s === "cancelled" || s === "rejected") return "cancelled";
+  if (s === "courier_selected") return "courier_selected";
+  if (s === "draft_created" || s === "draft") return "draft_created";
+  return s.replace(/\s+/g, "_");
 }
 
 async function getApiKey(store: any) {
@@ -301,12 +309,24 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
 }
 
 async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: any, preferredProvider?: string, preferredService?: string) {
-  const ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
+  let ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
     method: "GET",
     headers: { Authorization: apiKey }
   });
-  const ratesData = await ratesRes.json().catch(() => ({}));
-  const pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+  let ratesData = await ratesRes.json().catch(() => ({}));
+  let pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+
+  // Small retry if pricing is empty (sometimes Biteship takes a moment to process the draft)
+  if (pricing.length === 0) {
+    await new Promise(r => setTimeout(r, 800));
+    ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
+      method: "GET",
+      headers: { Authorization: apiKey }
+    });
+    ratesData = await ratesRes.json().catch(() => ({}));
+    pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+  }
+
   const selection = resolveCourierSelection(pricing, preferredProvider || order?.shippingProvider, preferredService || order?.shippingService);
   if (!selection?.type) {
     return { ok: false, error: "COURIER_NOT_AVAILABLE" as const };
@@ -358,13 +378,14 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
       draftOrderId = String((created as any).draftOrderId || "");
     }
 
-    // 2. Apply courier if not yet selected
-    // If status is 'courier_selected', we assume courier is already set correctly on the draft
-    // from the pending stage. We only re-apply if we suspect it's missing.
-    if (currentStatus !== "courier_selected") {
+    // 2. Apply courier if not yet selected OR if we just created a new draft
+    // Final states that should skip booking/applying: confirmed, allocated, picking_up, on_going, delivered, cancelled
+    const finalStates = ["confirmed", "allocated", "picking_up", "on_going", "delivered", "cancelled"];
+    const needsCourier = !finalStates.includes(currentStatus);
+
+    if (needsCourier) {
        const applied = await applyCourierToDraft(apiKey, draftOrderId, order, order?.shippingProvider, order?.shippingService);
        if (!applied.ok) {
-         // If applying courier fails, we can't proceed to confirm
          return applied;
        }
     }
