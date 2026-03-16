@@ -206,52 +206,65 @@ export async function cancelBiteshipOrder(store: any, biteshipOrderId: string) {
 function resolveCourierCompany(provider?: string) {
   const p = String(provider || "").toLowerCase();
   if (p.includes("go")) return "gojek";
-  return "jne";
+  if (p.includes("jne")) return "jne";
+  return p; // Return the raw provider if it's something else
 }
 
 function matchCourierCompany(item: any, company: string) {
   const raw = String(item?.courier_company || item?.courier_name || item?.courier_code || "").toLowerCase();
   if (!raw) return false;
-  if (company === "gojek") return raw.includes("gojek") || raw.includes("gosend") || raw.includes("go-send") || raw.includes("go");
-  return raw.includes("jne");
+  
+  const target = company.toLowerCase();
+  if (target === "gojek" || target === "gosend") {
+    return raw.includes("gojek") || raw.includes("gosend") || raw.includes("go-send") || raw.includes("go");
+  }
+  if (target === "jne") {
+    return raw.includes("jne");
+  }
+  return raw.includes(target);
 }
 
 function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
   if (!pricing || pricing.length === 0) return null;
 
+  // 1. Normalize the preferred provider
   const company = resolveCourierCompany(preferredProvider);
+  
+  // 2. Try to find services by that company
   const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
+  
+  // 3. Define the pool to search from (prefer company-specific, then all)
   const targetPool = byCompany.length > 0 ? byCompany : pricing;
-  if (targetPool.length === 0) return null;
 
+  // 4. Try exact service match within the pool
   const preferred = String(preferredService || "").toLowerCase().trim();
-  if (preferred && preferred !== "-") {
+  if (preferred && preferred !== "-" && preferred !== "reg") {
     const preferredMatch = targetPool.find((x) => {
       const type = String(x?.courier_type || "").toLowerCase();
       const name = String(x?.courier_service_name || x?.courier_type || "").toLowerCase();
-      return type.includes(preferred) || preferred.includes(type) || name.includes(preferred) || preferred.includes(name);
+      return type === preferred || name === preferred || type.includes(preferred) || name.includes(preferred);
     });
     if (preferredMatch) {
       return {
-        company: resolveCourierCompany(preferredProvider || preferredMatch?.courier_company || preferredMatch?.courier_name || preferredMatch?.courier_code),
+        company: preferredMatch?.courier_company || preferredMatch?.courier_code || company,
         type: String(preferredMatch?.courier_type || "")
       };
     }
   }
 
-  // Fallback 1: If no exact service match, try to find ANY service from the same provider (e.g. any JNE service if JNE requested)
+  // 5. Fallback 1: First available service from preferred company
   if (byCompany.length > 0) {
     const fallback = byCompany[0];
     return {
-      company: resolveCourierCompany(preferredProvider || fallback?.courier_company || fallback?.courier_name || fallback?.courier_code),
+      company: fallback?.courier_company || fallback?.courier_code || company,
       type: String(fallback?.courier_type || "")
     };
   }
 
-  // Fallback 2: Any available service at all
-  const fallback = targetPool[0];
+  // 6. Fallback 2: Any available service at all
+  const fallback = pricing[0];
   return {
-    company: resolveCourierCompany(fallback?.courier_company || fallback?.courier_name || fallback?.courier_code || "jne"),
+    company: fallback?.courier_company || fallback?.courier_code || "jne",
     type: String(fallback?.courier_type || "")
   };
 }
