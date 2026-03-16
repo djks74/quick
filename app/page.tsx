@@ -56,7 +56,7 @@ const translations = {
     new_order: "New Order",
     whatsapp_features: "Manage products, update pricing, and fulfill orders—all directly within WhatsApp.",
     scan_demo: "Scan to try Demo",
-    contact_demo: "Contact us for demo activation",
+    contact_demo: "Book a Demo Call",
     flow_subtitle: "Future of Retail & SME",
     flow_title_start: "Seamless flow from",
     flow_title_highlight: "Scan to Payment.",
