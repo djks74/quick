@@ -207,11 +207,11 @@ function resolveCourierCompany(provider?: string) {
   const p = String(provider || "").toLowerCase();
   if (p.includes("go")) return "gojek";
   if (p.includes("jne")) return "jne";
-  return p; // Return the raw provider if it's something else
+  return p;
 }
 
 function matchCourierCompany(item: any, company: string) {
-  const raw = String(item?.courier_company || item?.courier_name || item?.courier_code || "").toLowerCase();
+  const raw = String(item?.company || item?.courier_company || item?.courier_name || item?.courier_code || "").toLowerCase();
   if (!raw) return false;
   
   const target = company.toLowerCase();
@@ -224,49 +224,65 @@ function matchCourierCompany(item: any, company: string) {
   return raw.includes(target);
 }
 
-function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
-  if (!pricing || pricing.length === 0) return null;
+function getServiceType(item: any) {
+  // Try all possible keys for the service type/code
+  const type = item?.courier_service_code || 
+               item?.courier_type || 
+               item?.service_type || 
+               item?.service_code || 
+               item?.courier_service_name || 
+               item?.type ||
+               "";
+  return String(type).toLowerCase().trim();
+}
 
-  // 1. Normalize the preferred provider
+function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
+  if (!pricing || !Array.isArray(pricing) || pricing.length === 0) return null;
+
   const company = resolveCourierCompany(preferredProvider);
-  
-  // 2. Try to find services by that company
   const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
-  
-  // 3. Define the pool to search from (prefer company-specific, then all)
   const targetPool = byCompany.length > 0 ? byCompany : pricing;
 
-  // 4. Try exact service match within the pool
   const preferred = String(preferredService || "").toLowerCase().trim();
-  if (preferred && preferred !== "-" && preferred !== "reg") {
+  
+  // 1. Try to find the exact service type or name
+  if (preferred && preferred !== "-") {
     const preferredMatch = targetPool.find((x) => {
-      const type = String(x?.courier_type || "").toLowerCase();
-      const name = String(x?.courier_service_name || x?.courier_type || "").toLowerCase();
+      const type = getServiceType(x);
+      const name = String(x?.courier_service_name || x?.courier_type || x?.service_type || "").toLowerCase();
       return type === preferred || name === preferred || type.includes(preferred) || name.includes(preferred);
     });
-    if (preferredMatch) {
+    if (preferredMatch && getServiceType(preferredMatch)) {
       return {
-        company: preferredMatch?.courier_company || preferredMatch?.courier_code || company,
-        type: String(preferredMatch?.courier_type || "")
+        company: preferredMatch?.courier_code || preferredMatch?.courier_company || preferredMatch?.company || company,
+        type: getServiceType(preferredMatch)
       };
     }
   }
 
-  // 5. Fallback 1: First available service from preferred company
+  // 2. Fallback to first available from preferred company
   if (byCompany.length > 0) {
-    const fallback = byCompany[0];
+    const fallback = byCompany.find(x => getServiceType(x)) || byCompany[0];
+    const type = getServiceType(fallback);
+    if (type) {
+      return {
+        company: fallback?.courier_code || fallback?.courier_company || fallback?.company || company,
+        type: type
+      };
+    }
+  }
+
+  // 3. Fallback to absolutely any available service
+  const absoluteFallback = pricing.find(x => getServiceType(x)) || pricing[0];
+  const absType = getServiceType(absoluteFallback);
+  if (absType) {
     return {
-      company: fallback?.courier_company || fallback?.courier_code || company,
-      type: String(fallback?.courier_type || "")
+      company: absoluteFallback?.courier_code || absoluteFallback?.courier_company || absoluteFallback?.company || "jne",
+      type: absType
     };
   }
 
-  // 6. Fallback 2: Any available service at all
-  const fallback = pricing[0];
-  return {
-    company: fallback?.courier_company || fallback?.courier_code || "jne",
-    type: String(fallback?.courier_type || "")
-  };
+  return null;
 }
 
 async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
@@ -336,7 +352,13 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
     headers: { Authorization: apiKey }
   });
   let ratesData = await ratesRes.json().catch(() => ({}));
-  let pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+  let pricing = Array.isArray(ratesData?.pricing) 
+    ? ratesData.pricing 
+    : Array.isArray(ratesData?.data?.pricing) 
+      ? ratesData.data.pricing 
+      : Array.isArray(ratesData?.data)
+        ? ratesData.data
+        : [];
 
   // Small retry if pricing is empty (sometimes Biteship takes a moment to process the draft)
   if (pricing.length === 0) {
@@ -346,13 +368,19 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
       headers: { Authorization: apiKey }
     });
     ratesData = await ratesRes.json().catch(() => ({}));
-    pricing = Array.isArray(ratesData?.pricing) ? ratesData.pricing : Array.isArray(ratesData?.data?.pricing) ? ratesData.data.pricing : [];
+    pricing = Array.isArray(ratesData?.pricing) 
+      ? ratesData.pricing 
+      : Array.isArray(ratesData?.data?.pricing) 
+        ? ratesData.data.pricing 
+        : Array.isArray(ratesData?.data)
+          ? ratesData.data
+          : [];
   }
 
   const selection = resolveCourierSelection(pricing, preferredProvider || order?.shippingProvider, preferredService || order?.shippingService);
   if (!selection?.type) {
     const errorMsg = pricing.length === 0 ? "NO_RATES_FOR_ADDRESS" : "COURIER_NOT_AVAILABLE";
-    return { ok: false, error: errorMsg as any };
+    return { ok: false, error: errorMsg as any, detail: { pricing, ratesData } };
   }
 
   const setCourierRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}`, {
@@ -413,27 +441,46 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
        }
     }
 
-    // 3. Confirm the order (Book it)
-    const confirmRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/confirm`, {
-      method: "POST",
-      headers: { Authorization: apiKey }
-    });
-    const confirmData = await confirmRes.json().catch(() => ({}));
-    const biteshipOrderId = confirmData?.id || confirmData?.order_id || confirmData?.order?.id || null;
-    
-    if (!confirmRes.ok || !biteshipOrderId) {
-      return { ok: false, error: confirmData?.error || "CONFIRM_FAILED", code: confirmData?.code || confirmRes.status };
+    // 3. Confirm the order (Book it) if not already confirmed
+    if (!finalStates.includes(currentStatus)) {
+      const confirmRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/confirm`, {
+        method: "POST",
+        headers: { Authorization: apiKey }
+      });
+      const confirmData = await confirmRes.json().catch(() => ({}));
+      
+      if (!confirmRes.ok) {
+        return { 
+          ok: false, 
+          error: confirmData?.error || "CONFIRM_FAILED", 
+          code: confirmData?.code || confirmRes.status,
+          detail: confirmData
+        };
+      }
+
+      const biteshipOrderId = confirmData?.id || confirmData?.order_id || confirmData?.order?.id || null;
+      if (!biteshipOrderId) {
+        return { ok: false, error: "NO_ORDER_ID_RETURNED", detail: confirmData };
+      }
+
+      const courier = confirmData?.courier || confirmData?.order?.courier || {};
+       const trackingNo = courier?.waybill_id || courier?.courier_waybill_id || courier?.tracking_id || null;
+       const status = normalizeBiteshipStatus(confirmData?.status || confirmData?.order?.status || "confirmed");
+
+      return {
+        ok: true,
+        biteshipOrderId,
+        trackingNo,
+        shippingStatus: status
+      };
     }
 
-    const courier = confirmData?.courier || confirmData?.order?.courier || {};
-    const trackingNo = courier?.tracking_id || courier?.waybill_id || courier?.courier_waybill_id || null;
-    const status = normalizeBiteshipStatus(confirmData?.status || confirmData?.order?.status || "confirmed");
-
+    // If already confirmed, just return current data
     return {
       ok: true,
-      biteshipOrderId,
-      trackingNo,
-      shippingStatus: status
+      biteshipOrderId: draftOrderId,
+      trackingNo: order?.shippingTrackingNo || null,
+      shippingStatus: currentStatus
     };
   } catch (error) {
     return {

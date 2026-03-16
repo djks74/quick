@@ -111,11 +111,19 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       }).catch(() => null);
 
       const bookingFailed = booking as any;
+      console.error("BITESHIP_BOOKING_FAILED", {
+        orderId: order.id,
+        provider: order.shippingProvider,
+        error: bookingFailed.error,
+        code: bookingFailed.code,
+        detail: bookingFailed.detail
+      });
       return NextResponse.json({
         success: false,
         error: `Booking Failed: ${bookingFailed.error || "Unknown error"}. Check store address & courier availability.`,
         bookingError: bookingFailed.error,
-        bookingCode: bookingFailed.code || null
+        bookingCode: bookingFailed.code || null,
+        bookingDetail: bookingFailed.detail
       });
     }
 
