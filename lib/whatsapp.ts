@@ -184,13 +184,13 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       const alertText = lowCreditAlertLevel === "CRITICAL"
         ? (
             lowCreditAlertUrl
-              ? `🚨 Your Mythoz WA balance is almost empty. Top up immediately to avoid message interruption: ${lowCreditAlertUrl}`
-              : `🚨 Your Mythoz WA balance is almost empty. Top up immediately to avoid message interruption.`
+              ? `🚨 Your Gercep WA balance is almost empty. Top up immediately to avoid message interruption: ${lowCreditAlertUrl}`
+              : `🚨 Your Gercep WA balance is almost empty. Top up immediately to avoid message interruption.`
           )
         : (
             lowCreditAlertUrl
-              ? `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending: ${lowCreditAlertUrl}`
-              : `⚠️ Your Mythoz WA balance is low. Top up now so receipts keep sending.`
+              ? `⚠️ Your Gercep WA balance is low. Top up now so receipts keep sending: ${lowCreditAlertUrl}`
+              : `⚠️ Your Gercep WA balance is low. Top up now so receipts keep sending.`
           );
       await dispatchWhatsAppMessage(
         lowCreditAlertPhone.replace(/\D/g, "").replace(/^0/, "62"),

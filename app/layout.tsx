@@ -5,6 +5,14 @@ import { Providers } from "@/components/Providers";
 export const metadata: Metadata = {
   title: "Gercep",
   description: "Gercep - Digital Menu & Store",
+  icons: {
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" }
+    ],
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

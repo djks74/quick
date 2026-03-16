@@ -12,6 +12,11 @@ const customerFaq = [
       "Yes. Tap Order via WhatsApp from the menu page. The bot will guide you to browse menu, search products, choose variations, and place your order.",
   },
   {
+    question: "How does delivery work?",
+    answer:
+      "For takeaway orders, we provide real-time shipping rates. You can choose GoSend Instant for local delivery or JNE for out-of-city shipments. Shipping costs are calculated automatically based on your address.",
+  },
+  {
     question: "Why are some products not visible in menu?",
     answer:
       "Out-of-stock products are automatically hidden from the customer menu. Only products with available stock are shown.",
@@ -48,6 +53,11 @@ const merchantFaq = [
     question: "How are payments confirmed?",
     answer:
       "Payment callbacks update order status automatically. Merchants can monitor paid, pending, and failed statuses from the order dashboard.",
+  },
+  {
+    question: "How do I process shipping as a merchant?",
+    answer:
+      "When an order is marked as Paid, the system automatically books the shipment using the selected courier (GoSend or JNE). A tracking number (Resi) is generated immediately and sent to the customer.",
   },
   {
     question: "Can merchant and customer use Indonesian by default?",

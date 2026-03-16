@@ -46,7 +46,7 @@ const translations = {
     title_start: "Launch Your",
     title_highlight: "Digital Menu",
     title_end: "in Seconds",
-    description: "One system for your shop, your chat, and your stock. Accept orders via WhatsApp, manage your physical store with our POS, and master your inventory down to the gram.",
+    description: "One system for your shop, your chat, and your shipping. Accept orders via WhatsApp, manage your physical store with our POS, and track every delivery with ease.",
     view_demo: "View Demo Store",
     create_store: "Create Your Store",
     easy_setup: "Easy Setup",
@@ -79,12 +79,18 @@ const translations = {
     phase3_f2: "Instant payment callbacks",
     phase3_f3: "Zero manual verification",
     phase3_f4: "Auto-update order status",
-    phase4_title: "Admin Mastery",
-    phase4_subtitle: "Control everything from one place.",
-    phase4_f1: "Integrated POS for cashier operations",
-    phase4_f2: "Inventory and stock management",
-    phase4_f3: "Barcode scan for stock in/out updates",
-    phase4_f4: "Real-time sales and stock insights"
+    phase4_title: "Shipping Integration",
+    phase4_subtitle: "Reach your customers anywhere.",
+    phase4_f1: "Real-time rates calculation",
+    phase4_f2: "GoSend Instant for local delivery",
+    phase4_f3: "JNE for out-of-city shipments",
+    phase4_f4: "Automatic Resi generation",
+    phase5_title: "Admin Mastery",
+    phase5_subtitle: "Control everything from one place.",
+    phase5_f1: "Integrated POS for cashier operations",
+    phase5_f2: "Inventory and stock management",
+    phase5_f3: "Barcode scan for stock in/out updates",
+    phase5_f4: "Real-time sales and stock insights"
   },
   id: {
     login: "Masuk",
@@ -125,12 +131,18 @@ const translations = {
     phase3_f2: "Callback pembayaran instan",
     phase3_f3: "Tanpa verifikasi manual",
     phase3_f4: "Update status pesanan otomatis",
-    phase4_title: "Kendali Admin",
-    phase4_subtitle: "Kontrol semuanya dari satu tempat.",
-    phase4_f1: "POS terintegrasi untuk operasional kasir",
-    phase4_f2: "Manajemen inventori dan stok",
-    phase4_f3: "Scan barcode untuk update stok masuk/keluar",
-    phase4_f4: "Insight penjualan dan stok secara real-time"
+    phase4_title: "Integrasi Pengiriman",
+    phase4_subtitle: "Jangkau pelanggan Anda di mana saja.",
+    phase4_f1: "Tarif real-time otomatis",
+    phase4_f2: "GoSend Instant untuk lokal",
+    phase4_f3: "JNE untuk pengiriman luar kota",
+    phase4_f4: "Generasi Resi otomatis",
+    phase5_title: "Kendali Admin",
+    phase5_subtitle: "Kontrol semuanya dari satu tempat.",
+    phase5_f1: "POS terintegrasi untuk operasional kasir",
+    phase5_f2: "Manajemen inventori dan stok",
+    phase5_f3: "Scan barcode untuk update stok masuk/keluar",
+    phase5_f4: "Insight penjualan dan stok secara real-time"
   }
 };
 
@@ -170,9 +182,18 @@ export default function Home() {
       phase: "Phase 4",
       title: t.phase4_title,
       subtitle: t.phase4_subtitle,
+      icon: Smartphone,
+      color: "blue",
+      features: [t.phase4_f1, t.phase4_f2, t.phase4_f3, t.phase4_f4],
+      image: "https://images.unsplash.com/photo-1580674285054-bed31e145f59?auto=format&fit=crop&q=80&w=800"
+    },
+    {
+      phase: "Phase 5",
+      title: t.phase5_title,
+      subtitle: t.phase5_subtitle,
       icon: LayoutDashboard,
       color: "purple",
-      features: [t.phase4_f1, t.phase4_f2, t.phase4_f3, t.phase4_f4],
+      features: [t.phase5_f1, t.phase5_f2, t.phase5_f3, t.phase5_f4],
       image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800"
     }
   ];
@@ -385,7 +406,9 @@ export default function Home() {
                     src={step.image} 
                     alt={step.title} 
                     fill
+                    priority={idx >= 3}
                     unoptimized
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 800px"
                     className="object-cover" 
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />

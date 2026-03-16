@@ -3,6 +3,7 @@ import Link from "next/link";
 const customerSteps = [
   "Scan table or store QR code to open digital menu.",
   "Browse in-stock items and add products to cart.",
+  "For Takeaway, provide your address and select a courier (GoSend or JNE).",
   "Use search in WhatsApp if you need faster product lookup.",
   "Choose variations when the bot asks for product options.",
   "Complete checkout and follow payment instructions.",
@@ -41,6 +42,13 @@ const operationsGuide = [
       "Pay Now opens internal payment route first for better in-app experience.",
       "Payment callback updates order status automatically.",
       "Merchant can monitor pending, paid, failed, and cancelled orders in dashboard.",
+    ],
+  },
+  {
+    title: "Shipping and Fulfillment",
+    points: [
+      "When an order is marked as Paid, the system automatically books the shipment using the selected courier (GoSend or JNE).",
+      "A tracking number (Resi) is generated immediately and sent to the customer.",
     ],
   },
 ];

@@ -13,9 +13,28 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<"details" | "payment" | "success">("details");
   const [loading, setLoading] = useState(false);
   const [selectedGateway, setSelectedGateway] = useState<"xendit" | "midtrans" | "cod" | null>(null);
+  const [address, setAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [shippingProvider, setShippingProvider] = useState<"gosend" | "jne" | null>(null);
+  const [shippingCost, setShippingCost] = useState<number | null>(null);
+  const [calculatingShipping, setCalculatingShipping] = useState(false);
 
-  const shipping = cartTotal > 500 ? 0 : 50;
-  const total = cartTotal + shipping;
+  const total = cartTotal + (shippingCost || 0);
+
+  const calculateShipping = async () => {
+    if (!address || !postalCode || !shippingProvider) return;
+    setCalculatingShipping(true);
+    try {
+      // Simulate real-time shipping API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const cost = shippingProvider === "gosend" ? 15000 : 9000;
+      setShippingCost(cost);
+    } catch (error) {
+      console.error("Shipping calculation failed", error);
+    } finally {
+      setCalculatingShipping(false);
+    }
+  };
 
   const handlePlaceOrder = async () => {
     if (!selectedGateway) return;
@@ -101,7 +120,12 @@ export default function CheckoutPage() {
                     </div>
                     <div className="space-y-1 md:col-span-2">
                       <label className="text-xs font-bold text-gray-500 uppercase">Street Address</label>
-                      <input type="text" className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      <input 
+                        type="text" 
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" 
+                      />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-gray-500 uppercase">City</label>
@@ -109,13 +133,66 @@ export default function CheckoutPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-gray-500 uppercase">Postal Code</label>
-                      <input type="text" className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      <input 
+                        type="text" 
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" 
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
+                      <h3 className="text-sm font-bold uppercase tracking-wider">Select Shipping Courier</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label className={cn(
+                          "flex items-center p-4 border rounded-xl cursor-pointer transition-all",
+                          shippingProvider === "gosend" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-gray-200 hover:border-gray-300"
+                        )}>
+                          <input 
+                            type="radio" 
+                            name="shipping" 
+                            className="hidden" 
+                            checked={shippingProvider === "gosend"} 
+                            onChange={() => { setShippingProvider("gosend"); setShippingCost(null); }} 
+                          />
+                          <div className="flex-1">
+                            <span className="font-bold text-gray-900 block">GoSend Instant</span>
+                            <span className="text-xs text-gray-500">Local delivery (same day)</span>
+                          </div>
+                        </label>
+                        <label className={cn(
+                          "flex items-center p-4 border rounded-xl cursor-pointer transition-all",
+                          shippingProvider === "jne" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-gray-200 hover:border-gray-300"
+                        )}>
+                          <input 
+                            type="radio" 
+                            name="shipping" 
+                            className="hidden" 
+                            checked={shippingProvider === "jne"} 
+                            onChange={() => { setShippingProvider("jne"); setShippingCost(null); }} 
+                          />
+                          <div className="flex-1">
+                            <span className="font-bold text-gray-900 block">JNE Reguler</span>
+                            <span className="text-xs text-gray-500">Outside the city (2-3 days)</span>
+                          </div>
+                        </label>
+                      </div>
+                      
+                      {shippingProvider && !shippingCost && (
+                        <button
+                          onClick={calculateShipping}
+                          disabled={calculatingShipping || !address || !postalCode}
+                          className="w-full bg-gray-900 text-white py-2 rounded-lg text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                        >
+                          {calculatingShipping ? "Calculating..." : "Calculate Shipping Price"}
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="mt-8 flex justify-end">
                     <button 
                       onClick={() => setStep("payment")}
-                      className="bg-primary text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider shadow-lg shadow-primary/20 hover:bg-orange-600 transition-colors flex items-center"
+                      disabled={!shippingCost}
+                      className="bg-primary text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider shadow-lg shadow-primary/20 hover:bg-orange-600 transition-colors flex items-center disabled:bg-gray-400 disabled:shadow-none"
                     >
                       Continue to Payment
                       <ArrowRight className="w-4 h-4 ml-2" />
@@ -246,7 +323,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-gray-500">
                     <span>Shipping</span>
-                    <span>{shipping === 0 ? "Free" : `$${shipping}`}</span>
+                    <span>{shippingCost === null ? "Calculated at next step" : shippingCost === 0 ? "Free" : `$${shippingCost.toLocaleString()}`}</span>
                   </div>
                   <div className="flex justify-between text-gray-900 font-black text-lg pt-2 border-t border-gray-100 mt-2">
                     <span>Total</span>
