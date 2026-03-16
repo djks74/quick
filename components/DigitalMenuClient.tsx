@@ -825,12 +825,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     {orderType === 'TAKEAWAY' && selectedQuote && (
                        <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
                           <span>Shipping ({selectedQuote.provider} {selectedQuote.service})</span>
-                          <span>{formatPrice(Number(selectedQuote.price || 0))}</span>
+                          <span>{formatPrice(currentShippingCost)}</span>
                        </div>
                     )}
                     <div className="flex justify-between items-end pt-4 border-t border-gray-100 dark:border-gray-800">
                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total Amount</span>
-                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}</span>
+                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}</span>
                     </div>
                  </div>
 
@@ -846,7 +846,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('qris') + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee('qris') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
@@ -864,7 +864,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('transfer') + (orderType === 'TAKEAWAY' ? Number(selectedQuote?.price || 0) : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee('transfer') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
                           </span>
                           {calculatePlatformFee('transfer') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
