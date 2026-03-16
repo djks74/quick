@@ -30,7 +30,7 @@ async function requireSuperAdmin() {
   return user;
 }
 
-export async function getAllStores() {
+export async function getAllStores(limit: number = 200) {
   try {
     await requireSuperAdmin();
     const stores = await prisma.store.findMany({
@@ -55,7 +55,8 @@ export async function getAllStores() {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: limit > 0 ? limit : undefined
     });
     return stores;
   } catch (error) {
@@ -99,12 +100,13 @@ export async function updateStorePlan(storeId: number, plan: string, fee: number
   }
 }
 
-export async function getAllUsers() {
+export async function getAllUsers(limit: number = 200) {
   try {
     await requireSuperAdmin();
     return await prisma.user.findMany({
       include: { stores: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: limit > 0 ? limit : undefined
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -188,12 +190,13 @@ export async function deleteStore(storeId: number) {
   }
 }
 
-export async function getAllWithdrawals() {
+export async function getAllWithdrawals(limit: number = 200) {
   try {
     await requireSuperAdmin();
     return await prisma.withdrawal.findMany({
       include: { store: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: limit > 0 ? limit : undefined
     });
   } catch (error) {
     console.error('Error fetching all withdrawals:', error);

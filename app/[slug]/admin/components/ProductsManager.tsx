@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { 
   Plus, 
   Search, 
@@ -53,10 +53,26 @@ export default function ProductsManager({
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((p) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          p.name.toLowerCase().includes(q) ||
+          (p.category || "").toLowerCase().includes(q)
+        );
+      }),
+    [products, searchQuery]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedProducts = useMemo(
+    () => filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredProducts, currentPage, pageSize]
   );
 
   const handleDelete = async (id: number) => {
@@ -202,7 +218,7 @@ export default function ProductsManager({
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {filteredProducts.map((product) => {
+                    {paginatedProducts.map((product) => {
                         const productCost = product.ingredients?.reduce((total: number, ing: any) => {
                             const inventoryItem = inventoryItems.find(i => i.id === ing.inventoryItemId);
                             if (!inventoryItem) return total;
@@ -284,6 +300,43 @@ export default function ProductsManager({
                     })}
                 </tbody>
                 </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-4 text-xs text-gray-500 dark:text-gray-400">
+              <span>
+                Showing{" "}
+                <span className="font-bold">
+                  {filteredProducts.length === 0
+                    ? 0
+                    : (currentPage - 1) * pageSize + 1}
+                  {"–"}
+                  {Math.min(currentPage * pageSize, filteredProducts.length)}
+                </span>{" "}
+                of <span className="font-bold">{filteredProducts.length}</span>{" "}
+                products
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-gray-900 text-[11px] font-bold uppercase tracking-widest"
+                >
+                  Prev
+                </button>
+                <span className="text-[11px] font-bold uppercase tracking-widest">
+                  Page {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-gray-900 text-[11px] font-bold uppercase tracking-widest"
+                >
+                  Next
+                </button>
+              </div>
             </div>
         </>
       )}

@@ -13,8 +13,8 @@ import WithdrawalTable from "../components/WithdrawalTable";
 
 export default async function SuperAdminWithdrawals() {
   const [withdrawals, stores] = await Promise.all([
-    getAllWithdrawals(),
-    getAllStores()
+    getAllWithdrawals(200),
+    getAllStores(200)
   ]);
   
   const totalStores = stores.length;

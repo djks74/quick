@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { 
-  updateWithdrawalStatus,
-  getAllWithdrawals 
+  updateWithdrawalStatus
 } from "@/lib/super-admin";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -25,9 +24,10 @@ export default function WithdrawalTable({ initialWithdrawals }: { initialWithdra
     
     setProcessingId(id);
     const res = await updateWithdrawalStatus(id, status);
-    if (res.success) {
-      const w = await getAllWithdrawals();
-      setWithdrawals(w);
+    if (res.success && res.data) {
+      setWithdrawals((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, status: res.data.status, updatedAt: res.data.updatedAt } : w))
+      );
     } else {
       alert(res.error || "Failed to update status");
     }

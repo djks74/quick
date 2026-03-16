@@ -380,15 +380,34 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
         alert(data?.error || "Checkout failed");
         return;
       }
-      const paymentUrl = data?.paymentResult?.paymentUrl || data?.paymentResult?.invoiceUrl || data?.paymentResult?.redirect_url;
+
+      // 1) Manual payment flow: redirect to internal payment page
+      if (data?.isManual && data?.orderId) {
+        window.location.href = `/checkout/pay/${data.orderId}`;
+        return;
+      }
+
+      // 2) Gateway payment flow: prefer top-level paymentUrl (current API),
+      //    but keep backward compatibility with nested fields if present.
+      const paymentUrl =
+        data?.paymentUrl ||
+        data?.redirect_url ||
+        data?.paymentResult?.paymentUrl ||
+        data?.paymentResult?.invoiceUrl ||
+        data?.paymentResult?.redirect_url;
+
       if (paymentUrl) {
         window.location.href = paymentUrl;
         return;
       }
-      if (data?.order?.id) {
-        window.location.href = `/checkout/pay/${data.order.id}`;
+
+      // 3) Fallback: if we only have order ID, send user to internal pay page
+      const orderId = data?.orderId || data?.order?.id;
+      if (orderId) {
+        window.location.href = `/checkout/pay/${orderId}`;
         return;
       }
+
       alert("Payment link unavailable. Please try again.");
     } catch {
       alert("Checkout failed. Please try again.");

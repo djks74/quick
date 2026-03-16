@@ -13,8 +13,8 @@ export default async function SuperAdminUsersPage() {
     redirect('/login');
   }
 
-  const users = await getAllUsers();
-  const stores = await getAllStores(); // Just for the counter in Nav
+  const users = await getAllUsers(200);
+  const stores = await getAllStores(200); // Just for the counter in Nav
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8 transition-colors duration-300">

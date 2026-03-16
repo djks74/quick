@@ -14,7 +14,7 @@ export default async function SuperAdminPage() {
     redirect('/login');
   }
 
-  const stores = await getAllStores();
+  const stores = await getAllStores(200);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8 transition-colors duration-300">

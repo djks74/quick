@@ -12,7 +12,7 @@ export default async function SuperAdminSettingsPage() {
     redirect("/login");
   }
 
-  const [stores, settings] = await Promise.all([getAllStores(), getPlatformSettings()]);
+  const [stores, settings] = await Promise.all([getAllStores(200), getPlatformSettings()]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8 transition-colors duration-300">
