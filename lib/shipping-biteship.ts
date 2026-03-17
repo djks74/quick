@@ -22,9 +22,10 @@ type BiteshipCreateOrderInput = {
 };
 
 function parseCourierProvider(value?: string): "JNE" | "GOSEND" | null {
-  const text = (value || "").toLowerCase();
-  if (text.includes("jne")) return "JNE";
-  if (text.includes("gojek") || text.includes("gosend")) return "GOSEND";
+  const text = String(value || "").toLowerCase();
+  const normalized = text.replace(/[^a-z0-9]/g, "");
+  if (normalized.includes("jne")) return "JNE";
+  if (normalized.includes("gojek") || normalized.includes("gosend")) return "GOSEND";
   return null;
 }
 
@@ -241,6 +242,7 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
 
   const company = resolveCourierCompany(preferredProvider);
   const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
+  if (preferredProvider && byCompany.length === 0) return null;
   const targetPool = byCompany.length > 0 ? byCompany : pricing;
 
   const preferred = String(preferredService || "").toLowerCase().trim();

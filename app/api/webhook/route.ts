@@ -1030,7 +1030,22 @@ export async function POST(req: NextRequest) {
           store: targetStore,
           destinationAddress: addressText
         });
-        const selected = shippingOptions.find((opt) => opt.provider === ctx.provider) || shippingOptions[0];
+        const selected = shippingOptions.find((opt) => opt.provider === ctx.provider);
+        if (!selected) {
+          await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
+          let optionsMsg = l(`Kurir tidak tersedia untuk alamat ini. Pilih pengiriman:\n1. Pickup (Ambil Sendiri)`, `Courier is not available for this address. Choose shipping:\n1. Pickup (Self-pickup)`);
+          let optionCount = 1;
+          if (targetStore.shippingEnableJne) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. JNE`;
+          }
+          if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. GoSend`;
+          }
+          await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
         const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
         const taxAmount = total * (targetStore.taxPercent / 100);
         const serviceCharge = total * (targetStore.serviceChargePercent / 100);
