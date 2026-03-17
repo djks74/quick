@@ -12,6 +12,8 @@ type BiteshipRateInput = {
   store: any;
   destinationAddress: string;
   destinationPostalCode?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   weightGrams?: number;
 };
 
@@ -19,6 +21,7 @@ type BiteshipCreateOrderInput = {
   store: any;
   order: any;
   items: Array<{ name?: string; quantity?: number; price?: number }>;
+  destinationCoordinate?: { latitude: number; longitude: number };
 };
 
 function parseCourierProvider(value?: string): "JNE" | "GOSEND" | null {
@@ -90,6 +93,8 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     origin_area_id: store?.biteshipOriginAreaId || undefined,
     destination_postal_code: postal || undefined,
     destination_address: input.destinationAddress,
+    destination_latitude: typeof input.destinationLatitude === "number" ? input.destinationLatitude : undefined,
+    destination_longitude: typeof input.destinationLongitude === "number" ? input.destinationLongitude : undefined,
     couriers: [store?.shippingEnableJne ? "jne" : null, store?.shippingEnableGosend && !store?.shippingJneOnly ? "gojek" : null].filter(Boolean).join(","),
     items: [
       {
@@ -279,7 +284,7 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
 }
 
 async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
-  const { store, order, items } = input;
+  const { store, order, items, destinationCoordinate } = input;
   const apiKey = await getApiKey(store);
   if (!apiKey) return { ok: false, error: "BITESHIP_KEY_MISSING" as const };
 
@@ -309,6 +314,9 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
     destination_contact_phone: customerPhone || senderPhone,
     destination_address: destinationAddress,
     destination_postal_code: destinationPostalCode,
+    destination_coordinate: destinationCoordinate
+      ? { latitude: destinationCoordinate.latitude, longitude: destinationCoordinate.longitude }
+      : undefined,
     delivery_type: "now",
     items: (items || []).map((item) => ({
       name: item?.name || "Order Item",
