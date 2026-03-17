@@ -70,17 +70,11 @@ export async function POST(req: Request) {
     let sent = false;
     let templateSent = false;
     try {
-      if (type === 'whatsapp') {
+      sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
+      if (!sent && type === 'whatsapp') {
         const templateName = process.env.WHATSAPP_WELCOME_TEMPLATE || "hello_world";
         const templateLang = process.env.WHATSAPP_WELCOME_TEMPLATE_LANG || "en_US";
         templateSent = await sendWhatsAppTemplateMessage(phone, storeId, templateName, templateLang);
-        if (templateSent) {
-          sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
-        } else {
-          sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
-        }
-      } else {
-        sent = await sendWhatsAppMessage(phone, message, storeId, { buttonText: "View Menu", buttonUrl: menuUrl }) || false;
       }
     } catch (sendError) {
       console.error("Failed to send WhatsApp message:", sendError);
@@ -97,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         messageSent: true,
-        templateUsed: templateSent,
+        templateUsed: !sent && templateSent,
         fallbackPhone: store.whatsapp || null
       });
     }
