@@ -237,7 +237,24 @@ export async function updatePlatformSettings(data: {
 export async function deleteStore(storeId: number) {
   try {
     await requireSuperAdmin();
-    await prisma.store.delete({ where: { id: storeId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.orderNotification.deleteMany({ where: { storeId } });
+      await tx.orderItem.deleteMany({ where: { order: { storeId } } });
+      await tx.order.deleteMany({ where: { storeId } });
+      await tx.productIngredient.deleteMany({
+        where: {
+          OR: [{ product: { storeId } }, { inventoryItem: { storeId } }]
+        }
+      });
+      await tx.inventoryItem.deleteMany({ where: { storeId } });
+      await tx.product.deleteMany({ where: { storeId } });
+      await tx.category.deleteMany({ where: { storeId } });
+      await tx.table.deleteMany({ where: { storeId } });
+      await tx.withdrawal.deleteMany({ where: { storeId } });
+      await tx.waUsageLog.deleteMany({ where: { storeId } });
+      await tx.whatsAppSession.deleteMany({ where: { storeId } });
+      await tx.store.delete({ where: { id: storeId } });
+    });
     return { success: true };
   } catch (error) {
     console.error('Error deleting store:', error);
