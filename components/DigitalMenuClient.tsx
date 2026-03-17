@@ -122,23 +122,38 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     setMounted(true);
     // Check-In Logic
     if (tableNumber) {
-        const stored = localStorage.getItem('customerPhone');
-        if (!stored) {
-            setShowCheckIn(true);
-        } else {
-            setCustomerPhone(stored);
+        const checkinKey = `checkin:${store.id}:${tableNumber}`;
+        const storePhoneKey = `customerPhone:${store.id}`;
+        const storedPhone = localStorage.getItem(storePhoneKey) || localStorage.getItem('customerPhone') || "";
+        const rawCheckin = localStorage.getItem(checkinKey);
+        let hasValidCheckin = false;
+        if (rawCheckin) {
+          try {
+            const parsed = JSON.parse(rawCheckin);
+            const at = Number(parsed?.at || 0);
+            const phone = String(parsed?.phone || "");
+            if (phone && at && (Date.now() - at) <= 15 * 60 * 1000) {
+              hasValidCheckin = true;
+              setCustomerPhone(phone);
+            }
+          } catch {
+          }
+        }
+        if (!hasValidCheckin) {
+          if (storedPhone) setCustomerPhone(storedPhone);
+          setShowCheckIn(true);
         }
     }
-  }, [tableNumber]);
+  }, [tableNumber, store.id]);
 
   useEffect(() => {
     if (customerPhone) {
       setCheckoutPhone(customerPhone);
       return;
     }
-    const stored = localStorage.getItem('customerPhone');
+    const stored = localStorage.getItem(`customerPhone:${store.id}`) || localStorage.getItem('customerPhone');
     if (stored) setCheckoutPhone(stored);
-  }, [customerPhone]);
+  }, [customerPhone, store.id]);
 
   useEffect(() => {
     if (orderType !== 'TAKEAWAY') {
@@ -157,7 +172,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   };
 
   const handleChoice = async (choice: 'whatsapp' | 'web') => {
+      const storePhoneKey = `customerPhone:${store.id}`;
+      localStorage.setItem(storePhoneKey, customerPhone);
       localStorage.setItem('customerPhone', customerPhone);
+      if (tableNumber) {
+        localStorage.setItem(`checkin:${store.id}:${tableNumber}`, JSON.stringify({ phone: customerPhone, at: Date.now() }));
+      }
       setIsCheckingIn(true);
       try {
           const res = await fetch('/api/check-in', {
