@@ -193,7 +193,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           
           const data = await res.json();
           const fallbackPhone = data.fallbackPhone || store.whatsapp || siteConfig.whatsappNumber;
-          const whatsappUrl = `https://wa.me/${fallbackPhone}`;
+          const fallbackText = tableNumber ? "Menu" : "Menu";
+          const whatsappUrl = data?.messageSent
+            ? `https://wa.me/${fallbackPhone}`
+            : `https://wa.me/${fallbackPhone}?text=${encodeURIComponent(fallbackText)}`;
           setCheckInFallbackUrl(whatsappUrl);
 
           if (choice === 'whatsapp') {
@@ -206,7 +209,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           console.error("Check-in trigger failed:", e);
           // Fallback if API fails
           if (choice === 'whatsapp') {
-              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}`;
+              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent("Menu")}`;
               setCheckInFallbackUrl(whatsappUrl);
               setCheckInStep('success');
               return;
