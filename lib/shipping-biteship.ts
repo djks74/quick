@@ -63,15 +63,6 @@ async function getApiKey(store: any) {
 
 function getFallbackOptions(store: any): ShippingOption[] {
   const options: ShippingOption[] = [];
-  if (store?.shippingEnableGosend && !store?.shippingJneOnly) {
-    options.push({
-      provider: "GOSEND",
-      service: "Instant",
-      fee: 18000,
-      eta: "1-3 jam",
-      type: "instant"
-    });
-  }
   if (store?.shippingEnableJne) {
     options.push({
       provider: "JNE",
