@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Edit, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { updateStorePlan, deleteStore } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore, setStoreWaBalance } from "@/lib/super-admin";
 
 export default function StoreTable({ stores }: { stores: any[] }) {
   const router = useRouter();
@@ -19,8 +19,16 @@ export default function StoreTable({ stores }: { stores: any[] }) {
     const form = e.target as HTMLFormElement;
     const plan = (form.elements.namedItem('plan') as HTMLSelectElement).value;
     const fee = parseFloat((form.elements.namedItem('fee') as HTMLInputElement).value);
+    const waBalanceRaw = (form.elements.namedItem('waBalance') as HTMLInputElement | null)?.value;
+    const waReason = (form.elements.namedItem('waReason') as HTMLInputElement | null)?.value;
 
     await updateStorePlan(editingStore.id, plan, fee);
+    if (waBalanceRaw !== undefined) {
+      const next = parseFloat(String(waBalanceRaw));
+      if (Number.isFinite(next) && next >= 0 && Number(next) !== Number(editingStore.waBalance || 0)) {
+        await setStoreWaBalance(editingStore.id, next, waReason);
+      }
+    }
 
     setLoading(false);
     setEditingStore(null);
@@ -50,6 +58,7 @@ export default function StoreTable({ stores }: { stores: any[] }) {
             <th className="px-6 py-3">Plan</th>
             <th className="px-6 py-3">Status</th>
             <th className="px-6 py-3">Orders</th>
+            <th className="px-6 py-3">WA Credit</th>
             <th className="px-6 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -93,6 +102,14 @@ export default function StoreTable({ stores }: { stores: any[] }) {
               </td>
               <td className="px-6 py-4 dark:text-gray-300">
                 {store._count?.orders || 0}
+              </td>
+              <td className="px-6 py-4">
+                <div className="text-gray-900 dark:text-gray-200 font-medium">
+                  {new Intl.NumberFormat('id-ID').format(Number(store.waBalance || 0))}
+                </div>
+                <div className="text-gray-500 dark:text-gray-400 text-xs">
+                  / msg: {new Intl.NumberFormat('id-ID').format(Number(store.waPricePerMessage || 0))}
+                </div>
               </td>
               <td className="px-6 py-4 text-right">
                 <div className="flex items-center justify-end gap-2">
@@ -149,6 +166,28 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                   step="0.1"
                   className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
                   defaultValue={editingStore.transactionFeePercent}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">WA Credit Balance</label>
+                <input
+                  name="waBalance"
+                  type="number"
+                  step="1"
+                  min="0"
+                  className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
+                  defaultValue={Number(editingStore.waBalance || 0)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">WA Balance Reason (Optional)</label>
+                <input
+                  name="waReason"
+                  type="text"
+                  className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
+                  placeholder="e.g. manual topup adjustment"
                 />
               </div>
 

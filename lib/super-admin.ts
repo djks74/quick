@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { ensureWaCreditSchema } from "@/lib/wa-credit";
 
 let ensuredPlatformSettingsSchema: Promise<void> | null = null;
 
@@ -33,6 +34,7 @@ async function requireSuperAdmin() {
 export async function getAllStores(limit: number = 200) {
   try {
     await requireSuperAdmin();
+    await ensureWaCreditSchema();
     const stores = await prisma.store.findMany({
       select: {
         id: true,
@@ -41,6 +43,8 @@ export async function getAllStores(limit: number = 200) {
         isOpen: true,
         subscriptionPlan: true,
         balance: true,
+        waBalance: true,
+        waPricePerMessage: true,
         createdAt: true,
         owner: {
           select: {
@@ -62,6 +66,57 @@ export async function getAllStores(limit: number = 200) {
   } catch (error) {
     console.error('Error fetching all stores:', error);
     return [];
+  }
+}
+
+export async function setStoreWaBalance(storeId: number, newBalance: number, reason?: string) {
+  try {
+    const user = await requireSuperAdmin();
+    await ensureWaCreditSchema();
+
+    const nextBalance = Number(newBalance);
+    if (!Number.isFinite(nextBalance) || nextBalance < 0) {
+      return { success: false as const, error: "Invalid balance" };
+    }
+
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: { id: true, waBalance: true }
+    });
+    if (!store) return { success: false as const, error: "Store not found" };
+
+    const prevBalance = Number(store.waBalance || 0);
+    const delta = Number((nextBalance - prevBalance).toFixed(2));
+
+    const externalRef = `ADMIN-WA-SET-${storeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const description = String(reason || "").trim()
+      ? `Admin set WA balance: ${reason}`
+      : "Admin set WA balance";
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const s = await tx.store.update({
+        where: { id: storeId },
+        data: { waBalance: nextBalance },
+        select: { waBalance: true }
+      });
+      await tx.waUsageLog.create({
+        data: {
+          storeId,
+          type: "ADMIN_SET",
+          amount: delta,
+          description,
+          balanceAfter: Number((s.waBalance || 0).toFixed(2)),
+          externalRef,
+          messageStatus: `by:${String(user?.email || user?.name || "super_admin")}`
+        }
+      });
+      return s;
+    });
+
+    return { success: true as const, data: { waBalance: updated.waBalance } };
+  } catch (error) {
+    console.error("Error setting WA balance:", error);
+    return { success: false as const, error: "Failed to update WA balance" };
   }
 }
 
