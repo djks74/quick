@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { 
   Search,
   AlertCircle,
@@ -13,8 +15,15 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 export default function LedgerTable({ initialLedger, storeId, waDashboard }: { initialLedger: any[]; storeId: number; waDashboard: any }) {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const isSuperAdmin = (session as any)?.user?.role === "SUPER_ADMIN";
   const [searchQuery, setSearchQuery] = useState("");
   const [topupLoadingAmount, setTopupLoadingAmount] = useState<number | null>(null);
+  const [editingWaBalance, setEditingWaBalance] = useState(false);
+  const [waBalanceInput, setWaBalanceInput] = useState<string>("");
+  const [waBalanceReason, setWaBalanceReason] = useState<string>("");
+  const [waBalanceSaving, setWaBalanceSaving] = useState(false);
 
   const filteredLedger = initialLedger.filter(item => 
     item.id.toString().includes(searchQuery) ||
@@ -47,6 +56,36 @@ export default function LedgerTable({ initialLedger, storeId, waDashboard }: { i
       alert(error.message || "Top-up failed");
     } finally {
       setTopupLoadingAmount(null);
+    }
+  };
+
+  const submitWaBalance = async () => {
+    if (!isSuperAdmin) return;
+    const next = parseFloat(String(waBalanceInput).replace(",", "."));
+    if (!Number.isFinite(next) || next < 0) {
+      alert("Invalid balance");
+      return;
+    }
+    setWaBalanceSaving(true);
+    try {
+      const res = await fetch("/api/super-admin/wa-balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId,
+          waBalance: next,
+          reason: waBalanceReason
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update balance");
+      setEditingWaBalance(false);
+      setWaBalanceReason("");
+      router.refresh();
+    } catch (error: any) {
+      alert(error.message || "Failed to update balance");
+    } finally {
+      setWaBalanceSaving(false);
     }
   };
 
@@ -86,6 +125,62 @@ export default function LedgerTable({ initialLedger, storeId, waDashboard }: { i
             ))}
           </div>
         </div>
+        {isSuperAdmin && (
+          <div className="mt-4 rounded-xl border border-gray-100 dark:border-gray-800 p-4 bg-gray-50/50 dark:bg-gray-800/30">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="text-xs font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                Super Admin: Edit WA Credit
+              </div>
+              {!editingWaBalance ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWaBalanceInput(String(waBalance));
+                    setEditingWaBalance(true);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest"
+                >
+                  Edit Balance
+                </button>
+              ) : (
+                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="w-full md:w-40 px-3 py-2 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-xs font-bold dark:text-white"
+                    value={waBalanceInput}
+                    onChange={(e) => setWaBalanceInput(e.target.value)}
+                    placeholder="e.g. 50000"
+                  />
+                  <input
+                    type="text"
+                    className="w-full md:w-64 px-3 py-2 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-xs font-bold dark:text-white"
+                    value={waBalanceReason}
+                    onChange={(e) => setWaBalanceReason(e.target.value)}
+                    placeholder="Reason (optional)"
+                  />
+                  <button
+                    type="button"
+                    disabled={waBalanceSaving}
+                    onClick={submitWaBalance}
+                    className="px-3 py-2 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                  >
+                    {waBalanceSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    disabled={waBalanceSaving}
+                    onClick={() => setEditingWaBalance(false)}
+                    className="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-4 bg-gray-50/50 dark:bg-gray-800/30">
             <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Latest WA Usage</p>
