@@ -192,20 +192,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           });
           
           const data = await res.json();
-          const fallbackMessage = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
           const fallbackPhone = data.fallbackPhone || store.whatsapp || siteConfig.whatsappNumber;
-          const whatsappUrl = `https://wa.me/${fallbackPhone}?text=${encodeURIComponent(fallbackMessage)}`;
+          const whatsappUrl = `https://wa.me/${fallbackPhone}`;
           setCheckInFallbackUrl(whatsappUrl);
 
           if (choice === 'whatsapp') {
-              if (data.messageSent) {
-                  // Server successfully sent the message to phone
-                  setCheckInStep('success');
-              } else {
-                  // Server failed to send (likely 24h window), fallback to client-side redirect
-                  window.open(whatsappUrl, '_blank');
-                  setShowCheckIn(false);
-              }
+              setCheckInStep('success');
           } else {
               // Directly on web, just close
               setShowCheckIn(false);
@@ -214,9 +206,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           console.error("Check-in trigger failed:", e);
           // Fallback if API fails
           if (choice === 'whatsapp') {
-              const message = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
-              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
-              window.open(whatsappUrl, '_blank');
+              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}`;
+              setCheckInFallbackUrl(whatsappUrl);
+              setCheckInStep('success');
+              return;
           }
           setShowCheckIn(false);
       } finally {
