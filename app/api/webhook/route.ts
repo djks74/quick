@@ -472,7 +472,10 @@ export async function POST(req: NextRequest) {
         const shippingConfigured = isShippingConfigured(targetStore);
         const prevTable = String(session.tableNumber || "").trim();
         const isRescanSameTable = !!prevTable && prevTable.toLowerCase() === String(tableNum).toLowerCase();
-        if (isRescanSameTable) {
+        const lastUpdatedAt = session?.updatedAt ? new Date(session.updatedAt).getTime() : 0;
+        const isExpired = !lastUpdatedAt || (Date.now() - lastUpdatedAt) > 15 * 60 * 1000;
+
+        if (isRescanSameTable && !isExpired) {
           await updateSession(from, targetStore.id, { tableNumber: tableNum });
         } else {
           await updateSession(from, targetStore.id, { tableNumber: tableNum, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION', cart: [] });
@@ -480,7 +483,7 @@ export async function POST(req: NextRequest) {
 
         const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
         await sendWhatsAppMessage(from, 
-          isRescanSameTable
+          (isRescanSameTable && !isExpired)
             ? l(
                 `✅ Kamu sudah check-in di meja *${tableNum}*.\n\nBalas "Menu" untuk lanjut pesan via WhatsApp.\nIngin English? balas: EN`,
                 `✅ You are already checked-in at Table *${tableNum}*.\n\nReply "Menu" to continue ordering via WhatsApp.\nWant Indonesian again? reply: ID`
@@ -503,7 +506,7 @@ export async function POST(req: NextRequest) {
                     )
               ),
           targetStore.id,
-          isRescanSameTable ? undefined : { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
+          (isRescanSameTable && !isExpired) ? undefined : { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
         );
         return NextResponse.json({ success: true });
       }
