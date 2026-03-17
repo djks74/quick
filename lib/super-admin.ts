@@ -237,25 +237,42 @@ export async function updatePlatformSettings(data: {
 export async function deleteStore(storeId: number) {
   try {
     await requireSuperAdmin();
-    await prisma.$transaction(async (tx) => {
-      await tx.orderNotification.deleteMany({ where: { storeId } });
-      await tx.orderItem.deleteMany({ where: { order: { storeId } } });
-      await tx.order.deleteMany({ where: { storeId } });
-      await tx.productIngredient.deleteMany({
-        where: {
-          OR: [{ product: { storeId } }, { inventoryItem: { storeId } }]
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.orderNotification.deleteMany({ where: { storeId } });
+            await tx.orderItem.deleteMany({ where: { order: { storeId } } });
+            await tx.order.deleteMany({ where: { storeId } });
+            await tx.productIngredient.deleteMany({
+              where: {
+                OR: [{ product: { storeId } }, { inventoryItem: { storeId } }]
+              }
+            });
+            await tx.inventoryItem.deleteMany({ where: { storeId } });
+            await tx.product.deleteMany({ where: { storeId } });
+            await tx.category.deleteMany({ where: { storeId } });
+            await tx.table.deleteMany({ where: { storeId } });
+            await tx.withdrawal.deleteMany({ where: { storeId } });
+            await tx.waUsageLog.deleteMany({ where: { storeId } });
+            await tx.whatsAppSession.deleteMany({ where: { storeId } });
+            await tx.store.delete({ where: { id: storeId } });
+          },
+          { maxWait: 15000, timeout: 120000 }
+        );
+        return { success: true };
+      } catch (error: any) {
+        lastError = error;
+        if (error?.code === "P2028" && attempt < 2) {
+          await wait(1000 * (attempt + 1));
+          continue;
         }
-      });
-      await tx.inventoryItem.deleteMany({ where: { storeId } });
-      await tx.product.deleteMany({ where: { storeId } });
-      await tx.category.deleteMany({ where: { storeId } });
-      await tx.table.deleteMany({ where: { storeId } });
-      await tx.withdrawal.deleteMany({ where: { storeId } });
-      await tx.waUsageLog.deleteMany({ where: { storeId } });
-      await tx.whatsAppSession.deleteMany({ where: { storeId } });
-      await tx.store.delete({ where: { id: storeId } });
-    });
-    return { success: true };
+        throw error;
+      }
+    }
+    throw lastError;
   } catch (error) {
     console.error('Error deleting store:', error);
     return { success: false, error: 'Failed to delete store' };
