@@ -470,27 +470,40 @@ export async function POST(req: NextRequest) {
       if (checkInMatch) {
         const tableNum = checkInMatch[1].replace(/table|meja/gi, '').trim();
         const shippingConfigured = isShippingConfigured(targetStore);
-        await updateSession(from, targetStore.id, { tableNumber: tableNum, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION', cart: [] });
+        const prevTable = String(session.tableNumber || "").trim();
+        const isRescanSameTable = !!prevTable && prevTable.toLowerCase() === String(tableNum).toLowerCase();
+        if (isRescanSameTable) {
+          await updateSession(from, targetStore.id, { tableNumber: tableNum });
+        } else {
+          await updateSession(from, targetStore.id, { tableNumber: tableNum, step: shippingConfigured ? 'SERVICE_TYPE_SELECTION' : 'MENU_SELECTION', cart: [] });
+        }
 
         const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}?table=${tableNum}`;
         await sendWhatsAppMessage(from, 
-          shippingConfigured
+          isRescanSameTable
             ? l(
-                `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
-                  `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\n` +
-                  `Setelah pilih, kamu bisa lanjut pesan via WhatsApp.\n` +
-                  `Ingin English? balas: EN`,
-                `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
-                  `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\n` +
-                  `After selecting, continue ordering via WhatsApp.\n` +
-                  `Want Indonesian again? reply: ID`
+                `✅ Kamu sudah check-in di meja *${tableNum}*.\n\nBalas "Menu" untuk lanjut pesan via WhatsApp.\nIngin English? balas: EN`,
+                `✅ You are already checked-in at Table *${tableNum}*.\n\nReply "Menu" to continue ordering via WhatsApp.\nWant Indonesian again? reply: ID`
               )
-            : l(
-                `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\nBalas "Menu" untuk mulai pesan.\nIngin English? balas: EN`,
-                `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\nReply "Menu" to start ordering.\nWant Indonesian again? reply: ID`
+            : (
+                shippingConfigured
+                  ? l(
+                      `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
+                        `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\n` +
+                        `Setelah pilih, kamu bisa lanjut pesan via WhatsApp.\n` +
+                        `Ingin English? balas: EN`,
+                      `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
+                        `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\n` +
+                        `After selecting, continue ordering via WhatsApp.\n` +
+                        `Want Indonesian again? reply: ID`
+                    )
+                  : l(
+                      `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\nBalas "Menu" untuk mulai pesan.\nIngin English? balas: EN`,
+                      `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\nReply "Menu" to start ordering.\nWant Indonesian again? reply: ID`
+                    )
               ),
           targetStore.id,
-          { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
+          isRescanSameTable ? undefined : { buttonText: l("Lihat Menu", "View Menu"), buttonUrl: menuUrl }
         );
         return NextResponse.json({ success: true });
       }
