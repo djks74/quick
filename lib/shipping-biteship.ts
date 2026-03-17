@@ -107,6 +107,8 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
 
   const payload = {
     origin_area_id: store?.biteshipOriginAreaId || undefined,
+    origin_latitude: typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
+    origin_longitude: typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : undefined,
     destination_postal_code: postal || undefined,
     destination_address: input.destinationAddress,
     destination_latitude: typeof input.destinationLatitude === "number" ? input.destinationLatitude : undefined,
@@ -326,6 +328,10 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
     origin_contact_phone: senderPhone,
     origin_address: senderAddress,
     origin_postal_code: senderPostalCode,
+    origin_coordinate:
+      typeof store?.biteshipOriginLat === "number" && typeof store?.biteshipOriginLng === "number"
+        ? { latitude: store.biteshipOriginLat, longitude: store.biteshipOriginLng }
+        : undefined,
     destination_contact_name: "Customer",
     destination_contact_phone: customerPhone || senderPhone,
     destination_address: destinationAddress,
