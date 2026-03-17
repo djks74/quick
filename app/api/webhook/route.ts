@@ -462,13 +462,156 @@ export async function POST(req: NextRequest) {
       }
 
       console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}, STORE: ${targetStore.name}`);
-
-      if (!textBody) return NextResponse.json({ success: true });
-
-      // Get or create session
       const session = await getSession(from, targetStore.id);
       let lang = await getWaLanguage(from, targetStore.id);
       const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
+
+      if (session.step && session.step.startsWith("TAKEAWAY_GOSEND_LOCATION:")) {
+        const ctx = parseTakeawayGosendLocationStep(session.step);
+        const cart = (session.cart as any[]) || [];
+        if (!ctx || !ctx.address) {
+          await updateSession(from, targetStore.id, { step: 'ORDERING:ALL' });
+          await sendWhatsAppMessage(from, l(`Sesi pengiriman tidak valid, balas "Menu".`, `Invalid shipping session, reply "Menu".`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+        if (cart.length === 0) {
+          await updateSession(from, targetStore.id, { step: 'START' });
+          await sendWhatsAppMessage(from, l(`Keranjang kosong. Balas "Menu" untuk pesan lagi.`, `Your cart is empty. Reply "Menu" to order again.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        const loc = (message as any).location;
+        const lat = typeof loc?.latitude === "number" ? loc.latitude : parseFloat(String(loc?.latitude || ""));
+        const lng = typeof loc?.longitude === "number" ? loc.longitude : parseFloat(String(loc?.longitude || ""));
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          await sendWhatsAppMessage(
+            from,
+            l(
+              `📍 Lokasi belum terbaca. Mohon *cek lokasi* lalu kirim lagi (Share Location) untuk GoSend.`,
+              `📍 Location not detected. Please check your location and share it again for GoSend.`
+            ),
+            targetStore.id
+          );
+          return NextResponse.json({ success: true });
+        }
+
+        const shippingOptions = await getShippingQuoteFromBiteship({
+          store: targetStore,
+          destinationAddress: ctx.address,
+          destinationLatitude: lat,
+          destinationLongitude: lng
+        });
+        const selected = shippingOptions.find((opt) => opt.provider === "GOSEND");
+        if (!selected) {
+          await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
+          let optionsMsg = l(
+            `🚫 GoSend tidak tersedia untuk lokasi ini.\n\nJika lokasi salah, mohon *cek lalu kirim ulang lokasi (Share Location)*.\nAtau pilih kurir lain:\n1. Pickup (Ambil Sendiri)`,
+            `🚫 GoSend is not available for this location.\n\nIf your location is wrong, please check it and share again.\nOr choose another option:\n1. Pickup (Self-pickup)`
+          );
+          let optionCount = 1;
+          if (targetStore.shippingEnableJne) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. JNE`;
+          }
+          if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. GoSend`;
+          }
+          await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        const taxAmount = total * (targetStore.taxPercent / 100);
+        const serviceCharge = total * (targetStore.serviceChargePercent / 100);
+        const subtotalWithTaxService = total + taxAmount + serviceCharge;
+        let fee = 0;
+        if (targetStore.feePaidBy === 'CUSTOMER') {
+          if (ctx.method === 'qris' && targetStore.qrisFeePercent) fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
+          else if (ctx.method === 'bank_transfer' && targetStore.manualTransferFee) fee = Number(targetStore.manualTransferFee);
+        }
+        const shippingCost = Number(selected?.fee || 0);
+        const finalTotal = subtotalWithTaxService + fee + shippingCost;
+
+        let order = await prisma.order.create({
+          data: {
+            storeId: targetStore.id,
+            customerPhone: from,
+            totalAmount: finalTotal,
+            taxAmount,
+            serviceCharge,
+            paymentFee: fee,
+            status: 'PENDING',
+            orderType: 'TAKEAWAY',
+            shippingProvider: selected?.provider || "GOSEND",
+            shippingService: selected?.service || "-",
+            shippingStatus: 'QUOTE_READY',
+            shippingAddress: ctx.address,
+            shippingCost,
+            shippingEta: selected?.eta || "-",
+            items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
+          }
+        });
+
+        const draft = await createBiteshipDraftForPendingOrder({
+          store: targetStore,
+          order,
+          destinationCoordinate: { latitude: lat, longitude: lng },
+          items: cart.map((item) => ({
+            name: item.name,
+            quantity: item.qty,
+            price: item.price
+          }))
+        });
+
+        if (draft?.ok && (draft as any)?.draftOrderId) {
+          const pendingDraft = draft as any;
+          order = await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: pendingDraft.draftOrderId,
+              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+            }
+          });
+        }
+
+        await createOrderNotification({
+          storeId: targetStore.id,
+          orderId: order.id,
+          source: "WHATSAPP",
+          title: `New Takeaway order #${order.id}`,
+          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+          metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
+        }).catch(() => null);
+
+        await sendMerchantWhatsApp(
+          targetStore.id,
+          `📦 *Pesanan Baru #${order.id}*\n` +
+          `------------------\n` +
+          `Tipe: Takeaway/Pengiriman\n` +
+          `Customer: ${from}\n` +
+          `Kurir: GOSEND ${selected?.service || ""}\n` +
+          `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n` +
+          `Alamat: ${ctx.address}\n\n` +
+          `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
+        ).catch(() => null);
+
+        const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
+        let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
+        cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
+        summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
+        if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
+        if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
+        if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+        summary += `${l("Ongkir", "Shipping")} (GOSEND ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
+        summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
+        summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+        await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
+        await updateSession(from, targetStore.id, { step: 'START', cart: [] });
+        return NextResponse.json({ success: true });
+      }
+
+      if (!textBody) return NextResponse.json({ success: true });
       
       // 1. GLOBAL COMMANDS
       const checkInMatch = textBody.match(/(?:check-in|table|meja)\s*(?:table|meja)?\s*(.+)/i);
@@ -1176,148 +1319,6 @@ export async function POST(req: NextRequest) {
         if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
         if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
         summary += `${l("Ongkir", "Shipping")} (${selected?.provider || ctx.provider} ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
-        summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
-        summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
-        await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
-        await updateSession(from, targetStore.id, { step: 'START', cart: [] });
-        return NextResponse.json({ success: true });
-      }
-
-      if (session.step && session.step.startsWith("TAKEAWAY_GOSEND_LOCATION:")) {
-        const ctx = parseTakeawayGosendLocationStep(session.step);
-        const cart = (session.cart as any[]) || [];
-        if (!ctx || !ctx.address) {
-          await updateSession(from, targetStore.id, { step: 'ORDERING:ALL' });
-          await sendWhatsAppMessage(from, l(`Sesi pengiriman tidak valid, balas "Menu".`, `Invalid shipping session, reply "Menu".`), targetStore.id);
-          return NextResponse.json({ success: true });
-        }
-        if (cart.length === 0) {
-          await updateSession(from, targetStore.id, { step: 'START' });
-          await sendWhatsAppMessage(from, l(`Keranjang kosong. Balas "Menu" untuk pesan lagi.`, `Your cart is empty. Reply "Menu" to order again.`), targetStore.id);
-          return NextResponse.json({ success: true });
-        }
-
-        const loc = (message as any).location;
-        const lat = typeof loc?.latitude === "number" ? loc.latitude : parseFloat(String(loc?.latitude || ""));
-        const lng = typeof loc?.longitude === "number" ? loc.longitude : parseFloat(String(loc?.longitude || ""));
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-          await sendWhatsAppMessage(
-            from,
-            l(
-              `📍 Mohon kirim *lokasi (Share Location)* kamu untuk GoSend.`,
-              `📍 Please share your location for GoSend.`
-            ),
-            targetStore.id
-          );
-          return NextResponse.json({ success: true });
-        }
-
-        const shippingOptions = await getShippingQuoteFromBiteship({
-          store: targetStore,
-          destinationAddress: ctx.address,
-          destinationLatitude: lat,
-          destinationLongitude: lng
-        });
-        const selected = shippingOptions.find((opt) => opt.provider === "GOSEND");
-        if (!selected) {
-          await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
-          let optionsMsg = l(`Kurir tidak tersedia untuk alamat/lokasi ini. Pilih pengiriman:\n1. Pickup (Ambil Sendiri)`, `Courier is not available for this location. Choose shipping:\n1. Pickup (Self-pickup)`);
-          let optionCount = 1;
-          if (targetStore.shippingEnableJne) {
-            optionCount++;
-            optionsMsg += `\n${optionCount}. JNE`;
-          }
-          if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
-            optionCount++;
-            optionsMsg += `\n${optionCount}. GoSend`;
-          }
-          await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
-          return NextResponse.json({ success: true });
-        }
-
-        const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-        const taxAmount = total * (targetStore.taxPercent / 100);
-        const serviceCharge = total * (targetStore.serviceChargePercent / 100);
-        const subtotalWithTaxService = total + taxAmount + serviceCharge;
-        let fee = 0;
-        if (targetStore.feePaidBy === 'CUSTOMER') {
-          if (ctx.method === 'qris' && targetStore.qrisFeePercent) fee = subtotalWithTaxService * (Number(targetStore.qrisFeePercent) / 100);
-          else if (ctx.method === 'bank_transfer' && targetStore.manualTransferFee) fee = Number(targetStore.manualTransferFee);
-        }
-        const shippingCost = Number(selected?.fee || 0);
-        const finalTotal = subtotalWithTaxService + fee + shippingCost;
-
-        let order = await prisma.order.create({
-          data: {
-            storeId: targetStore.id,
-            customerPhone: from,
-            totalAmount: finalTotal,
-            taxAmount,
-            serviceCharge,
-            paymentFee: fee,
-            status: 'PENDING',
-            orderType: 'TAKEAWAY',
-            shippingProvider: selected?.provider || "GOSEND",
-            shippingService: selected?.service || "-",
-            shippingStatus: 'QUOTE_READY',
-            shippingAddress: ctx.address,
-            shippingCost,
-            shippingEta: selected?.eta || "-",
-            items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
-          }
-        });
-
-        const draft = await createBiteshipDraftForPendingOrder({
-          store: targetStore,
-          order,
-          destinationCoordinate: { latitude: lat, longitude: lng },
-          items: cart.map((item) => ({
-            name: item.name,
-            quantity: item.qty,
-            price: item.price
-          }))
-        });
-
-        if (draft?.ok && (draft as any)?.draftOrderId) {
-          const pendingDraft = draft as any;
-          order = await prisma.order.update({
-            where: { id: order.id },
-            data: {
-              biteshipOrderId: pendingDraft.draftOrderId,
-              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
-            }
-          });
-        }
-
-        await createOrderNotification({
-          storeId: targetStore.id,
-          orderId: order.id,
-          source: "WHATSAPP",
-          title: `New Takeaway order #${order.id}`,
-          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
-          metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
-        }).catch(() => null);
-
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `📦 *Pesanan Baru #${order.id}*\n` +
-          `------------------\n` +
-          `Tipe: Takeaway/Pengiriman\n` +
-          `Customer: ${from}\n` +
-          `Kurir: GOSEND ${selected?.service || ""}\n` +
-          `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n` +
-          `Alamat: ${ctx.address}\n\n` +
-          `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-        ).catch(() => null);
-
-        const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
-        let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
-        cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
-        summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
-        if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
-        if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-        if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-        summary += `${l("Ongkir", "Shipping")} (GOSEND ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
         summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
         await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
