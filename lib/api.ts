@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/order-notifications";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
+import { lookupBiteshipAreaIdFromInput } from "@/lib/shipping-biteship";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
@@ -146,9 +147,6 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     if (!store) return null;
 
-    const { posPassword, ...safeLog } = data || {};
-    console.log("SERVER: Updating store settings for", storeId, JSON.stringify(safeLog));
-
     const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
 
     // 2. Transaction to update Store and User
@@ -235,6 +233,24 @@ export async function updateStoreSettings(storeId: number, data: any) {
       ] : [])
     ]);
 
+    let finalStore: any = updatedStore;
+    const postalDigits = String(data?.shippingSenderPostalCode || "").replace(/\D/g, "");
+    const wantsAutoOriginAreaId = !String(data?.biteshipOriginAreaId || "").trim() && !!postalDigits;
+    const missingOriginAreaId = !String((updatedStore as any)?.biteshipOriginAreaId || "").trim();
+    if (wantsAutoOriginAreaId && missingOriginAreaId) {
+      const lookupStore = {
+        ...(updatedStore as any),
+        biteshipApiKey: canUseOwnIntegrationConfig ? (data?.biteshipApiKey || (updatedStore as any).biteshipApiKey) : (updatedStore as any).biteshipApiKey
+      };
+      const areaId = await lookupBiteshipAreaIdFromInput(lookupStore, postalDigits);
+      if (areaId) {
+        finalStore = await prisma.store.update({
+          where: { id: storeId },
+          data: { biteshipOriginAreaId: areaId }
+        });
+      }
+    }
+
     if (data?.posUsername || data?.posPassword) {
       await upsertPosCashier(storeId, store.slug, data.posUsername, data.posPassword);
     }
@@ -244,7 +260,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
     revalidatePath(`/${store.slug}/pos`);
     revalidatePath(`/${store.slug}`);
 
-    return updatedStore;
+    return finalStore;
   } catch (error) {
     console.error('Error updating store settings:', error);
     return null;

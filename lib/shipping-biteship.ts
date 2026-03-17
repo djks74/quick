@@ -64,6 +64,22 @@ async function getApiKey(store: any) {
   return process.env.BITESHIP_API_KEY || "";
 }
 
+export async function lookupBiteshipAreaIdFromInput(store: any, input: string) {
+  const apiKey = await getApiKey(store);
+  const text = String(input || "").trim();
+  if (!apiKey || !text) return null;
+  try {
+    const url = `https://api.biteship.com/v1/maps/areas?countries=ID&input=${encodeURIComponent(text)}&type=single`;
+    const res = await fetch(url, { method: "GET", headers: { Authorization: apiKey } });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const id = data?.areas?.[0]?.id;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function getFallbackOptions(store: any): ShippingOption[] {
   const options: ShippingOption[] = [];
   if (store?.shippingEnableJne) {
