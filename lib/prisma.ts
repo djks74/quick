@@ -4,10 +4,17 @@ const globalForPrisma = global as unknown as {
   prismaV2: PrismaClient | undefined;
 };
 
+const rawDatabaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  rawDatabaseUrl && !rawDatabaseUrl.includes("connection_limit=")
+    ? `${rawDatabaseUrl}${rawDatabaseUrl.includes("?") ? "&" : "?"}connection_limit=1`
+    : rawDatabaseUrl;
+
 export const prisma =
   globalForPrisma.prismaV2 ??
   new PrismaClient({
-    log: ['query', 'error', 'warn'],
+    log: process.env.NODE_ENV === "production" ? ["error"] : ["query", "error", "warn"],
+    datasources: databaseUrl ? { db: { url: databaseUrl } } : undefined
   });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaV2 = prisma;
+globalForPrisma.prismaV2 = prisma;
