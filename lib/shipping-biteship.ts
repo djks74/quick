@@ -105,6 +105,9 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     if (match) postal = match[1];
   }
 
+  // Debug log for postal code
+  console.log(`[BITESHIP_RATES] Address: ${input.destinationAddress}, Derived Postal: ${postal}`);
+
   const payload = {
     origin_area_id: store?.biteshipOriginAreaId || undefined,
     origin_latitude: typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
