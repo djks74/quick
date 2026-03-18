@@ -143,25 +143,61 @@ export async function processPayment(orderId: number, amount: number, customerPh
       clientKey: clientKey
     });
 
-    const parameter: any = {
-      transaction_details: {
-        order_id: `ORDER-${orderId}-${Date.now()}`, // Unique ID for Midtrans
-        gross_amount: amount
-      },
-      customer_details: {
-        phone: customerPhone
-      }
-    };
-
-    // Filter Payment Methods if specificType is provided
-    if (specificType === 'qris') {
-        parameter.enabled_payments = ['gopay', 'shopeepay', 'qris', 'other_qris'];
-    } else if (specificType === 'bank_transfer') {
-        parameter.enabled_payments = ['bca_va', 'bni_va', 'bri_va', 'permata_va', 'other_va', 'echannel']; // 'echannel' is Mandiri Bill
+    const normalizedAmount = Math.max(1, Math.round(Number(amount) || 0));
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount < 1) {
+      throw new Error("Invalid payment amount");
+    }
+    if (normalizedAmount !== amount) {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { totalAmount: normalizedAmount }
+      });
     }
 
+    const buildParameter = (useSpecificType: boolean) => {
+      const parameter: any = {
+        transaction_details: {
+          order_id: `ORDER-${orderId}-${Date.now()}`,
+          gross_amount: normalizedAmount
+        },
+        customer_details: {
+          phone: customerPhone
+        }
+      };
+      if (useSpecificType && specificType === 'qris') {
+        parameter.enabled_payments = ['gopay', 'shopeepay', 'qris', 'other_qris'];
+      } else if (useSpecificType && specificType === 'bank_transfer') {
+        parameter.enabled_payments = ['bca_va', 'bni_va', 'bri_va', 'permata_va', 'other_va', 'echannel'];
+      }
+      return parameter;
+    };
+
+    const tryCreateTransaction = async (parameter: any) => {
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          return await snap.createTransaction(parameter);
+        } catch (err: any) {
+          lastError = err;
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+      }
+      throw lastError;
+    };
+
     try {
-      const transaction = await snap.createTransaction(parameter);
+      let transaction: any;
+      if (specificType === 'qris' || specificType === 'bank_transfer') {
+        try {
+          transaction = await tryCreateTransaction(buildParameter(true));
+        } catch (specificErr) {
+          transaction = await tryCreateTransaction(buildParameter(false));
+        }
+      } else {
+        transaction = await tryCreateTransaction(buildParameter(false));
+      }
       
       await prisma.order.update({
         where: { id: orderId },
