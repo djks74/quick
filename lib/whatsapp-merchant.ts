@@ -57,10 +57,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `- Set shipping gosend on/off\n` +
       `- Set jne only on/off\n` +
       `- Mau kirim barang (Order GoSend/JNE)\n\n` +
-      `*Pembayaran*\n` +
+      `*Pembayaran & Tagihan*\n` +
       `- Payment option\n` +
       `- Set payment midtrans on/off\n` +
-      `- Set payment transfer on/off\n\n` +
+      `- Set payment transfer on/off\n` +
+      `- Mau kirim tagihan (Kirim link bayar)\n\n` +
       `*Operasional*\n` +
       `- Buka toko / Tutup toko\n\n` +
       `*Keuangan & Report*\n` +
@@ -142,11 +143,100 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
     return;
   }
 
-  // State Machine for Merchant Shipping
-  if (merchantSession?.step?.startsWith("MERCHANT_SHIP_")) {
+  if (lowerText === "mau kirim tagihan" || lowerText === "kirim tagihan" || lowerText === "buat tagihan") {
+    await prisma.whatsAppSession.upsert({
+      where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+      update: { step: "MERCHANT_INVOICE_PHONE", cart: [] },
+      create: { phoneNumber: from, storeId: 0, step: "MERCHANT_INVOICE_PHONE", cart: [] }
+    });
+    await sendWhatsAppMessage(from, "💳 *Kirim Tagihan*\n\nBerapa nomor WhatsApp yang mau ditagih? (Contoh: 08123456789)", store.id);
+    return;
+  }
+
+  // State Machine for Merchant Shipping & Invoicing
+  if (merchantSession?.step?.startsWith("MERCHANT_SHIP_") || merchantSession?.step?.startsWith("MERCHANT_INVOICE_")) {
     const step = merchantSession.step;
     const cart = (merchantSession.cart as any[]) || [];
 
+    // --- MERCHANT_INVOICE Steps ---
+    if (step === "MERCHANT_INVOICE_PHONE") {
+      const phone = textBody.replace(/\D/g, "");
+      if (phone.length < 9) {
+        await sendWhatsAppMessage(from, "❌ Nomor telepon tidak valid. Silakan kirim nomor yang benar.", store.id);
+        return;
+      }
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_INVOICE_AMOUNT", cart: [{ targetPhone: phone }] }
+      });
+      await sendWhatsAppMessage(from, `📱 Nomor: *${phone}*\n\nBerapa nominal tagihannya? (Hanya angka, contoh: 50000)`, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_INVOICE_AMOUNT") {
+      const amount = parseInt(textBody.replace(/\D/g, "")) || 0;
+      if (amount < 1000) {
+        await sendWhatsAppMessage(from, "❌ Nominal minimal Rp 1.000.", store.id);
+        return;
+      }
+      const updatedCart = [...cart];
+      updatedCart[0].amount = amount;
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_INVOICE_CONFIRM", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(
+        from,
+        `📝 *Konfirmasi Tagihan*\n\n` +
+          `Ke: ${updatedCart[0].targetPhone}\n` +
+          `Nominal: ${formatMoney(amount)}\n\n` +
+          `Ketik "OK" untuk kirim tagihan.`,
+        store.id
+      );
+      return;
+    }
+
+    if (step === "MERCHANT_INVOICE_CONFIRM") {
+      if (lowerText !== "ok") {
+        await sendWhatsAppMessage(from, 'Ketik "OK" untuk kirim atau "Mau kirim tagihan" untuk mengulang.', store.id);
+        return;
+      }
+      const info = cart[0];
+      const amount = Number(info.amount);
+      const targetPhone = String(info.targetPhone);
+
+      const order = await prisma.order.create({
+        data: {
+          storeId: store.id,
+          customerPhone: targetPhone,
+          totalAmount: amount,
+          status: "PENDING",
+          orderType: "TAKEAWAY",
+          paymentMethod: null,
+          notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: from })
+        } as any
+      });
+
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_PAYMENT_METHOD", cart: [{ ...info, orderId: order.id, isInvoice: true }] }
+      });
+
+      await sendWhatsAppMessage(
+        from,
+        `✅ Tagihan # ${order.id} dibuat.\n` +
+          `Nominal: ${formatMoney(amount)}\n\n` +
+          `Pilih metode pembayaran untuk dikirim ke customer:\n` +
+          `1) WA Credit (Langsung lunas)\n` +
+          `2) QRIS (Fee 1%)\n` +
+          `3) Transfer Bank (Fee Rp 5.000)\n\n` +
+          `Balas: 1 / 2 / 3`,
+        store.id
+      );
+      return;
+    }
+
+    // --- MERCHANT_SHIP Steps ---
     if (step === "MERCHANT_SHIP_RECIPIENT_NAME") {
       const name = textBody.trim();
       if (!name) return;
@@ -590,32 +680,52 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       if (choice === "2" || choice === "qris" || choice === "midtrans") {
-        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "qris");
+        const fee = Math.ceil(amount * 0.01);
+        const finalAmount = amount + fee;
+        const paymentUrl = await createPaymentLink(order.id, finalAmount, from, store.id, "qris");
+        
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { totalAmount: finalAmount, paymentFee: fee }
+        });
+
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_MODE", cart: [] }
         });
-        await sendWhatsAppMessage(
-          from,
-          `💳 Silakan bayar via QRIS (Midtrans).\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\nSetelah dibayar, sistem akan booking kurir otomatis.`,
-          store.id,
-          { buttonText: "Bayar QRIS", buttonUrl: paymentUrl }
-        );
+
+        const msg = `💳 *Pembayaran QRIS*\nOrder #${order.id}\nTotal: ${formatMoney(finalAmount)}\n(Termasuk fee 1%: ${formatMoney(fee)})\n\nSilakan bayar melalui link di bawah.`;
+        
+        await sendWhatsAppMessage(from, msg, store.id, { buttonText: "Bayar QRIS", buttonUrl: paymentUrl });
+        
+        if (info.isInvoice) {
+          await sendWhatsAppMessage(order.customerPhone, msg, store.id, { buttonText: "Bayar QRIS", buttonUrl: paymentUrl });
+        }
         return;
       }
 
       if (choice === "3" || choice === "bank" || choice === "transfer") {
-        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "bank_transfer");
+        const fee = 5000;
+        const finalAmount = amount + fee;
+        const paymentUrl = await createPaymentLink(order.id, finalAmount, from, store.id, "bank_transfer");
+
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { totalAmount: finalAmount, paymentFee: fee }
+        });
+
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_MODE", cart: [] }
         });
-        await sendWhatsAppMessage(
-          from,
-          `🏦 Silakan bayar via Transfer Bank (Midtrans VA).\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\nSetelah dibayar, sistem akan booking kurir otomatis.`,
-          store.id,
-          { buttonText: "Bayar Transfer Bank", buttonUrl: paymentUrl }
-        );
+
+        const msg = `🏦 *Pembayaran Transfer Bank*\nOrder #${order.id}\nTotal: ${formatMoney(finalAmount)}\n(Termasuk fee admin: ${formatMoney(fee)})\n\nSilakan bayar melalui link di bawah.`;
+
+        await sendWhatsAppMessage(from, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
+
+        if (info.isInvoice) {
+          await sendWhatsAppMessage(order.customerPhone, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
+        }
         return;
       }
 
