@@ -183,18 +183,47 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       if (location) {
         lat = location.latitude;
         lng = location.longitude;
-        address = location.address || location.name || "Lokasi via Share Location";
+        address = location.address || location.name || "";
       } else {
         address = textBody.trim();
       }
 
-      if (!address) return;
+      if (!address) {
+        await sendWhatsAppMessage(from, "❌ Alamat belum terbaca. Tolong ketik alamat lengkap + kode pos (5 digit).", store.id);
+        return;
+      }
 
+      const hasPostal = /\b\d{5}\b/.test(address);
       const updatedCart = [...cart];
       updatedCart[0].address = address;
       if (lat) updatedCart[0].lat = lat;
       if (lng) updatedCart[0].lng = lng;
 
+      if (location && !hasPostal) {
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_SHIP_ADDRESS_DETAIL", cart: updatedCart }
+        });
+        await sendWhatsAppMessage(from, "📍 Lokasi diterima. Sekarang kirim *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"", store.id);
+        return;
+      }
+
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_ITEM_NAME", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(from, `📍 Alamat: *${address}*\n\nApa nama barang yang dikirim?`, store.id);
+      return;
+    }
+    
+    if (step === "MERCHANT_SHIP_ADDRESS_DETAIL") {
+      const address = textBody.trim();
+      if (!/\b\d{5}\b/.test(address)) {
+        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"", store.id);
+        return;
+      }
+      const updatedCart = [...cart];
+      updatedCart[0].address = address;
       await prisma.whatsAppSession.update({
         where: { id: merchantSession.id },
         data: { step: "MERCHANT_SHIP_ITEM_NAME", cart: updatedCart }
@@ -350,7 +379,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         const draft = await createBiteshipDraftForPendingOrder({
           store,
           order,
-          items: [{ name: itemName, quantity: 1, price: 0, weight }]
+          items: [{ name: itemName, quantity: 1, price: 0, weight }],
+          destinationCoordinate:
+            typeof info?.lat === "number" && typeof info?.lng === "number"
+              ? { latitude: Number(info.lat), longitude: Number(info.lng) }
+              : undefined
         });
         if (draft.ok) {
           const d = draft as any;
@@ -361,6 +394,18 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
               shippingStatus: d.shippingStatus || "draft_created"
             }
           });
+          if (d.shippingStatus !== "courier_selected") {
+            await prisma.whatsAppSession.update({
+              where: { id: merchantSession.id },
+              data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: info?.lat, lng: info?.lng }] }
+            });
+            await sendWhatsAppMessage(
+              from,
+              "❌ Kurir belum bisa dipilih otomatis.\nPastikan alamat lengkap + kode pos benar, lalu kirim ulang alamatnya.",
+              store.id
+            );
+            return;
+          }
         }
 
         await prisma.whatsAppSession.update({

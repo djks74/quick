@@ -497,9 +497,22 @@ export async function createBiteshipDraftForPendingOrder(input: BiteshipCreateOr
   const draft = created as any;
   const applied = await applyCourierToDraft(draft.apiKey, draft.draftOrderId, input.order, input.order?.shippingProvider, input.order?.shippingService);
   if (!applied.ok) {
-    return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "draft_created" as const };
+    console.log("BITESHIP_DRAFT_COURIER_NOT_SET", {
+      draftOrderId: draft.draftOrderId,
+      orderId: input?.order?.id,
+      error: (applied as any)?.error,
+      code: (applied as any)?.code
+    });
+    return {
+      ok: true,
+      draftOrderId: draft.draftOrderId,
+      shippingStatus: "draft_created" as const,
+      courierSelected: false,
+      applyError: (applied as any)?.error || null,
+      applyCode: (applied as any)?.code || null
+    };
   }
-  return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "courier_selected" as const };
+  return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "courier_selected" as const, courierSelected: true };
 }
 
 export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrderInput) {
