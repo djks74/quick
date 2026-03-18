@@ -2,67 +2,52 @@ import Link from "next/link";
 
 const customerFaq = [
   {
-    question: "How do I order from the digital menu?",
+    question: "Apa itu Gercep AI Assistant?",
     answer:
-      "Scan the QR code, open the menu page, add items to cart, and continue checkout. You can complete payment on the provided payment page or follow merchant instructions.",
+      "Gercep AI Assistant adalah asisten pintar berbasis kecerdasan buatan (AI) yang membantu Anda mencari toko, melihat menu, dan melakukan pemesanan secara natural melalui WhatsApp atau Chat di website kami.",
   },
   {
-    question: "Can I order using WhatsApp?",
+    question: "Bagaimana cara memesan menggunakan AI?",
     answer:
-      "Yes. Tap Order via WhatsApp from the menu page. The bot will guide you to browse menu, search products, choose variations, and place your order.",
+      "Cukup ketik apa yang Anda cari (contoh: 'Cari nasi uduk') di WhatsApp atau Chat Assistant kami. AI akan mencarikan toko yang sesuai, menunjukkan menu, dan membantu Anda membuat pesanan hingga mendapatkan link pembayaran.",
   },
   {
-    question: "How does delivery work?",
+    question: "Apakah saya bisa menanyakan riwayat pesanan saya?",
     answer:
-      "For takeaway orders, we provide real-time shipping rates. You can choose GoSend Instant for local delivery or JNE for out-of-city shipments. Shipping costs are calculated automatically based on your address.",
+      "Ya! Anda bisa menanyakan 'Cek pesanan terakhir saya' dan AI akan memberikan detail pesanan terbaru Anda beserta link pembayarannya jika belum dibayar.",
   },
   {
-    question: "Why are some products not visible in menu?",
+    question: "Bagaimana cara kerja pengiriman dengan AI?",
     answer:
-      "Out-of-stock products are automatically hidden from the customer menu. Only products with available stock are shown.",
+      "Untuk pesanan takeaway, cukup bagikan lokasi Anda atau ketik alamat Anda. AI akan menghitung ongkir secara otomatis menggunakan GoSend atau JNE dan menunjukkannya kepada Anda sebelum Anda membayar.",
   },
   {
-    question: "What if I search a product with many options?",
+    question: "Apakah saya bisa membayar langsung dari chat?",
     answer:
-      "The WhatsApp bot will ask you to select the exact product or variation, for example choosing between multiple nasi menu options.",
-  },
-  {
-    question: "I submitted my phone number but did not get a message. What should I do?",
-    answer:
-      "Use the Open WhatsApp Chat action from the menu page and send a message manually. The system will continue your order flow from there.",
+      "Ya. Setelah pesanan dibuat, AI akan memberikan tombol 'Pay Now' (Bayar Sekarang) yang akan mengarahkan Anda langsung ke halaman pembayaran Midtrans yang aman.",
   },
 ];
 
 const merchantFaq = [
   {
-    question: "How do I update menu and prices?",
+    question: "Bagaimana AI membantu mengelola toko saya?",
     answer:
-      "Go to dashboard product management to update name, price, stock, and variations. Changes are reflected immediately on menu and WhatsApp flow.",
+      "AI kami secara otomatis memahami katalog produk Anda. AI bisa menjawab pertanyaan pelanggan tentang menu, stok, dan harga 24/7 tanpa Anda perlu membalas manual.",
   },
   {
-    question: "How does low-stock reminder work?",
+    question: "Dapatkah saya mengupdate harga atau produk via chat?",
     answer:
-      "When ingredient stock crosses below minimum threshold, the system sends a WhatsApp reminder to merchant. Critical out-of-stock alerts are also triggered.",
+      "Ya! Sebagai merchant, Anda bisa mengupdate harga atau menambah produk cukup dengan mengirim pesan ke AI di WhatsApp, misalnya: 'Ubah harga Nasi Goreng jadi 25000'.",
   },
   {
-    question: "Can I manage multiple branches?",
+    question: "Apakah ada biaya tambahan untuk menggunakan AI?",
     answer:
-      "Yes. The platform supports multi-store operations and centralized control from admin area, depending on your account setup.",
+      "Fitur AI Assistant tersedia untuk membantu meningkatkan konversi penjualan Anda. Biaya transaksi tetap mengikuti standar (QRIS 1% atau Bank Transfer Rp 5.000).",
   },
   {
-    question: "How are payments confirmed?",
+    question: "Bagaimana AI menangani stok yang habis?",
     answer:
-      "Payment callbacks update order status automatically. Merchants can monitor paid, pending, and failed statuses from the order dashboard.",
-  },
-  {
-    question: "How do I process shipping as a merchant?",
-    answer:
-      "When an order is marked as Paid, the system automatically books the shipment using the selected courier (GoSend or JNE). A tracking number (Resi) is generated immediately and sent to the customer.",
-  },
-  {
-    question: "Can merchant and customer use Indonesian by default?",
-    answer:
-      "Yes. WhatsApp flows are configured with Indonesian as default, and users can switch to English when needed.",
+      "AI hanya akan menawarkan produk yang memiliki stok tersedia di sistem Anda. Jika stok habis, AI akan memberitahu pelanggan dan menyarankan produk alternatif.",
   },
 ];
 
@@ -70,46 +55,53 @@ export default function FaqPage() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-[#0F1113] text-gray-900 dark:text-white">
       <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
-        <div className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black">FAQ</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Common questions for customers and merchants using Gercep Ecosystem.
+        <div className="space-y-2 text-center md:text-left">
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight">FAQ & BANTUAN AI</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-lg">
+            Segala hal yang perlu Anda ketahui tentang berbelanja pintar dengan Gercep AI Assistant.
           </p>
         </div>
 
-        <section className="space-y-5">
-          <h2 className="text-2xl font-black">Customer FAQ</h2>
-          <div className="space-y-4">
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-lg">?</div>
+            <h2 className="text-2xl font-black uppercase tracking-wider">Untuk Pelanggan</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
             {customerFaq.map((item) => (
               <article
                 key={item.question}
-                className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 space-y-2"
+                className="rounded-3xl border border-gray-100 dark:border-white/10 bg-white dark:bg-white/5 p-6 hover:shadow-xl transition-all duration-300 group"
               >
-                <h3 className="text-lg font-bold">{item.question}</h3>
-                <p className="text-gray-700 dark:text-gray-300">{item.answer}</p>
+                <h3 className="text-lg font-bold group-hover:text-blue-600 transition-colors">{item.question}</h3>
+                <p className="text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">{item.answer}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="space-y-5">
-          <h2 className="text-2xl font-black">Merchant FAQ</h2>
-          <div className="space-y-4">
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center text-white font-bold shadow-lg">M</div>
+            <h2 className="text-2xl font-black uppercase tracking-wider">Untuk Merchant</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
             {merchantFaq.map((item) => (
               <article
                 key={item.question}
-                className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 space-y-2"
+                className="rounded-3xl border border-gray-100 dark:border-white/10 bg-white dark:bg-white/5 p-6 hover:shadow-xl transition-all duration-300 group"
               >
-                <h3 className="text-lg font-bold">{item.question}</h3>
-                <p className="text-gray-700 dark:text-gray-300">{item.answer}</p>
+                <h3 className="text-lg font-bold group-hover:text-green-600 transition-colors">{item.question}</h3>
+                <p className="text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">{item.answer}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <div className="pt-2">
-          <Link href="/" className="text-[#2271b1] font-bold hover:underline">
-            Back to Home
+        <div className="pt-8 text-center border-t dark:border-white/10">
+          <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-black hover:gap-3 transition-all">
+            <span>Kembali ke Beranda</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
           </Link>
         </div>
       </div>

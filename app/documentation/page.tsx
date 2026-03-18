@@ -1,54 +1,55 @@
 import Link from "next/link";
 
 const customerSteps = [
-  "Scan table or store QR code to open digital menu.",
-  "Browse in-stock items and add products to cart.",
-  "For Takeaway, provide your address and select a courier (GoSend or JNE).",
-  "Use search in WhatsApp if you need faster product lookup.",
-  "Choose variations when the bot asks for product options.",
-  "Complete checkout and follow payment instructions.",
-  "Track order status updates from chat or order page.",
+  "Buka Chat Assistant di website atau kirim pesan ke WhatsApp Gercep.",
+  "Ketik apa yang Anda cari, misalnya 'Cari nasi uduk' atau 'Ada promo apa hari ini?'.",
+  "AI akan mencarikan toko dan menu yang sesuai dengan permintaan Anda.",
+  "Pilih menu dan beritahu AI jumlah yang ingin dipesan.",
+  "Untuk pengiriman, bagikan lokasi Anda atau ketik alamat lengkap Anda.",
+  "AI akan menghitung total biaya termasuk pajak, biaya layanan, dan ongkir.",
+  "Klik tombol 'Pay Now' untuk menyelesaikan pembayaran via QRIS atau Bank Transfer.",
 ];
 
 const merchantSteps = [
-  "Register store and complete profile details.",
-  "Add product catalog with price, stock, and variations.",
-  "Set ingredient inventory and minimum stock thresholds.",
-  "Connect WhatsApp and ensure webhook is active.",
-  "Use dashboard to monitor orders, payments, and fulfillment.",
-  "Review daily summary and resolve low-stock alerts quickly.",
+  "Daftarkan toko Anda dan lengkapi profil melalui dashboard.",
+  "Upload katalog produk Anda dengan harga dan stok yang akurat.",
+  "AI akan secara otomatis mempelajari menu Anda untuk membantu pelanggan.",
+  "Gunakan WhatsApp untuk update cepat: ketik 'Update harga Es Teh jadi 5000'.",
+  "Pantau semua pesanan masuk secara real-time di dashboard merchant.",
+  "Terima pembayaran otomatis tanpa perlu verifikasi manual.",
 ];
 
 const operationsGuide = [
   {
-    title: "Menu and Stock Management",
+    title: "Pencarian Produk Pintar",
     points: [
-      "Only in-stock products are shown to customers.",
-      "Low stock and out-of-stock reminders can be sent to merchant WhatsApp.",
-      "Keep minimum threshold values updated for accurate reminders.",
+      "Pelanggan bisa mencari berdasarkan nama makanan, kategori, atau nama toko.",
+      "AI bisa memberikan rekomendasi berdasarkan ketersediaan stok.",
+      "Pencarian berfungsi lintas-toko di seluruh ekosistem Gercep.",
     ],
   },
   {
-    title: "WhatsApp Ordering Flow",
+    title: "Manajemen Merchant via AI",
     points: [
-      "Customer can type menu, search, and order directly in chat.",
-      "Bot asks for clarification if product name is ambiguous.",
-      "Language default is Indonesian with option to switch to English.",
+      "Merchant bisa menambah produk baru cukup dengan chat ke AI.",
+      "Update harga dan variasi produk bisa dilakukan instan via WhatsApp.",
+      "AI mendeteksi nomor telepon merchant secara otomatis untuk keamanan.",
     ],
   },
   {
-    title: "Payment and Status",
+    title: "Sistem Pembayaran & Biaya",
     points: [
-      "Pay Now opens internal payment route first for better in-app experience.",
-      "Payment callback updates order status automatically.",
-      "Merchant can monitor pending, paid, failed, and cancelled orders in dashboard.",
+      "Kalkulasi biaya (Pajak, Service, Ongkir) dilakukan otomatis oleh AI.",
+      "Mendukung pembayaran QRIS (biaya 1%) dan Bank Transfer (biaya Rp 5.000).",
+      "Link pembayaran Midtrans dihasilkan secara dinamis untuk setiap pesanan.",
     ],
   },
   {
-    title: "Shipping and Fulfillment",
+    title: "Pengiriman & Logistik",
     points: [
-      "When an order is marked as Paid, the system automatically books the shipment using the selected courier (GoSend or JNE).",
-      "A tracking number (Resi) is generated immediately and sent to the customer.",
+      "Integrasi langsung dengan Biteship untuk tarif GoSend dan JNE.",
+      "AI membutuhkan alamat atau koordinat GPS untuk menghitung ongkir.",
+      "Status pengiriman dapat dilacak langsung melalui chat assistant.",
     ],
   },
 ];
@@ -57,43 +58,48 @@ export default function DocumentationPage() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-[#0F1113] text-gray-900 dark:text-white">
       <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
-        <div className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black">Documentation</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Quick usage guide for customers and merchants on Gercep Ecosystem.
+        <div className="space-y-2 text-center md:text-left">
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight">DOKUMENTASI AI</h1>
+          <p className="text-gray-600 dark:text-gray-400 text-lg">
+            Panduan lengkap penggunaan fitur AI untuk pelanggan dan pemilik toko.
           </p>
         </div>
 
-        <section className="space-y-4">
-          <h2 className="text-2xl font-black">Customer Quick Start</h2>
-          <ol className="list-decimal pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-            {customerSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        </section>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <section className="space-y-6 bg-white dark:bg-white/5 p-8 rounded-3xl border border-gray-100 dark:border-white/10 shadow-sm">
+            <h2 className="text-2xl font-black text-blue-600">Panduan Pelanggan</h2>
+            <ol className="list-decimal pl-5 space-y-4 text-gray-700 dark:text-gray-300 font-medium">
+              {customerSteps.map((step) => (
+                <li key={step} className="pl-2">{step}</li>
+              ))}
+            </ol>
+          </section>
 
-        <section className="space-y-4">
-          <h2 className="text-2xl font-black">Merchant Onboarding</h2>
-          <ol className="list-decimal pl-6 space-y-2 text-gray-700 dark:text-gray-300">
-            {merchantSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        </section>
+          <section className="space-y-6 bg-white dark:bg-white/5 p-8 rounded-3xl border border-gray-100 dark:border-white/10 shadow-sm">
+            <h2 className="text-2xl font-black text-green-600">Panduan Merchant</h2>
+            <ol className="list-decimal pl-5 space-y-4 text-gray-700 dark:text-gray-300 font-medium">
+              {merchantSteps.map((step) => (
+                <li key={step} className="pl-2">{step}</li>
+              ))}
+            </ol>
+          </section>
+        </div>
 
-        <section className="space-y-5">
-          <h2 className="text-2xl font-black">Operations Guide</h2>
-          <div className="space-y-4">
+        <section className="space-y-8">
+          <h2 className="text-3xl font-black text-center">Detail Operasional AI</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {operationsGuide.map((section) => (
               <article
                 key={section.title}
-                className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 space-y-2"
+                className="rounded-3xl border border-gray-100 dark:border-white/10 bg-white dark:bg-white/5 p-8 hover:border-blue-500/50 transition-colors"
               >
-                <h3 className="text-lg font-bold">{section.title}</h3>
-                <ul className="list-disc pl-6 space-y-1 text-gray-700 dark:text-gray-300">
+                <h3 className="text-xl font-bold mb-4">{section.title}</h3>
+                <ul className="space-y-3">
                   {section.points.map((point) => (
-                    <li key={point}>{point}</li>
+                    <li key={point} className="flex items-start gap-3 text-gray-600 dark:text-gray-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 shrink-0" />
+                      <span>{point}</span>
+                    </li>
                   ))}
                 </ul>
               </article>
@@ -101,9 +107,10 @@ export default function DocumentationPage() {
           </div>
         </section>
 
-        <div className="pt-2">
-          <Link href="/" className="text-[#2271b1] font-bold hover:underline">
-            Back to Home
+        <div className="pt-8 text-center border-t dark:border-white/10">
+          <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-black hover:gap-3 transition-all">
+            <span>Kembali ke Beranda</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
           </Link>
         </div>
       </div>
