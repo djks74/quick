@@ -438,6 +438,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
+      // Hide System products (like Tagihan Manual)
+      if (p.category === "System") return false;
+      
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase();
       return matchesSearch && matchesCategory;

@@ -125,21 +125,22 @@ export async function POST(req: NextRequest) {
 
     // Send WhatsApp Notification if PAID
     if (status === 'PAID') {
-      const parseShipmentMeta = () => {
-        const raw = String(order.notes || "").trim();
+      const parseMeta = () => {
+        const raw = String((order as any).notes || "").trim();
         if (!raw) return null;
         try {
-          const parsed = JSON.parse(raw);
-          if (parsed?.kind === "MERCHANT_SHIPMENT") return parsed;
+          return JSON.parse(raw);
         } catch {
         }
         return null;
       };
-      const shipmentMeta = parseShipmentMeta();
+      const orderMeta = parseMeta();
+      const isShipment = orderMeta?.kind === "MERCHANT_SHIPMENT";
+      const isInvoice = orderMeta?.kind === "MERCHANT_INVOICE";
 
       // Update Store Balance (Net Amount)
       const netAmount = order.totalAmount - (order.paymentFee || 0) - (order.transactionFee || 0);
-      if (!shipmentMeta) {
+      if (!isShipment) {
         await prisma.store.update({
           where: { id: order.storeId },
           data: { balance: { increment: netAmount } }
@@ -162,13 +163,13 @@ export async function POST(req: NextRequest) {
               quantity: item.quantity,
               price: item.price
             }))
-          : shipmentMeta
+          : isShipment
             ? [
                 {
-                  name: String(shipmentMeta?.itemName || "Barang"),
+                  name: String(orderMeta?.itemName || "Barang"),
                   quantity: 1,
                   price: 0,
-                  weight: Number(shipmentMeta?.weightGrams || 1000)
+                  weight: Number(orderMeta?.weightGrams || 1000)
                 }
               ]
             : [{ name: "Order Item", quantity: 1, price: 0, weight: 200 }];
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
               shippingTrackingNo: booked.trackingNo || order.shippingTrackingNo || null,
               shippingStatus: booked.shippingStatus || order.shippingStatus || "confirmed"
             }
-          });
+          }) as any;
         } else {
           const bookingFailed = booking as any;
           console.error("BITESHIP_BOOKING_FAILED", {
@@ -240,12 +241,13 @@ export async function POST(req: NextRequest) {
       })();
 
       // 1. Notify Recipient / Customer
-      if (shipmentMeta) {
+      if (isShipment || isInvoice) {
+        const title = isShipment ? "Pengiriman" : "Tagihan";
         await sendWhatsAppMessage(
           order.customerPhone,
-          `📦 Pengiriman dibuat!\n\n` +
+          `📦 ${title} dibuat!\n\n` +
             `Order #${order.id}\n` +
-            `Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n` +
+            (isShipment ? `Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n` : "") +
             `${order.shippingTrackingNo ? `Resi: ${order.shippingTrackingNo}\n` : ``}` +
             `${order.shippingStatus ? `Status: ${order.shippingStatus}\n` : ``}` +
             `\nBalas "Cek Resi ${order.id}" untuk lihat status terbaru.`,
@@ -270,13 +272,17 @@ export async function POST(req: NextRequest) {
               include: { product: true }
           });
 
-          let msg = shipmentMeta
+          let msg = isShipment
             ? `🚚 *Pengiriman Baru #${order.id} (Sudah Dibayar)*\n`
-            : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
+            : isInvoice
+              ? `💳 *Tagihan Lunas #${order.id}*\n`
+              : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
+          
           if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
-          msg += shipmentMeta
-            ? `👤 Penerima: ${shipmentMeta?.recipientName || "-"} (${order.customerPhone})\n`
+          msg += (isShipment || isInvoice)
+            ? `👤 Customer: ${order.customerPhone}\n`
             : `👤 Customer: ${order.customerPhone}\n`;
+          
           msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
           msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
           if (order.orderType === 'TAKEAWAY') {
@@ -301,8 +307,10 @@ export async function POST(req: NextRequest) {
             msg += `\n`;
           }
           msg += `*Item:*\n`;
-          if (shipmentMeta) {
-            msg += `1x ${shipmentMeta?.itemName || "Barang"}\n`;
+          if (isShipment) {
+            msg += `1x ${orderMeta?.itemName || "Barang"}\n`;
+          } else if (isInvoice) {
+            msg += `1x Tagihan Manual\n`;
           } else {
             items.forEach(item => {
                 msg += `${item.quantity}x ${item.product.name}\n`;

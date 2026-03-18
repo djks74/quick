@@ -205,6 +205,23 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       const amount = Number(info.amount);
       const targetPhone = String(info.targetPhone);
 
+      // Find or create a "Tagihan" product for reporting
+      let product = await prisma.product.findFirst({
+        where: { storeId: store.id, name: "Tagihan Manual" }
+      });
+      if (!product) {
+        product = await prisma.product.create({
+          data: {
+            storeId: store.id,
+            name: "Tagihan Manual",
+            category: "System",
+            price: 0,
+            description: "Produk otomatis untuk tagihan manual",
+            stock: 999999
+          }
+        });
+      }
+
       const order = await prisma.order.create({
         data: {
           storeId: store.id,
@@ -213,7 +230,14 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           status: "PENDING",
           orderType: "TAKEAWAY",
           paymentMethod: null,
-          notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: from })
+          notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: from }),
+          items: {
+            create: {
+              productId: product.id,
+              quantity: 1,
+              price: amount
+            }
+          }
         } as any
       });
 

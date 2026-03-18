@@ -59,6 +59,9 @@ export default function ProductsManager({
   const filteredProducts = useMemo(
     () =>
       products.filter((p) => {
+        // Hide System products (like Tagihan Manual)
+        if (p.category === "System") return false;
+
         const q = searchQuery.toLowerCase();
         return (
           p.name.toLowerCase().includes(q) ||
