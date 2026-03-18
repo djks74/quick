@@ -322,17 +322,24 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
 
   const company = resolveCourierCompany(preferredProvider);
   const byCompany = pricing.filter((x) => matchCourierCompany(x, company));
-  if (preferredProvider && byCompany.length === 0) return null;
-  const targetPool = byCompany.length > 0 ? byCompany : pricing;
+  
+  // If preferred company is not found, we will log it but continue to fallback
+  if (preferredProvider && byCompany.length === 0) {
+    console.warn(`[BITESHIP_RESOLVE] Preferred provider ${preferredProvider} not found in rates. Falling back to any available.`, {
+      available: pricing.map(p => `${p.courier_name} ${p.courier_service_name}`).join(", ")
+    });
+  }
 
+  const targetPool = byCompany.length > 0 ? byCompany : pricing;
   const preferred = normalizeServiceKey(preferredService);
   
-  // 1. Try to find the exact service type or name
+  // 1. Try to find the exact service type or name in the target pool
   if (preferred && preferred !== "-") {
     const preferredMatch = targetPool.find((x) => {
       const type = normalizeServiceKey(getServiceType(x));
       const name = normalizeServiceKey(String(x?.courier_service_name || x?.courier_type || x?.service_type || ""));
-      return type === preferred || name === preferred || type.includes(preferred) || name.includes(preferred);
+      const fallback = deriveServiceTypeFallback(x);
+      return type === preferred || name === preferred || fallback === preferred || type.includes(preferred) || name.includes(preferred);
     });
     if (preferredMatch) {
       const resolved = normalizeServiceKey(getServiceType(preferredMatch)) || deriveServiceTypeFallback(preferredMatch) || preferred;
@@ -343,30 +350,21 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
     }
   }
 
-  // 2. Fallback to first available from preferred company
-  if (byCompany.length > 0) {
-    const fallback = byCompany.find(x => getServiceType(x)) || byCompany[0];
+  // 2. Fallback to first available from target pool (which is byCompany if possible, else anything)
+  const fallback = targetPool.find(x => getServiceType(x)) || targetPool[0];
+  if (fallback) {
     const type = normalizeServiceKey(getServiceType(fallback)) || deriveServiceTypeFallback(fallback);
     if (type) {
       return {
-        company: fallback?.courier_code || fallback?.courier_company || fallback?.company || company,
+        company: fallback?.courier_code || fallback?.courier_company || fallback?.company || (byCompany.length > 0 ? company : "jne"),
         type: type
       };
     }
   }
 
+  // 3. Last resort: If we have a preferred service but couldn't match anything, just use it
   if (preferred && preferred !== "-") {
-    return { company, type: preferred };
-  }
-
-  // 3. Fallback to absolutely any available service
-  const absoluteFallback = pricing.find(x => getServiceType(x)) || pricing[0];
-  const absType = normalizeServiceKey(getServiceType(absoluteFallback)) || deriveServiceTypeFallback(absoluteFallback);
-  if (absType) {
-    return {
-      company: absoluteFallback?.courier_code || absoluteFallback?.courier_company || absoluteFallback?.company || "jne",
-      type: absType
-    };
+    return { company: company || "jne", type: preferred };
   }
 
   return null;
@@ -466,23 +464,13 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
     return preferredService || order?.shippingService || "";
   };
 
-  let ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
-    method: "GET",
-    headers: { Authorization: apiKey }
-  });
-  let ratesData = await ratesRes.json().catch(() => ({}));
-  let pricing = Array.isArray(ratesData?.pricing) 
-    ? ratesData.pricing 
-    : Array.isArray(ratesData?.data?.pricing) 
-      ? ratesData.data.pricing 
-      : Array.isArray(ratesData?.data)
-        ? ratesData.data
-        : [];
-
-  // Small retry if pricing is empty (sometimes Biteship takes a moment to process the draft)
-  if (pricing.length === 0) {
-    await new Promise(r => setTimeout(r, 800));
-    ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
+  let pricing: any[] = [];
+  let ratesData: any = {};
+  
+  // Retry mechanism for getting rates from Biteship draft
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
       method: "GET",
       headers: { Authorization: apiKey }
     });
@@ -494,10 +482,21 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
         : Array.isArray(ratesData?.data)
           ? ratesData.data
           : [];
+
+    if (pricing.length > 0) break;
+    
+    if (attempt < maxAttempts) {
+      const delay = 1000 * attempt; // 1s, 2s
+      console.log(`[BITESHIP_RETRY] Attempt ${attempt} failed for draft ${draftOrderId}. Retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
   }
 
   const resolvedProvider = preferredProvider || order?.shippingProvider;
   const resolvedService = resolvePreferredService();
+  
+  console.log(`[BITESHIP_APPLY] Draft: ${draftOrderId}, Order: ${order?.id}, Provider: ${resolvedProvider}, Service: ${resolvedService}, PricingCount: ${pricing.length}`);
+  
   const selection = resolveCourierSelection(pricing, resolvedProvider, resolvedService);
   if (!selection?.type) {
     const errorMsg = pricing.length === 0 ? "NO_RATES_FOR_ADDRESS" : "COURIER_NOT_AVAILABLE";
@@ -506,7 +505,8 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
       orderId: order?.id,
       preferredProvider: resolvedProvider,
       preferredService: resolvedService,
-      pricingCount: pricing.length
+      pricingCount: pricing.length,
+      ratesData: JSON.stringify(ratesData).slice(0, 500) // Log first 500 chars of ratesData for debugging
     });
     return { ok: false, error: errorMsg as any, detail: { pricing, ratesData } };
   }

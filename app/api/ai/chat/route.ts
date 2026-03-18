@@ -164,7 +164,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
   },
 
-  async create_customer_order({ slug, customer_phone, items, order_type, address, shippingProvider, shippingService, shippingFee, payment_method }: any) {
+  async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
@@ -232,7 +232,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         const draft = await createBiteshipDraftForPendingOrder({
           store,
           order,
-          items: biteshipItems
+          items: biteshipItems,
+          destinationCoordinate: (latitude && longitude) ? { latitude, longitude } : undefined
         }) as any;
 
         if (draft.ok) {
@@ -506,6 +507,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const locationInfo = context?.location 
+      ? ` The user's current location is latitude: ${context.location.latitude}, longitude: ${context.location.longitude}.`
+      : "";
+
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
@@ -516,12 +521,13 @@ SHIPPING & LOCATION:
 2. Once you have the user's location/address, use 'get_shipping_rates' to show delivery options (GOSEND/JNE).
 3. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
 4. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for takeaway.
+5. IMPORTANT: When calling 'create_customer_order' for a TAKEAWAY order, you MUST pass the 'latitude' and 'longitude' if you have them from the user's shared location or context.
 
 Once an order is created:
 1. Show the user the 'breakdown' of the order.
 2. Tell them they can pay directly here or have the payment link sent to their WhatsApp.
 3. If they want to pay on WhatsApp, ask for their WhatsApp number and call 'send_order_to_whatsapp'.
-4. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+4. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -622,6 +628,8 @@ Once an order is created:
                   },
                   order_type: { type: "string", enum: ["DINE_IN", "TAKEAWAY"] },
                   address: { type: "string" },
+                  latitude: { type: "number" },
+                  longitude: { type: "number" },
                   shippingProvider: { type: "string" },
                   shippingService: { type: "string" },
                   shippingFee: { type: "number" },
