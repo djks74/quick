@@ -480,7 +480,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       if (choice === "2" || choice === "qris" || choice === "midtrans") {
-        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "shipment");
+        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "qris");
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_MODE", cart: [] }
@@ -495,20 +495,16 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       if (choice === "3" || choice === "bank" || choice === "transfer") {
-        const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
-        const bankName = platform?.bankName || "BCA";
-        const bankAccountNumber = platform?.bankAccountNumber || "-";
-        const bankAccountName = platform?.bankAccountName || "GERCEP";
+        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "bank_transfer");
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_MODE", cart: [] }
         });
         await sendWhatsAppMessage(
           from,
-          `🏦 Transfer Bank\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\n` +
-            `${bankName}\nNo Rek: ${bankAccountNumber}\nA/N: ${bankAccountName}\n\n` +
-            `Catatan: tulis berita transfer "SHIP#${order.id}".\nSetelah transfer, admin akan verifikasi lalu booking kurir.`,
-          store.id
+          `🏦 Silakan bayar via Transfer Bank (Midtrans VA).\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\nSetelah dibayar, sistem akan booking kurir otomatis.`,
+          store.id,
+          { buttonText: "Bayar Transfer Bank", buttonUrl: paymentUrl }
         );
         return;
       }
