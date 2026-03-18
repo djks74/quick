@@ -327,30 +327,47 @@ export async function POST(req: NextRequest) {
     const from = message.from;
     const textBody = message.text?.body?.trim();
     const lowerText = textBody?.toLowerCase();
+    const senderPhoneVariants = (() => {
+      const raw = String(from || "").trim();
+      const cleaned = raw.replace(/[^\d+]/g, "");
+      const noPlus = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
+      const digits = noPlus.replace(/\D/g, "");
+      const normalized = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+      const variants = new Set<string>();
+      if (digits) variants.add(digits);
+      if (normalized) variants.add(normalized);
+      if (normalized.startsWith("62")) variants.add(`0${normalized.slice(2)}`);
+      if (digits) variants.add(`+${digits}`);
+      if (normalized) variants.add(`+${normalized}`);
+      return Array.from(variants).filter(Boolean);
+    })();
 
     console.log(`[WHATSAPP] Incoming Message: "${textBody}" from ${from} (Store Context: ${phoneNumberId})`);
 
     if (message && phoneNumberId) {
       // 0. MERCHANT CHECK
       // Check if sender is a registered Merchant
-      let user = await prisma.user.findUnique({
-        where: { phoneNumber: from },
+      let user = await prisma.user.findFirst({
+        where: { phoneNumber: { in: senderPhoneVariants } },
         include: { stores: true }
       });
 
       let preferredMerchantStoreId: number | null = null;
+      let isStoreWhatsappNumber = false;
 
       // Fallback: Check if this number is listed as a Store WhatsApp Number
       if (!user) {
           const storeByPhone = await prisma.store.findFirst({ 
-            where: { whatsapp: from }, 
-            include: { owner: true } 
+            where: { whatsapp: { in: senderPhoneVariants } }, 
+            include: { owner: true },
+            orderBy: { updatedAt: "desc" }
           });
           
           if (storeByPhone) {
+              isStoreWhatsappNumber = true;
               preferredMerchantStoreId = storeByPhone.id;
-              user = await prisma.user.findUnique({
-                  where: { id: storeByPhone.ownerId },
+              user = await prisma.user.findFirst({
+                  where: { id: storeByPhone.ownerId, role: { in: ["MERCHANT", "SUPER_ADMIN"] } },
                   include: { stores: true }
               });
           }
@@ -406,7 +423,8 @@ export async function POST(req: NextRequest) {
         }
 
         // Logic to bypass merchant handler
-        if (merchantSession.step === 'USER_MODE' || forceUserMode) {
+        const forceMerchantMode = isStoreWhatsappNumber && !forceUserMode;
+        if ((merchantSession.step === 'USER_MODE' || forceUserMode) && !forceMerchantMode) {
             // Proceed to User Logic (below)
         } else {
             // Default: Merchant Handler
@@ -441,6 +459,17 @@ export async function POST(req: NextRequest) {
       if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
          console.log('[WHATSAPP] Received message on Shared Platform Number');
          isSharedNumber = true;
+         
+         if (!targetStore) {
+           const storeBySender = await prisma.store.findFirst({
+             where: { whatsapp: { in: senderPhoneVariants } },
+             orderBy: { updatedAt: "desc" }
+           });
+           if (storeBySender) {
+             targetStore = storeBySender;
+             console.log(`[WHATSAPP] Resolved target store from sender whatsapp: ${targetStore.name}`);
+           }
+         }
          
          const recentSession = await prisma.whatsAppSession.findFirst({
             where: { phoneNumber: from },
