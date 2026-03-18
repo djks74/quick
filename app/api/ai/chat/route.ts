@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       systemInstruction: "You are the Gercep Platform Assistant. You help manage stores and orders. Use the available tools to find information. If a user wants to order, first search_stores, then get_store_products, then create_customer_order.",
       tools: [
         {

@@ -333,9 +333,57 @@ export async function POST(req: NextRequest) {
     const lowerText = textBody?.toLowerCase();
 
     // Log WhatsApp Traffic
-    await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
+      await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
 
-    const senderPhoneVariants = (() => {
+      // --- AI AGENT HANDLER ---
+      const isAICommand = lowerText?.startsWith("ai ") || lowerText?.startsWith("tanya ") || lowerText?.startsWith("ask ");
+      const aiSession = await prisma.whatsAppSession.findFirst({
+        where: { phoneNumber: from, step: "AI_MODE" }
+      });
+
+      if (isAICommand || aiSession) {
+        // Switch to AI Mode if command used
+        if (isAICommand && !aiSession) {
+          await prisma.whatsAppSession.upsert({
+            where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+            update: { step: "AI_MODE", cart: [] },
+            create: { phoneNumber: from, storeId: 0, step: "AI_MODE", cart: [] }
+          });
+        }
+
+        // Handle "exit" to leave AI mode
+        if (lowerText === "exit" || lowerText === "stop" || lowerText === "keluar") {
+          await prisma.whatsAppSession.update({
+            where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+            data: { step: "START" }
+          });
+          await sendWhatsAppMessage(from, "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu biasa.", 0);
+          return NextResponse.json({ success: true });
+        }
+
+        // Call the AI Chat API
+        const prompt = isAICommand ? textBody?.replace(/^(ai|tanya|ask)\s+/i, "") : textBody;
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
+          const res = await fetch(`${baseUrl}/api/ai/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: prompt, isPublic: true })
+          });
+          const data = await res.json();
+          if (data.text) {
+            await sendWhatsAppMessage(from, `🤖 *AI Assistant*:\n\n${data.text}\n\n_(Balas 'Exit' untuk berhenti)_`, 0);
+          } else {
+            await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", 0);
+          }
+        } catch (e) {
+          console.error("[WA_AI_ERROR]", e);
+          await sendWhatsAppMessage(from, "❌ Terjadi kesalahan koneksi ke AI.", 0);
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      const senderPhoneVariants = (() => {
       const raw = String(from || "").trim();
       const cleaned = raw.replace(/[^\d+]/g, "");
       const noPlus = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
