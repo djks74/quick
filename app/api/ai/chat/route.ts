@@ -6,6 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { processPayment } from "@/lib/payment";
+import { createOrderNotification } from "@/lib/order-notifications";
+import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
 
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
@@ -322,6 +324,36 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         error: "Actual payment link is unavailable right now. Please retry."
       };
     }
+
+    await createOrderNotification({
+      storeId: store.id,
+      orderId: order.id,
+      source: "AI_CHAT_ASSISTANT",
+      title: `Order #${order.id} menunggu pembayaran`,
+      body: `${cleanPhone} • Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}`,
+      metadata: {
+        totalAmount: finalAmount,
+        taxAmount,
+        serviceCharge,
+        paymentFee,
+        shippingCost,
+        shippingProvider: shippingProvider || null,
+        shippingService: shippingService || null,
+        shippingAddress: trimmedAddress || null
+      }
+    }).catch(() => null);
+
+    await sendMerchantWhatsApp(
+      store.id,
+      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}${isTakeaway ? `\nKurir: ${shippingProvider || "-"} ${shippingService || "-"}` : ""}`
+    ).catch(() => null);
+
+    await sendWhatsAppMessage(
+      cleanPhone,
+      `⏳ Order #${order.id} masih *menunggu pembayaran*.\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.`,
+      store.id,
+      { buttonText: "Bayar Sekarang", buttonUrl: paymentUrl }
+    ).catch(() => null);
 
     const breakdown = [
       `🛒 *${store.name} ORDER #${order.id}*`,

@@ -33,7 +33,7 @@ async function processPendingPaymentReminders() {
       const paymentUrl = resolvePaymentUrl(order.id, order.paymentUrl);
       await sendWhatsAppMessage(
         order.customerPhone,
-        `⏳ Order #${order.id} masih *menunggu pembayaran* (pending).\nJumlah: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}\n\nMau lanjutkan bayar?\nBalas: "Lanjut ${order.id}" atau "Batal ${order.id}"`,
+        `⏳ Order #${order.id} masih *menunggu pembayaran* (pending).\nJumlah: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.\n\nMau lanjutkan bayar?\nBalas: "Lanjut ${order.id}" atau "Batal ${order.id}"`,
         order.storeId,
         { buttonText: "Lanjut Bayar", buttonUrl: paymentUrl }
       );

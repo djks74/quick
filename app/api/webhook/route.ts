@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
-import { resolvePaymentUrl } from '@/lib/merchant-alerts';
+import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { logTraffic } from '@/lib/traffic';
@@ -731,7 +731,23 @@ export async function POST(req: NextRequest) {
           }))
         });
 
-        if (draft?.ok && (draft as any)?.draftOrderId) {
+        if (!draft?.ok) {
+          await prisma.order
+            .update({ where: { id: order.id }, data: { shippingStatus: "draft_failed" } as any })
+            .catch(() => null);
+          await sendWhatsAppMessage(
+            from,
+            l(
+              "Gagal membuat draft pengiriman. Mohon cek alamat (kode pos / share lokasi) dan coba pilih kurir ulang.",
+              "Failed to create delivery draft. Please check your address (postal code / share location) and retry."
+            ),
+            targetStore.id
+          );
+          await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
+          return NextResponse.json({ success: true });
+        }
+
+        if ((draft as any)?.draftOrderId) {
           const pendingDraft = draft as any;
           order = await prisma.order.update({
             where: { id: order.id },
@@ -750,6 +766,10 @@ export async function POST(req: NextRequest) {
           body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
           metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
         }).catch(() => null);
+        await sendMerchantWhatsApp(
+          targetStore.id,
+          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: GOSEND ${selected?.service || ""}`
+        ).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -761,6 +781,7 @@ export async function POST(req: NextRequest) {
         summary += `${l("Ongkir", "Shipping")} (GOSEND ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
         summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+        summary += l("\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.", "\n\n⏳ Payment links can expire. Please complete payment soon.");
         await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
         await updateSession(from, targetStore.id, { step: 'START', cart: [] });
         return NextResponse.json({ success: true });
@@ -1582,9 +1603,21 @@ export async function POST(req: NextRequest) {
                 totalAmount: amount
               }
             });
+            await sendMerchantWhatsApp(
+              targetStore.id,
+              `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(amount)}`
+            ).catch(() => null);
 
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
-            await sendWhatsAppMessage(from, l(`Order #${order.id} berhasil dibuat.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`), targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
+            await sendWhatsAppMessage(
+              from,
+              l(
+                `Order #${order.id} berhasil dibuat.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.`,
+                `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\n⏳ Payment links can expire. Please complete payment soon.`
+              ),
+              targetStore.id,
+              { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink }
+            );
             await updateSession(from, targetStore.id, { step: 'START' });
           } catch (e) {
             await sendWhatsAppMessage(from, l(`Gagal membuat order. Coba lagi ya.`, `Error creating order. Please try again.`), targetStore.id);
@@ -1675,6 +1708,10 @@ export async function POST(req: NextRequest) {
               items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
             }
           });
+          await sendMerchantWhatsApp(
+            targetStore.id,
+            `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}${session.tableNumber ? `\nMeja: ${session.tableNumber}` : ""}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`
+          ).catch(() => null);
 
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
           let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1684,6 +1721,7 @@ export async function POST(req: NextRequest) {
           if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
           if (fee > 0) summary += `Fee (${method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
           summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
+          summary += l("\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.", "\n\n⏳ Payment links can expire. Please complete payment soon.");
 
           await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
           await updateSession(from, targetStore.id, { step: 'START', cart: [] });
