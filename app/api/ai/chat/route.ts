@@ -175,10 +175,26 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     for (const item of items) {
       const product = await prisma.product.findUnique({ where: { id: item.productId, storeId: store.id } });
       if (!product) return { error: `Product ID ${item.productId} not found` };
-      const lineTotal = product.price * item.quantity;
+      
+      let itemPrice = product.price;
+      let itemName = product.name;
+      
+      if (item.variationName && product.variations && Array.isArray(product.variations)) {
+        const variations = product.variations as any[];
+        const variation = variations.find(v => 
+          v.name.toLowerCase().includes(item.variationName.toLowerCase()) || 
+          item.variationName.toLowerCase().includes(v.name.toLowerCase())
+        );
+        if (variation) {
+          itemPrice = variation.price;
+          itemName = `${product.name} (${variation.name})`;
+        }
+      }
+      
+      const lineTotal = itemPrice * item.quantity;
       itemsAmount += lineTotal;
-      orderItemsData.push({ productId: product.id, quantity: item.quantity, price: product.price });
-      details.push(`📦 ${product.name}\n   ${item.quantity}x @ Rp ${new Intl.NumberFormat('id-ID').format(product.price)} = Rp ${new Intl.NumberFormat('id-ID').format(lineTotal)}`);
+      orderItemsData.push({ productId: product.id, quantity: item.quantity, price: itemPrice });
+      details.push(`📦 ${itemName}\n   ${item.quantity}x @ Rp ${new Intl.NumberFormat('id-ID').format(itemPrice)} = Rp ${new Intl.NumberFormat('id-ID').format(lineTotal)}`);
     }
 
     const taxAmount = itemsAmount * (store.taxPercent / 100);
@@ -529,7 +545,8 @@ PAYMENT & RE-ORDERING:
 2. If a user wants to "re-order" or "order again", use 'get_last_order_by_phone' to find their items, but you MUST still ask for:
    - Their current location/address (if takeaway).
    - Their preferred payment method.
-3. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
+3. If a product has variations (like size, flavor, etc.), you MUST pass the correct 'variationName' when calling 'create_customer_order' to ensure the correct price is used.
+4. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
 
 Once an order is created:
 1. Show the user the 'breakdown' of the order.
@@ -630,7 +647,8 @@ Once an order is created:
                       type: "object",
                       properties: {
                         productId: { type: "integer" },
-                        quantity: { type: "integer" }
+                        quantity: { type: "integer" },
+                        variationName: { type: "string" }
                       }
                     }
                   },
