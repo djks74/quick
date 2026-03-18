@@ -311,12 +311,22 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         const provider = String(selected?.provider || "").toUpperCase();
         const service = String(selected?.service || "").trim();
         const eta = String(selected?.eta || "").trim();
+        const normalizedService = service
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+        const courierType =
+          provider.includes("GO")
+            ? normalizedService.includes("same_day") ? "same_day" : "instant"
+            : normalizedService || "reg";
 
         const notes = JSON.stringify({
           kind: "MERCHANT_SHIPMENT",
           recipientName,
           itemName,
           weightGrams: weight,
+          courierType,
           requestedBy: from
         });
 

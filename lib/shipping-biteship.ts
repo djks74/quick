@@ -225,6 +225,14 @@ function resolveCourierCompany(provider?: string) {
   return p;
 }
 
+function normalizeServiceKey(value?: string) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function matchCourierCompany(item: any, company: string) {
   const raw = String(item?.company || item?.courier_company || item?.courier_name || item?.courier_code || "").toLowerCase();
   if (!raw) return false;
@@ -242,6 +250,7 @@ function matchCourierCompany(item: any, company: string) {
 function getServiceType(item: any) {
   // Try all possible keys for the service type/code
   const type = item?.courier_service_code || 
+               item?.courier_service_type ||
                item?.courier_type || 
                item?.service_type || 
                item?.service_code || 
@@ -249,6 +258,24 @@ function getServiceType(item: any) {
                item?.type ||
                "";
   return String(type).toLowerCase().trim();
+}
+
+function deriveServiceTypeFallback(item: any) {
+  const raw = normalizeServiceKey(
+    item?.courier_service_code ||
+      item?.courier_service_type ||
+      item?.courier_type ||
+      item?.service_type ||
+      item?.service_code ||
+      item?.courier_service_name ||
+      item?.type ||
+      ""
+  );
+  if (!raw) return "";
+  if (raw.includes("instant")) return "instant";
+  if (raw.includes("same_day") || raw.includes("sameday")) return "same_day";
+  if (raw === "reg" || raw.includes("_reg") || raw.includes("reguler") || raw.includes("regular")) return "reg";
+  return raw;
 }
 
 function resolveCourierSelection(pricing: any[], preferredProvider?: string, preferredService?: string) {
@@ -259,19 +286,20 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
   if (preferredProvider && byCompany.length === 0) return null;
   const targetPool = byCompany.length > 0 ? byCompany : pricing;
 
-  const preferred = String(preferredService || "").toLowerCase().trim();
+  const preferred = normalizeServiceKey(preferredService);
   
   // 1. Try to find the exact service type or name
   if (preferred && preferred !== "-") {
     const preferredMatch = targetPool.find((x) => {
-      const type = getServiceType(x);
-      const name = String(x?.courier_service_name || x?.courier_type || x?.service_type || "").toLowerCase();
+      const type = normalizeServiceKey(getServiceType(x));
+      const name = normalizeServiceKey(String(x?.courier_service_name || x?.courier_type || x?.service_type || ""));
       return type === preferred || name === preferred || type.includes(preferred) || name.includes(preferred);
     });
-    if (preferredMatch && getServiceType(preferredMatch)) {
+    if (preferredMatch) {
+      const resolved = normalizeServiceKey(getServiceType(preferredMatch)) || deriveServiceTypeFallback(preferredMatch) || preferred;
       return {
         company: preferredMatch?.courier_code || preferredMatch?.courier_company || preferredMatch?.company || company,
-        type: getServiceType(preferredMatch)
+        type: resolved
       };
     }
   }
@@ -279,7 +307,7 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
   // 2. Fallback to first available from preferred company
   if (byCompany.length > 0) {
     const fallback = byCompany.find(x => getServiceType(x)) || byCompany[0];
-    const type = getServiceType(fallback);
+    const type = normalizeServiceKey(getServiceType(fallback)) || deriveServiceTypeFallback(fallback);
     if (type) {
       return {
         company: fallback?.courier_code || fallback?.courier_company || fallback?.company || company,
@@ -288,9 +316,13 @@ function resolveCourierSelection(pricing: any[], preferredProvider?: string, pre
     }
   }
 
+  if (preferred && preferred !== "-") {
+    return { company, type: preferred };
+  }
+
   // 3. Fallback to absolutely any available service
   const absoluteFallback = pricing.find(x => getServiceType(x)) || pricing[0];
-  const absType = getServiceType(absoluteFallback);
+  const absType = normalizeServiceKey(getServiceType(absoluteFallback)) || deriveServiceTypeFallback(absoluteFallback);
   if (absType) {
     return {
       company: absoluteFallback?.courier_code || absoluteFallback?.courier_company || absoluteFallback?.company || "jne",
@@ -382,6 +414,19 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
 }
 
 async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: any, preferredProvider?: string, preferredService?: string) {
+  const resolvePreferredService = () => {
+    const raw = String(order?.notes || "").trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        const courierType = parsed?.courierType;
+        if (typeof courierType === "string" && courierType.trim()) return courierType.trim();
+      } catch {
+      }
+    }
+    return preferredService || order?.shippingService || "";
+  };
+
   let ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
     method: "GET",
     headers: { Authorization: apiKey }
@@ -412,9 +457,18 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
           : [];
   }
 
-  const selection = resolveCourierSelection(pricing, preferredProvider || order?.shippingProvider, preferredService || order?.shippingService);
+  const resolvedProvider = preferredProvider || order?.shippingProvider;
+  const resolvedService = resolvePreferredService();
+  const selection = resolveCourierSelection(pricing, resolvedProvider, resolvedService);
   if (!selection?.type) {
     const errorMsg = pricing.length === 0 ? "NO_RATES_FOR_ADDRESS" : "COURIER_NOT_AVAILABLE";
+    console.log("BITESHIP_COURIER_SELECTION_FAILED", {
+      draftOrderId,
+      orderId: order?.id,
+      preferredProvider: resolvedProvider,
+      preferredService: resolvedService,
+      pricingCount: pricing.length
+    });
     return { ok: false, error: errorMsg as any, detail: { pricing, ratesData } };
   }
 
