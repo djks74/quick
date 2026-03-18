@@ -169,6 +169,25 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     if (!store) return { error: "Store not found" };
 
     const cleanPhone = normalizePhoneNumber(customer_phone);
+    const isTakeaway = String(order_type || "").toUpperCase() === "TAKEAWAY";
+    const trimmedAddress = String(address || "").trim();
+
+    if (isTakeaway) {
+      if (!trimmedAddress || trimmedAddress.length < 8) {
+        return { error: "Alamat pengiriman wajib diisi untuk order takeaway." };
+      }
+      if (!shippingProvider || !shippingService || shippingFee === undefined || shippingFee === null) {
+        return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };
+      }
+
+      const senderAddress = String(store?.shippingSenderAddress || "").trim();
+      const senderPhone = String(store?.shippingSenderPhone || store?.whatsapp || "").trim();
+      const senderPostal = String(store?.shippingSenderPostalCode || "").replace(/\D/g, "");
+      if (!senderAddress || !senderPhone || !senderPostal) {
+        return { error: "Alamat toko/pengirim belum lengkap. Mohon lengkapi di pengaturan shipping toko." };
+      }
+    }
+
     let itemsAmount = 0;
     const orderItemsData = [];
     const details = [];
@@ -222,7 +241,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         status: "PENDING",
         orderType: order_type,
         paymentMethod: payment_method || null,
-        shippingAddress: address || null,
+        shippingAddress: trimmedAddress || null,
         shippingProvider: shippingProvider || null,
         shippingService: shippingService || null,
         shippingCost,
@@ -232,7 +251,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
 
     // --- Biteship Draft Integration ---
-    if (order_type === "TAKEAWAY" && shippingProvider && shippingService) {
+    if (isTakeaway && shippingProvider && shippingService) {
       try {
         const biteshipItems = [];
         for (const item of orderItemsData) {
@@ -260,9 +279,17 @@ const tools: Record<string, (args: any) => Promise<any>> = {
               shippingStatus: draft.shippingStatus
             } as any
           });
+        } else if (draft?.error) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { shippingStatus: "draft_failed" } as any
+          });
         }
       } catch (e) {
         console.error("[BITESHIP_DRAFT_ERROR]", e);
+        await prisma.order
+          .update({ where: { id: order.id }, data: { shippingStatus: "draft_failed" } as any })
+          .catch(() => null);
       }
     }
 

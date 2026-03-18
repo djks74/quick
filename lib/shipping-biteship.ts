@@ -471,7 +471,7 @@ async function applyCourierToDraft(apiKey: string, draftOrderId: string, order: 
   let ratesData: any = {};
   
   // Retry mechanism for getting rates from Biteship draft
-  const maxAttempts = 3;
+  const maxAttempts = 5;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ratesRes = await fetch(`https://api.biteship.com/v1/draft_orders/${encodeURIComponent(draftOrderId)}/rates`, {
       method: "GET",
@@ -537,7 +537,11 @@ export async function createBiteshipDraftForPendingOrder(input: BiteshipCreateOr
   const created = await createBiteshipDraftOrder(input);
   if (!created.ok) return created;
   const draft = created as any;
-  const applied = await applyCourierToDraft(draft.apiKey, draft.draftOrderId, input.order, input.order?.shippingProvider, input.order?.shippingService);
+  let applied = await applyCourierToDraft(draft.apiKey, draft.draftOrderId, input.order, input.order?.shippingProvider, input.order?.shippingService);
+  if (!applied.ok) {
+    await new Promise(r => setTimeout(r, 2000));
+    applied = await applyCourierToDraft(draft.apiKey, draft.draftOrderId, input.order, input.order?.shippingProvider, input.order?.shippingService);
+  }
   if (!applied.ok) {
     console.log("BITESHIP_DRAFT_COURIER_NOT_SET", {
       draftOrderId: draft.draftOrderId,
