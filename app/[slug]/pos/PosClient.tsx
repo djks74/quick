@@ -153,7 +153,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
     refreshNotifications(true);
     const t = setInterval(() => refreshNotifications(false), 10000);
     return () => clearInterval(t);
-  }, [store.id, lastSeenCreatedAt]);
+  }, [store.id, lastSeenCreatedAt, refreshNotifications]);
 
   const markNotifRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);

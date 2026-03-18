@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
 // These are the actual implementations of the tools Gemini will call
-const tools: Record<string, Function> = {
+const tools: Record<string, (args: any) => Promise<any>> = {
   async search_stores({ query }: { query: string }) {
     const stores = await prisma.store.findMany({
       where: {

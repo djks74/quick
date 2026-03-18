@@ -5,6 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Trash2, ShoppingBag, ArrowRight, Minus, Plus, MessageCircle, CreditCard } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { products as initialProducts } from "@/data/products";
 import { getStoreSettings } from "@/lib/api";
 
@@ -87,8 +88,13 @@ export default function CartPage() {
             <div className="lg:col-span-8 space-y-4">
               {cartItems.map((item) => (
                 <div key={item.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-6 group">
-                  <div className="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                  <div className="relative w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
+                    <Image 
+                      src={item.image || "/placeholder.png"} 
+                      alt={item.name} 
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-300" 
+                    />
                   </div>
                   <div className="flex-1 space-y-1">
                     <h3 className="font-black italic text-gray-900 uppercase tracking-wider">{item.name}</h3>

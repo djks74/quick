@@ -37,7 +37,7 @@ export default function AdminSettings() {
       if (sessionStoreSlug) router.push(`/${sessionStoreSlug}/admin`);
       else router.push(`/`);
     }
-  }, [session, canAccess, slug, router, status]);
+  }, [session, canAccess, slug, router, status, sessionStoreSlug, slugValue]);
   
   // Hooks must be called unconditionally
   const { headerSettings, setHeaderSettings } = useShop();

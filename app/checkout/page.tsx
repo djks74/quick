@@ -7,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import { ArrowRight, Lock, Shield, Check } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export default function CheckoutPage() {
   const { cart, cartTotal, paymentSettings, clearCart } = useShop();
@@ -283,7 +284,14 @@ export default function CheckoutPage() {
                 <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar mb-4">
                   {cart.map((item) => (
                     <div key={item.id} className="flex items-start space-x-4">
-                      <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-lg bg-gray-50" />
+                      <div className="relative w-16 h-16 shrink-0 bg-gray-50 rounded-lg overflow-hidden">
+                        <Image 
+                          src={item.image || "/placeholder.png"} 
+                          alt={item.name} 
+                          fill
+                          className="object-cover" 
+                        />
+                      </div>
                       <div className="flex-1">
                         <h4 className="text-sm font-bold text-gray-900 line-clamp-2">{item.name}</h4>
                         <p className="text-xs text-gray-500 mt-1">Qty: {item.quantity} × ${item.price.toLocaleString()}</p>
