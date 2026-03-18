@@ -165,7 +165,7 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
         status: response.status,
         payload: JSON.stringify(payload)
       });
-      return getFallbackOptions(store);
+      return [];
     }
 
     const data = await response.json();
@@ -214,11 +214,11 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
           jneOnly: store?.shippingJneOnly
         }
       });
-      return getFallbackOptions(store);
+      return [];
     }
     return mapped.sort((a, b) => a.fee - b.fee);
   } catch {
-    return getFallbackOptions(store);
+    return [];
   }
 }
 
@@ -410,11 +410,17 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
 
   const destinationPostalMatch = destinationAddress.match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
   const destinationPostalCode = destinationPostalMatch ? Number(destinationPostalMatch[1]) : undefined;
+  const destinationAreaId = !destinationPostalCode
+    ? await lookupBiteshipAreaIdFromInput(store, destinationAddress).catch(() => null)
+    : null;
 
   const senderName = String(store?.shippingSenderName || store?.name || "Store").trim();
   const senderPhone = String(store?.shippingSenderPhone || store?.whatsapp || "").trim();
   const senderAddress = String(store?.shippingSenderAddress || "").trim();
   const senderPostalCode = store?.shippingSenderPostalCode ? Number(String(store.shippingSenderPostalCode).replace(/\D/g, "")) : undefined;
+  const originAreaId = store?.biteshipOriginAreaId
+    ? String(store.biteshipOriginAreaId)
+    : await lookupBiteshipAreaIdFromInput(store, senderAddress).catch(() => null);
   const customerPhone = String(order?.customerPhone || "").trim();
 
   if (!senderPhone || !senderAddress || !senderPostalCode) {
@@ -427,6 +433,7 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
     origin_contact_phone: senderPhone,
     origin_address: senderAddress,
     origin_postal_code: senderPostalCode,
+    origin_area_id: originAreaId || undefined,
     origin_coordinate:
       typeof store?.biteshipOriginLat === "number" && typeof store?.biteshipOriginLng === "number"
         ? { latitude: store.biteshipOriginLat, longitude: store.biteshipOriginLng }
@@ -435,6 +442,7 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
     destination_contact_phone: customerPhone || senderPhone,
     destination_address: destinationAddress,
     destination_postal_code: destinationPostalCode,
+    destination_area_id: destinationAreaId || undefined,
     destination_coordinate: destinationCoordinate
       ? { latitude: destinationCoordinate.latitude, longitude: destinationCoordinate.longitude }
       : undefined,
