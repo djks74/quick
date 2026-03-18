@@ -321,6 +321,7 @@ model PlatformSettings {
   midtransServerKey  String?
   midtransClientKey  String?
   biteshipApiKey     String?
+  geminiApiKey       String?
   bankName           String?
   bankAccountNumber  String?
   bankAccountName    String?

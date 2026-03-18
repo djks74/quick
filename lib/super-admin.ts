@@ -13,7 +13,8 @@ async function ensurePlatformSettingsSchema() {
     ensuredPlatformSettingsSchema = (async () => {
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "PlatformSettings"
-        ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT;
+        ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
+        ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT;
       `);
     })().catch((error) => {
       console.error("ensurePlatformSettingsSchema error:", error);
@@ -186,6 +187,7 @@ export async function updatePlatformSettings(data: {
   midtransServerKey?: string;
   midtransClientKey?: string;
   biteshipApiKey?: string;
+  geminiApiKey?: string;
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
@@ -204,12 +206,13 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
+        geminiApiKey: data.geminiApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,
         bankAccountName: data.bankAccountName || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null
-      },
+      } as any,
       create: {
         key: "default",
         whatsappToken: data.whatsappToken || null,
@@ -217,12 +220,13 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
+        geminiApiKey: data.geminiApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,
         bankAccountName: data.bankAccountName || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null
-      }
+      } as any
     });
     return { success: true, data: updated };
   } catch (error) {
