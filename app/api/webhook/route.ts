@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
-import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+import { resolvePaymentUrl } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 
 type WaLang = "id" | "en";
@@ -338,8 +338,26 @@ export async function POST(req: NextRequest) {
         include: { stores: true }
       });
 
+      let preferredMerchantStoreId: number | null = null;
+
+      // Fallback: Check if this number is listed as a Store WhatsApp Number
+      if (!user) {
+          const storeByPhone = await prisma.store.findFirst({ 
+            where: { whatsapp: from }, 
+            include: { owner: true } 
+          });
+          
+          if (storeByPhone) {
+              preferredMerchantStoreId = storeByPhone.id;
+              user = await prisma.user.findUnique({
+                  where: { id: storeByPhone.ownerId },
+                  include: { stores: true }
+              });
+          }
+      }
+
       // Check if Merchant is in "User Mode"
-      const isMerchant = user && (user.role === 'MERCHANT' || user.role === 'SUPER_ADMIN');
+      let isMerchant = !!user && (user.role === 'MERCHANT' || user.role === 'SUPER_ADMIN');
       let forceUserMode = false;
 
       // Detect User Intent that overrides Merchant Mode
@@ -350,21 +368,6 @@ export async function POST(req: NextRequest) {
           // Scanning QR (Table ...)
           if (lower.startsWith('table') || lower.startsWith('meja')) {
              forceUserMode = true;
-          }
-      }
-
-      // Fallback: Check if this number is listed as a Store WhatsApp Number
-      if (!user) {
-          const storeByPhone = await prisma.store.findFirst({ 
-            where: { whatsapp: from }, 
-            include: { owner: true } 
-          });
-          
-          if (storeByPhone) {
-              user = await prisma.user.findUnique({
-                  where: { id: storeByPhone.ownerId },
-                  include: { stores: true }
-              });
           }
       }
 
@@ -408,6 +411,13 @@ export async function POST(req: NextRequest) {
         } else {
             // Default: Merchant Handler
             if (user) {
+              if (preferredMerchantStoreId && Array.isArray((user as any).stores)) {
+                const stores = (user as any).stores as any[];
+                const idx = stores.findIndex((s) => Number(s?.id) === Number(preferredMerchantStoreId));
+                if (idx > 0) {
+                  (user as any).stores = [stores[idx], ...stores.slice(0, idx), ...stores.slice(idx + 1)];
+                }
+              }
               await handleMerchantMessage(user, message, from);
             }
             return NextResponse.json({ success: true });
@@ -579,22 +589,10 @@ export async function POST(req: NextRequest) {
           storeId: targetStore.id,
           orderId: order.id,
           source: "WHATSAPP",
-          title: `New Takeaway order #${order.id}`,
+          title: `Order takeaway #${order.id} menunggu pembayaran`,
           body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
           metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
         }).catch(() => null);
-
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `📦 *Pesanan Baru #${order.id}*\n` +
-          `------------------\n` +
-          `Tipe: Takeaway/Pengiriman\n` +
-          `Customer: ${from}\n` +
-          `Kurir: GOSEND ${selected?.service || ""}\n` +
-          `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n` +
-          `Alamat: ${ctx.address}\n\n` +
-          `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-        ).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1293,23 +1291,10 @@ export async function POST(req: NextRequest) {
           storeId: targetStore.id,
           orderId: order.id,
           source: "WHATSAPP",
-          title: `New Takeaway order #${order.id}`,
+          title: `Order takeaway #${order.id} menunggu pembayaran`,
           body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
           metadata: { orderType: "TAKEAWAY", shippingProvider: selected?.provider || ctx.provider, shippingCost, shippingAddress: addressText }
         }).catch(() => null);
-
-        // Notify Merchant
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `📦 *Pesanan Baru #${order.id}*\n` +
-          `------------------\n` +
-          `Tipe: Takeaway/Pengiriman\n` +
-          `Customer: ${from}\n` +
-          `Kurir: ${selected?.provider || ctx.provider} ${selected?.service || ""}\n` +
-          `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n` +
-          `Alamat: ${addressText}\n\n` +
-          `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-        ).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1434,23 +1419,12 @@ export async function POST(req: NextRequest) {
               storeId: targetStore.id,
               orderId: order.id,
               source: "WHATSAPP",
-              title: `New WhatsApp order #${order.id}`,
+              title: `Order #${order.id} menunggu pembayaran`,
               body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
               metadata: {
                 totalAmount: amount
               }
             });
-
-            // Notify Merchant
-            await sendMerchantWhatsApp(
-              targetStore.id,
-              `📦 *Order Baru #${order.id}*\n` +
-              `------------------\n` +
-              `Tipe: Manual Payment\n` +
-              `Customer: ${from}\n` +
-              `Total: Rp ${new Intl.NumberFormat('id-ID').format(amount)}\n\n` +
-              `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-            ).catch(() => null);
 
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
             await sendWhatsAppMessage(from, l(`Order #${order.id} berhasil dibuat.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`, `Order #${order.id} Created.\nAmount: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`), targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
@@ -1533,7 +1507,7 @@ export async function POST(req: NextRequest) {
             storeId: targetStore.id,
             orderId: order.id,
             source: "WHATSAPP",
-            title: `New WhatsApp order #${order.id}`,
+            title: `Order #${order.id} menunggu pembayaran`,
             body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
             metadata: {
               totalAmount: finalTotal,
@@ -1544,17 +1518,6 @@ export async function POST(req: NextRequest) {
               items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
             }
           });
-
-          // Notify Merchant
-          await sendMerchantWhatsApp(
-            targetStore.id,
-            `📦 *Pesanan Baru #${order.id}*\n` +
-            `------------------\n` +
-            `Tipe: ${session.tableNumber ? `Dine In (Meja ${session.tableNumber})` : 'Takeaway (Pickup)'}\n` +
-            `Customer: ${from}\n` +
-            `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n\n` +
-            `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-          ).catch(() => null);
 
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
           let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1745,7 +1708,7 @@ export async function POST(req: NextRequest) {
                    storeId: targetStore.id,
                    orderId: order.id,
                    source: "WHATSAPP",
-                   title: `New WhatsApp order #${order.id}`,
+                  title: `Order #${order.id} menunggu pembayaran`,
                    body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
                    metadata: {
                      totalAmount: finalTotal,
@@ -1756,17 +1719,6 @@ export async function POST(req: NextRequest) {
                      items: currentCart.map((item: any) => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
                    }
                  });
-
-                 // Notify Merchant
-                 await sendMerchantWhatsApp(
-                   targetStore.id,
-                   `📦 *Pesanan Baru #${order.id}*\n` +
-                   `------------------\n` +
-                   `Tipe: ${session.tableNumber ? `Dine In (Meja ${session.tableNumber})` : 'Takeaway (Pickup)'}\n` +
-                   `Customer: ${from}\n` +
-                   `Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n\n` +
-                   `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-                 ).catch(() => null);
 
                  const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, quickCheckoutMethod);
                  let summary = "🧾 *Order Summary*\n";

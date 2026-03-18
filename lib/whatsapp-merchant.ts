@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getWaUsageDashboard } from "@/lib/wa-credit";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 // Mock Transcription (Replace with OpenAI Whisper)
@@ -37,22 +38,210 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   const lowerText = commandText.toLowerCase().trim();
+  const formatMoney = (value: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Math.round(Number(value) || 0))}`;
+  const onOff = (value: boolean | null | undefined) => (value ? "ON" : "OFF");
 
   // 1. Help Command
   if (lowerText === 'help' || lowerText === 'menu') {
     await sendWhatsAppMessage(from, 
-      `👨‍🍳 *Bot Merchant* 👨‍🍳\n\n` +
-      `Perintah:\n` +
-      `1. *Ubah Harga*: "Ubah harga [Nama] [Nominal]"\n` +
-      `   Contoh: "Ubah harga Nasi Goreng 25000"\n` +
-      `2. *Tambah Produk*: "Tambah produk [Nama] [Nominal]"\n` +
-      `   Contoh: "Tambah produk Es Teh 5000"\n` +
-      `3. *Daftar Produk*: "Daftar produk"\n` +
-      `4. *Update Resi*: "Update resi [OrderID] [NoResi] [Kurir] [Service]"\n` +
-      `   Contoh: "Update resi 123 JX123456789 JNE REG"\n` +
-      `5. *Ganti Bahasa*: ketik "EN" atau "ID"`,
+      `👨‍🍳 *Admin Mode (Merchant)*\n\n` +
+      `Ketik salah satu perintah di bawah:\n\n` +
+      `*Produk*\n` +
+      `- Ubah harga [Nama] [Nominal]\n` +
+      `  Contoh: "Ubah harga Nasi Goreng 25000"\n` +
+      `- Tambah produk [Nama] [Nominal]\n` +
+      `  Contoh: "Tambah produk Es Teh 5000"\n` +
+      `- Daftar produk\n\n` +
+      `*Pengiriman*\n` +
+      `- Shipping option\n` +
+      `- Set shipping jne on/off\n` +
+      `- Set shipping gosend on/off\n` +
+      `- Set jne only on/off\n\n` +
+      `*Pembayaran*\n` +
+      `- Payment option\n` +
+      `- Set payment midtrans on/off\n` +
+      `- Set payment xendit on/off\n` +
+      `- Set payment transfer on/off\n\n` +
+      `*Operasional*\n` +
+      `- Buka toko / Tutup toko\n\n` +
+      `*Keuangan & Report*\n` +
+      `- WA balance\n` +
+      `- Report\n\n` +
+      `*Pengiriman (Manual)*\n` +
+      `- Update resi [OrderID] [NoResi] [Kurir] [Service]\n` +
+      `  Contoh: "Update resi 123 JX123456789 JNE REG"\n\n` +
+      `*Bahasa*\n` +
+      `- EN / ID`,
       store.id
     );
+    return;
+  }
+
+  if (
+    lowerText === "wa balance" ||
+    lowerText === "saldo wa" ||
+    lowerText === "saldo whatsapp" ||
+    lowerText === "whatsapp balance"
+  ) {
+    const dash = await getWaUsageDashboard(store.id).catch(() => null);
+    if (!dash) {
+      await sendWhatsAppMessage(from, `❌ Gagal ambil WA balance. Coba lagi ya.`, store.id);
+      return;
+    }
+    await sendWhatsAppMessage(
+      from,
+      `💬 *WA Balance (${store.name})*\n` +
+        `Saldo: ${formatMoney(dash.balance)}\n` +
+        `Harga/Msg: ${formatMoney(dash.pricePerMessage)}\n` +
+        `Perkiraan sisa msg: ${dash.remainingMessages}\n\n` +
+        `Balas "Report" untuk ringkasan order.`,
+      store.id
+    );
+    return;
+  }
+
+  if (lowerText === "report" || lowerText === "laporan" || lowerText === "summary") {
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [pendingCount, pendingSum, paidCount, paidSum, cancelledCount, dash] = await Promise.all([
+      prisma.order.count({ where: { storeId: store.id, status: "PENDING" } }),
+      prisma.order.aggregate({ where: { storeId: store.id, status: "PENDING" }, _sum: { totalAmount: true } }),
+      prisma.order.count({ where: { storeId: store.id, status: "PAID", createdAt: { gte: since } } }),
+      prisma.order.aggregate({ where: { storeId: store.id, status: "PAID", createdAt: { gte: since } }, _sum: { totalAmount: true } }),
+      prisma.order.count({ where: { storeId: store.id, status: "CANCELLED", createdAt: { gte: since } } }),
+      getWaUsageDashboard(store.id).catch(() => null)
+    ]);
+
+    const msg =
+      `📊 *Report (${store.name})*\n` +
+      `Periode: 24 jam terakhir\n\n` +
+      `*Order Pending (belum dibayar)*\n` +
+      `- Jumlah: ${pendingCount}\n` +
+      `- Total: ${formatMoney(Number(pendingSum?._sum?.totalAmount || 0))}\n\n` +
+      `*Order Paid (24 jam)*\n` +
+      `- Jumlah: ${paidCount}\n` +
+      `- Total: ${formatMoney(Number(paidSum?._sum?.totalAmount || 0))}\n\n` +
+      `*Cancelled (24 jam)*\n` +
+      `- Jumlah: ${cancelledCount}\n\n` +
+      `*Saldo Merchant*\n` +
+      `- Balance: ${formatMoney(Number(store.balance || 0))}\n` +
+      (dash
+        ? `\n*WA Balance*\n- Saldo: ${formatMoney(dash.balance)}\n- Est. sisa msg: ${dash.remainingMessages}\n`
+        : ``);
+
+    await sendWhatsAppMessage(from, msg, store.id);
+    return;
+  }
+
+  if (
+    lowerText === "shipping option" ||
+    lowerText === "shipping options" ||
+    lowerText === "opsi pengiriman" ||
+    lowerText === "pengiriman"
+  ) {
+    await sendWhatsAppMessage(
+      from,
+      `🚚 *Shipping Option (${store.name})*\n\n` +
+        `JNE: ${onOff(store.shippingEnableJne)}\n` +
+        `GoSend: ${onOff(store.shippingEnableGosend)}\n` +
+        `JNE Only: ${onOff(store.shippingJneOnly)}\n\n` +
+        `Update:\n` +
+        `- Set shipping jne on/off\n` +
+        `- Set shipping gosend on/off\n` +
+        `- Set jne only on/off`,
+      store.id
+    );
+    return;
+  }
+
+  const setShippingMatch = lowerText.match(/^(?:set|ubah|update)\s+(?:shipping|pengiriman)\s+(jne|gosend|gojek)\s+(on|off|enable|disable)$/i);
+  if (setShippingMatch) {
+    const target = setShippingMatch[1].toLowerCase();
+    const action = setShippingMatch[2].toLowerCase();
+    const enabled = action === "on" || action === "enable";
+    const updated = await prisma.store.update({
+      where: { id: store.id },
+      data:
+        target === "jne"
+          ? { shippingEnableJne: enabled }
+          : { shippingEnableGosend: enabled }
+    });
+    await sendWhatsAppMessage(
+      from,
+      `✅ Shipping updated.\nJNE: ${onOff(updated.shippingEnableJne)}\nGoSend: ${onOff(updated.shippingEnableGosend)}\nJNE Only: ${onOff(updated.shippingJneOnly)}`,
+      store.id
+    );
+    return;
+  }
+
+  const setJneOnlyMatch = lowerText.match(/^(?:set|ubah|update)\s+jne\s+only\s+(on|off|enable|disable)$/i);
+  if (setJneOnlyMatch) {
+    const action = setJneOnlyMatch[1].toLowerCase();
+    const enabled = action === "on" || action === "enable";
+    const updated = await prisma.store.update({
+      where: { id: store.id },
+      data: { shippingJneOnly: enabled }
+    });
+    await sendWhatsAppMessage(
+      from,
+      `✅ Shipping updated.\nJNE: ${onOff(updated.shippingEnableJne)}\nGoSend: ${onOff(updated.shippingEnableGosend)}\nJNE Only: ${onOff(updated.shippingJneOnly)}`,
+      store.id
+    );
+    return;
+  }
+
+  if (
+    lowerText === "payment option" ||
+    lowerText === "payment options" ||
+    lowerText === "opsi pembayaran" ||
+    lowerText === "pembayaran"
+  ) {
+    await sendWhatsAppMessage(
+      from,
+      `💳 *Payment Option (${store.name})*\n\n` +
+        `Midtrans: ${onOff(store.enableMidtrans)}\n` +
+        `Xendit: ${onOff(store.enableXendit)}\n` +
+        `Manual Transfer: ${onOff(store.enableManualTransfer)}\n\n` +
+        `Update:\n` +
+        `- Set payment midtrans on/off\n` +
+        `- Set payment xendit on/off\n` +
+        `- Set payment transfer on/off`,
+      store.id
+    );
+    return;
+  }
+
+  const setPaymentMatch = lowerText.match(/^(?:set|ubah|update)\s+(?:payment|pembayaran)\s+(midtrans|xendit|transfer|manual)\s+(on|off|enable|disable)$/i);
+  if (setPaymentMatch) {
+    const target = setPaymentMatch[1].toLowerCase();
+    const action = setPaymentMatch[2].toLowerCase();
+    const enabled = action === "on" || action === "enable";
+    const updated = await prisma.store.update({
+      where: { id: store.id },
+      data:
+        target === "midtrans"
+          ? { enableMidtrans: enabled }
+          : target === "xendit"
+            ? { enableXendit: enabled }
+            : { enableManualTransfer: enabled }
+    });
+    await sendWhatsAppMessage(
+      from,
+      `✅ Payment updated.\nMidtrans: ${onOff(updated.enableMidtrans)}\nXendit: ${onOff(updated.enableXendit)}\nManual Transfer: ${onOff(updated.enableManualTransfer)}`,
+      store.id
+    );
+    return;
+  }
+
+  if (lowerText === "buka toko" || lowerText === "open store" || lowerText === "open" || lowerText === "start") {
+    const updated = await prisma.store.update({ where: { id: store.id }, data: { isOpen: true } });
+    await sendWhatsAppMessage(from, `✅ Toko dibuka. Status: ${onOff(updated.isOpen)}`, store.id);
+    return;
+  }
+
+  if (lowerText === "tutup toko" || lowerText === "close store" || lowerText === "close" || lowerText === "stop") {
+    const updated = await prisma.store.update({ where: { id: store.id }, data: { isOpen: false } });
+    await sendWhatsAppMessage(from, `✅ Toko ditutup. Status: ${onOff(updated.isOpen)}`, store.id);
     return;
   }
 

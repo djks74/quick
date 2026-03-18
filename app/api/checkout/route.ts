@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { processPayment } from '@/lib/payment';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
-import { sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
 
 export async function POST(req: NextRequest) {
@@ -73,7 +72,7 @@ export async function POST(req: NextRequest) {
       storeId: parseInt(storeId),
       orderId: order.id,
       source: "STOREFRONT",
-      title: `New order #${order.id}`,
+      title: `Order #${order.id} menunggu pembayaran`,
       body: `${customerInfo?.phone || "GUEST"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
       metadata: {
         paymentMethod,
@@ -81,18 +80,6 @@ export async function POST(req: NextRequest) {
         tableNumber: customerInfo?.tableNumber || null
       }
     });
-
-    // Notify Merchant
-    await sendMerchantWhatsApp(
-      parseInt(storeId),
-      `📦 *Order Baru #${order.id}*\n` +
-      `------------------\n` +
-      `Tipe: Web Storefront${customerInfo?.tableNumber ? ` (Meja ${customerInfo.tableNumber})` : ''}\n` +
-      `Customer: ${customerInfo?.phone || "GUEST"}\n` +
-      `Total: Rp ${Math.round(total).toLocaleString("id-ID")}\n` +
-      `Metode: ${paymentMethod || 'manual'}\n\n` +
-      `⚠️ Mohon segera cek dashboard untuk memproses pesanan.`
-    ).catch(() => null);
 
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.

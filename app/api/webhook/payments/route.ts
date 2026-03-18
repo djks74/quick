@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
               include: { product: true }
           });
 
-          let msg = `💰 *Pembayaran Masuk untuk Order #${order.id}*\n`;
+          let msg = `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
           if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
           msg += `👤 Customer: ${order.customerPhone}\n`;
           msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;

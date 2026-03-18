@@ -50,7 +50,7 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
     // Notify Merchant
     await sendMerchantWhatsApp(
       order.storeId,
-      `✅ *Order #${order.id} Ditandai PAID oleh Admin*\n` +
+      `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n` +
       `Customer: ${order.customerPhone}\n` +
       `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n` +
       `Mohon segera diproses.`
