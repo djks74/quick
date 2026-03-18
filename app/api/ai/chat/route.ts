@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
+import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { processPayment } from "@/lib/payment";
 
@@ -214,6 +214,40 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         items: { create: orderItemsData }
       } as any
     });
+
+    // --- Biteship Draft Integration ---
+    if (order_type === "TAKEAWAY" && shippingProvider && shippingService) {
+      try {
+        const biteshipItems = [];
+        for (const item of orderItemsData) {
+          const product = await prisma.product.findUnique({ where: { id: item.productId } });
+          biteshipItems.push({
+            name: product?.name || "Product",
+            quantity: item.quantity,
+            price: item.price,
+            weight: 200 // Default weight
+          });
+        }
+
+        const draft = await createBiteshipDraftForPendingOrder({
+          store,
+          order,
+          items: biteshipItems
+        }) as any;
+
+        if (draft.ok) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: draft.draftOrderId,
+              shippingStatus: draft.shippingStatus
+            } as any
+          });
+        }
+      } catch (e) {
+        console.error("[BITESHIP_DRAFT_ERROR]", e);
+      }
+    }
 
     let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
     if (store.enableMidtrans) {
