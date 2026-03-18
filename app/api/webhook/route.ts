@@ -336,7 +336,19 @@ export async function POST(req: NextRequest) {
       await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
 
       // --- AI AGENT HANDLER ---
-      const isAICommand = lowerText?.startsWith("ai ") || lowerText?.startsWith("tanya ") || lowerText?.startsWith("ask ") || lowerText?.startsWith("cari ");
+      const isAICommand = 
+        lowerText?.startsWith("ai ") || 
+        lowerText?.startsWith("tanya ") || 
+        lowerText?.startsWith("ask ") || 
+        lowerText?.startsWith("cari ") ||
+        lowerText?.startsWith("search ") ||
+        lowerText?.startsWith("find ") ||
+        lowerText?.startsWith("tolong ") ||
+        (lowerText?.includes("cari ") && lowerText?.length > 8) ||
+        (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
+        (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
+        (lowerText?.includes("tolong ") && lowerText?.length > 8);
+
       let aiSession = await prisma.whatsAppSession.findFirst({
         where: { phoneNumber: from, step: "AI_MODE" }
       });

@@ -28,6 +28,17 @@ export default function FloatingAssistant() {
     }
   }, [messages, isOpen]);
 
+  const formatMessage = (text: string) => {
+    // 1. Handle Bold (**text**)
+    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // 2. Handle Markdown Links ([text](url))
+    formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80 transition-opacity font-medium">$1</a>');
+    // 3. Handle line breaks
+    return formatted.split('\n').map((line, i) => (
+      <span key={i} dangerouslySetInnerHTML={{ __html: line + '<br/>' }} />
+    ));
+  };
+
   const shareLocation = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
@@ -118,51 +129,59 @@ export default function FloatingAssistant() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end">
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
       {/* Chat Window */}
       {isOpen && (
-        <div className="mb-4 w-[380px] h-[550px] bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div className="w-[350px] sm:w-[400px] h-[550px] bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
           {/* Header */}
-          <div className="p-4 bg-primary text-white flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Sparkles size={18} />
-              <span className="font-bold text-sm">Gercep AI Assistant</span>
+          <div className="p-4 bg-primary text-white flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                <Sparkles size={20} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black tracking-tight">Gercep Assistant</h2>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Online</span>
+                </div>
+              </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors">
+            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
               <X size={20} />
             </button>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`flex gap-2 max-w-[85%] ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                    m.role === "user" ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-800 text-primary"
-                  }`}>
-                    {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
-                  </div>
-                  <div className={`p-3 rounded-xl text-[13px] leading-relaxed shadow-sm ${
+          <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide bg-gray-50/50 dark:bg-gray-900/50">
+            {messages.map((m, idx) => (
+              <div key={idx} className={cn("flex gap-3", m.role === "user" ? "flex-row-reverse" : "flex-start")}>
+                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm", m.role === "user" ? "bg-primary text-white" : "bg-white dark:bg-gray-800 text-primary border dark:border-gray-700")}>
+                  {m.role === "user" ? <User size={16} /> : <Bot size={16} />}
+                </div>
+                <div className={cn("max-w-[80%] flex flex-col gap-1", m.role === "user" ? "items-end" : "items-start")}>
+                  <div className={`p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
                     m.role === "user" 
                       ? "bg-primary text-white rounded-tr-none" 
-                      : "bg-gray-50 dark:bg-gray-800/50 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700"
+                      : "bg-white dark:bg-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700"
                   }`}>
                     {m.breakdown && (
-                      <div className="mb-2 p-2 bg-white/50 dark:bg-black/20 rounded-lg font-mono text-[11px] border border-black/5 dark:border-white/5 whitespace-pre-wrap">
+                      <div className="mb-3 p-3 bg-gray-50 dark:bg-black/40 rounded-xl font-mono text-[11px] border border-black/5 dark:border-white/5 whitespace-pre-wrap leading-tight text-gray-600 dark:text-gray-400">
                         {m.breakdown}
                       </div>
                     )}
-                    <div>{m.text}</div>
+                    <div className="break-words">
+                      {formatMessage(m.text)}
+                    </div>
                     {m.paymentUrl && (
                       <a 
                         href={m.paymentUrl} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="mt-3 flex items-center justify-center gap-2 w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs transition-colors shadow-md"
+                        className="mt-4 flex items-center justify-center gap-2 w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs transition-all shadow-lg hover:shadow-green-500/20 active:scale-95 uppercase tracking-wider"
                       >
                         <ExternalLink size={14} />
-                        Pay Now
+                        Pay Now (Bayar Sekarang)
                       </a>
                     )}
                   </div>

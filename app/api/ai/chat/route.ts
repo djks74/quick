@@ -492,6 +492,9 @@ Once an order is created:
     const MAX_ITERATIONS = 5;
     let iterations = 0;
 
+    let finalBreakdown = undefined;
+    let finalPaymentUrl = undefined;
+
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       const toolResponses = [];
       for (const call of calls) {
@@ -508,8 +511,11 @@ Once an order is created:
           
           // Capture structured data for the response
           if (call.name === "create_customer_order" && data.success) {
-            (response as any).breakdown = data.breakdown;
-            (response as any).paymentUrl = data.paymentUrl;
+            finalBreakdown = data.breakdown;
+            finalPaymentUrl = data.paymentUrl;
+          }
+          if (call.name === "create_merchant_invoice" && data.success) {
+            finalPaymentUrl = data.paymentUrl;
           }
         }
       }
@@ -524,8 +530,8 @@ Once an order is created:
     return NextResponse.json({ 
       text: response.text(),
       history: await chat.getHistory(),
-      breakdown: (response as any).breakdown,
-      paymentUrl: (response as any).paymentUrl
+      breakdown: finalBreakdown,
+      paymentUrl: finalPaymentUrl
     });
 
   } catch (error: any) {
