@@ -713,26 +713,9 @@ export default function AdminSettings() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
                 <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Biteship Integration</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use Biteship API for quote and resi checks.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure shipping origin for GoSend and JNE.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
-                {!isEnterprise && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm flex items-center border border-blue-100 dark:border-blue-800 transition-colors">
-                    <Lock className="w-4 h-4 mr-2" />
-                    Use platform env BITESHIP_API_KEY or upgrade to Enterprise to save your own key.
-                  </div>
-                )}
-                <div className={cn(!canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
-                  <div>
-                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">Biteship API Key</label>
-                    <input
-                      type="password"
-                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
-                      value={settings.biteshipApiKey}
-                      onChange={(e) => setSettings({ ...settings, biteshipApiKey: e.target.value })}
-                    />
-                  </div>
-                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-gray-300">Origin Area ID (Optional)</label>
                   <input

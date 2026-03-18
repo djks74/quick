@@ -114,7 +114,8 @@ export async function getStoreSettings(storeId: number | string) {
           whatsappToken: true,
           whatsappPhoneId: true,
           midtransServerKey: true,
-          midtransClientKey: true
+          midtransClientKey: true,
+          biteshipApiKey: true
         }
       });
 
@@ -123,7 +124,8 @@ export async function getStoreSettings(storeId: number | string) {
         whatsappToken: platform?.whatsappToken ?? settings.whatsappToken,
         whatsappPhoneId: platform?.whatsappPhoneId ?? settings.whatsappPhoneId,
         paymentGatewaySecret: platform?.midtransServerKey ?? settings.paymentGatewaySecret,
-        paymentGatewayClientKey: platform?.midtransClientKey ?? settings.paymentGatewayClientKey
+        paymentGatewayClientKey: platform?.midtransClientKey ?? settings.paymentGatewayClientKey,
+        biteshipApiKey: platform?.biteshipApiKey ?? settings.biteshipApiKey
       };
     }
 
@@ -217,8 +219,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
                 whatsappPhoneId: data.whatsappPhoneId,
                 paymentGatewaySecret: data.paymentGatewaySecret,
                 paymentGatewayClientKey: data.paymentGatewayClientKey,
-                bankAccount: data.bankAccount,
-                biteshipApiKey: data.biteshipApiKey
+                bankAccount: data.bankAccount
               }
             : {})
         }
@@ -237,11 +238,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
     const wantsAutoOriginAreaId = !String(data?.biteshipOriginAreaId || "").trim() && !!postalDigits;
     const missingOriginAreaId = !String((updatedStore as any)?.biteshipOriginAreaId || "").trim();
     if (wantsAutoOriginAreaId && missingOriginAreaId) {
-      const lookupStore = {
-        ...(updatedStore as any),
-        biteshipApiKey: canUseOwnIntegrationConfig ? (data?.biteshipApiKey || (updatedStore as any).biteshipApiKey) : (updatedStore as any).biteshipApiKey
-      };
-      const areaId = await lookupBiteshipAreaIdFromInput(lookupStore, postalDigits);
+      const areaId = await lookupBiteshipAreaIdFromInput(updatedStore, postalDigits);
       if (areaId) {
         finalStore = await prisma.store.update({
           where: { id: storeId },

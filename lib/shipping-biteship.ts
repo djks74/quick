@@ -51,15 +51,15 @@ function normalizeBiteshipStatus(value?: string) {
   return s.replace(/\s+/g, "_");
 }
 
-async function getApiKey(store: any) {
-  if (store?.biteshipApiKey) return store.biteshipApiKey;
+async function getApiKey(store?: any) {
   try {
     const platform = await prisma.platformSettings.findUnique({
       where: { key: "default" },
       select: { biteshipApiKey: true }
     });
     if (platform?.biteshipApiKey) return platform.biteshipApiKey;
-  } catch {
+  } catch (e) {
+    console.error("[BITESHIP_KEY_ERROR]", e);
   }
   return process.env.BITESHIP_API_KEY || "";
 }
