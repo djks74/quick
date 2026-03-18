@@ -19,7 +19,16 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           { products: { some: { name: { contains: query, mode: "insensitive" } } } }
         ]
       },
-      select: { name: true, slug: true },
+      select: { 
+        name: true, 
+        slug: true,
+        categories: { select: { name: true }, take: 2 },
+        products: { 
+          where: { name: { contains: query, mode: "insensitive" } },
+          select: { name: true },
+          take: 2
+        }
+      },
       take: 5
     });
     return { stores };
@@ -67,7 +76,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { options };
   },
 
-  async create_customer_order({ slug, customer_phone, items, order_type, address, shippingProvider, shippingService, shippingFee }: any) {
+  async create_customer_order({ slug, customer_phone, items, order_type, address, shippingProvider, shippingService, shippingFee, payment_method }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
@@ -80,15 +89,29 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       orderItemsData.push({ productId: product.id, quantity: item.quantity, price: product.price });
     }
 
-    const finalAmount = itemsAmount + (Number(shippingFee) || 0);
+    const taxAmount = itemsAmount * (store.taxPercent / 100);
+    const serviceCharge = itemsAmount * (store.serviceChargePercent / 100);
+    
+    let paymentFee = 0;
+    if (payment_method === "qris") {
+      paymentFee = (itemsAmount + taxAmount + serviceCharge + (Number(shippingFee) || 0)) * 0.01;
+    } else if (payment_method === "bank_transfer") {
+      paymentFee = 5000;
+    }
+
+    const finalAmount = itemsAmount + taxAmount + serviceCharge + (Number(shippingFee) || 0) + paymentFee;
 
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
         customerPhone: customer_phone,
         totalAmount: finalAmount,
+        taxAmount,
+        serviceCharge,
+        paymentFee,
         status: "PENDING",
         orderType: order_type,
+        paymentMethod: payment_method || null,
         shippingAddress: address || null,
         shippingProvider: shippingProvider || null,
         shippingService: shippingService || null,
@@ -104,12 +127,73 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       totalAmount: finalAmount,
       paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
     };
+  },
+
+  async create_merchant_invoice({ amount, customer_phone, merchant_phone, payment_method }: any) {
+    const user = await prisma.user.findFirst({
+      where: { phoneNumber: { contains: merchant_phone.replace(/\D/g, "") } },
+      include: { stores: true }
+    });
+    const store = user?.stores[0];
+    if (!store) return { error: "Merchant store not found" };
+
+    let product = await prisma.product.findFirst({
+      where: { storeId: store.id, name: "Tagihan Manual" }
+    });
+    if (!product) {
+      product = await prisma.product.create({
+        data: {
+          storeId: store.id,
+          name: "Tagihan Manual",
+          category: "System",
+          price: 0,
+          description: "Produk otomatis untuk tagihan manual",
+          stock: 999999
+        }
+      });
+    }
+
+    let paymentFee = 0;
+    if (payment_method === "qris") {
+      paymentFee = amount * 0.01;
+    } else if (payment_method === "bank_transfer") {
+      paymentFee = 5000;
+    }
+
+    const finalAmount = amount + paymentFee;
+
+    const order = await prisma.order.create({
+      data: {
+        storeId: store.id,
+        customerPhone: customer_phone,
+        totalAmount: finalAmount,
+        paymentFee,
+        status: "PENDING",
+        orderType: "TAKEAWAY",
+        paymentMethod: payment_method || null,
+        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: merchant_phone }),
+        items: {
+          create: {
+            productId: product.id,
+            quantity: 1,
+            price: amount
+          }
+        }
+      } as any
+    });
+
+    return {
+      success: true,
+      orderId: order.id,
+      totalAmount: finalAmount,
+      paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
+    };
   }
 };
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history, isPublic } = await req.json();
+    const { message, history, isPublic, context } = await req.json();
 
     // If not public, require session
     if (!isPublic) {
@@ -135,7 +219,7 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
-        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, use get_shipping_rates to show delivery options before calling create_customer_order." }]
+        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, use get_shipping_rates to show delivery options before calling create_customer_order. ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -208,9 +292,24 @@ export async function POST(req: NextRequest) {
                   address: { type: "string" },
                   shippingProvider: { type: "string" },
                   shippingService: { type: "string" },
-                  shippingFee: { type: "number" }
+                  shippingFee: { type: "number" },
+                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] }
                 },
                 required: ["slug", "customer_phone", "items", "order_type"]
+              }
+            },
+            {
+              name: "create_merchant_invoice",
+              description: "Create a manual invoice for a customer. Only for merchants.",
+              parameters: {
+                type: "object",
+                properties: {
+                  amount: { type: "number" },
+                  customer_phone: { type: "string" },
+                  merchant_phone: { type: "string" },
+                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] }
+                },
+                required: ["amount", "customer_phone", "merchant_phone"]
               }
             }
           ]

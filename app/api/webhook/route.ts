@@ -337,14 +337,14 @@ export async function POST(req: NextRequest) {
 
       // --- AI AGENT HANDLER ---
       const isAICommand = lowerText?.startsWith("ai ") || lowerText?.startsWith("tanya ") || lowerText?.startsWith("ask ") || lowerText?.startsWith("cari ");
-      const aiSession = await prisma.whatsAppSession.findFirst({
+      let aiSession = await prisma.whatsAppSession.findFirst({
         where: { phoneNumber: from, step: "AI_MODE" }
       });
 
       if (isAICommand || aiSession) {
         // Switch to AI Mode if command used
         if (isAICommand && !aiSession) {
-          await prisma.whatsAppSession.upsert({
+          aiSession = await prisma.whatsAppSession.upsert({
             where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
             update: { step: "AI_MODE", cart: [] },
             create: { phoneNumber: from, storeId: 0, step: "AI_MODE", cart: [] }
@@ -361,22 +361,37 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true });
         }
 
-        // Call the AI Chat API
-        const prompt = isAICommand 
-          ? textBody?.replace(/^(ai|tanya|ask|cari)\s+/i, (match: string) => match.toLowerCase() === "cari " ? "cari " : "") 
-          : textBody;
-        
-        // If the command was JUST "cari ...", we keep "cari" so Gemini knows the intent
-        const finalPrompt = (isAICommand && lowerText?.startsWith("cari ")) ? `cari ${prompt}` : prompt;
+        // Fetch history from session metadata
+        const history = ((aiSession as any)?.metadata as any)?.chatHistory || [];
+        const finalPrompt = textBody;
+
         try {
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
           const res = await fetch(`${baseUrl}/api/ai/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: finalPrompt, isPublic: true })
+            body: JSON.stringify({ 
+              message: finalPrompt, 
+              history, 
+              isPublic: true,
+              context: {
+                phoneNumber: from,
+                channel: "WHATSAPP"
+              }
+            })
           });
           const data = await res.json();
           if (data.text) {
+            // Update session with new history
+            await prisma.whatsAppSession.update({
+              where: { id: aiSession?.id || 0 },
+              data: { 
+                metadata: { 
+                  ...((aiSession as any)?.metadata || {}),
+                  chatHistory: data.history || [] 
+                } 
+              } as any
+            });
             await sendWhatsAppMessage(from, `🤖 *AI Assistant*:\n\n${data.text}\n\n_(Balas 'Exit' untuk berhenti)_`, 0);
           } else {
             await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", 0);
