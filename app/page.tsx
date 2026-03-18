@@ -17,11 +17,13 @@ import {
   Users, 
   ShieldCheck, 
   TrendingUp,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
+import FloatingAssistant from "@/components/ai/FloatingAssistant";
 
 const colorVariants: Record<string, string> = {
   blue: "bg-blue-50 text-blue-600 border-blue-100",
@@ -47,15 +49,15 @@ const translations = {
     title_highlight: "AI-Powered",
     title_end: "WhatsApp Commerce",
     description: "Meet Gercep Assistant: Your 24/7 AI-powered shop manager. Search stores, browse menus, and place orders naturally via WhatsApp or Web Chat.",
-    view_demo: "Chat with AI Demo",
-    create_store: "Get Started Free",
+    view_demo: "Start Order",
+    create_store: "Store Signup",
     easy_setup: "AI Powered",
     instant_launch: "Smart Search",
     easy_payment: "Instant Checkout",
     order_via_whatsapp: "Chat to Order",
     new_order: "AI Order",
     whatsapp_features: "Your customers can search products and order just by chatting with our AI Assistant.",
-    scan_demo: "Scan for AI Assistant",
+    scan_demo: "Scan to try Demo",
     contact_demo: "Book a Demo Call",
     flow_subtitle: "The Future of AI Commerce",
     flow_title_start: "Smart shopping with",
@@ -99,15 +101,15 @@ const translations = {
     title_highlight: "Commerce AI",
     title_end: "Pertama di WhatsApp",
     description: "Kenalan dengan Gercep Assistant: Manajer toko bertenaga AI 24/7. Cari toko, lihat menu, dan pesan secara natural via WhatsApp atau Web Chat.",
-    view_demo: "Chat dengan Demo AI",
-    create_store: "Mulai Gratis Sekarang",
+    view_demo: "Mulai Pesan",
+    create_store: "Daftar Toko",
     easy_setup: "Berbasis AI",
     instant_launch: "Pencarian Pintar",
     easy_payment: "Checkout Instan",
     order_via_whatsapp: "Chat untuk Pesan",
     new_order: "Pesanan AI",
     whatsapp_features: "Pelanggan Anda bisa mencari produk dan pesan hanya dengan chatting dengan AI Assistant kami.",
-    scan_demo: "Scan untuk AI Assistant",
+    scan_demo: "Scan untuk coba Demo",
     contact_demo: "Hubungi kami untuk aktivasi demo",
     flow_subtitle: "Masa Depan AI Commerce",
     flow_title_start: "Belanja pintar dengan",
@@ -148,6 +150,7 @@ const translations = {
 
 export default function Home() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
+  const [aiOpen, setAiOpen] = useState(false);
   const t = translations[lang];
 
   const steps = [
@@ -249,13 +252,13 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-            <Link 
-              href="/demo" 
+            <button 
+              onClick={() => setAiOpen(true)}
               className="group px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/30 flex items-center justify-center gap-2"
             >
               {t.view_demo}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            </button>
             <Link 
               href="/register" 
               className="px-8 py-4 bg-white dark:bg-white/10 text-gray-800 dark:text-white border-2 border-gray-100 dark:border-white/10 rounded-2xl font-bold hover:bg-gray-50 dark:hover:bg-white/20 hover:border-gray-200 dark:hover:border-white/20 transition-all shadow-sm hover:shadow-md flex items-center justify-center"
@@ -513,6 +516,8 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <FloatingAssistant forceOpen={aiOpen} onOpenChange={setAiOpen} />
     </div>
   );
 }

@@ -11,8 +11,19 @@ interface Message {
   paymentUrl?: string;
 }
 
-export default function FloatingAssistant() {
+export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOpen?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpen) {
+      setIsOpen(true);
+    }
+  }, [forceOpen]);
+
+  const toggleOpen = (val: boolean) => {
+    setIsOpen(val);
+    if (onOpenChange) onOpenChange(val);
+  };
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", text: "Halo! Saya Asisten AI Gercep. Mau cari makan atau pesan sesuatu hari ini?" }
   ]);
@@ -132,7 +143,7 @@ export default function FloatingAssistant() {
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
       {/* Chat Window */}
       {isOpen && (
-        <div className="w-[350px] sm:w-[400px] h-[550px] bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed inset-0 sm:inset-auto sm:bottom-24 sm:right-0 w-full sm:w-[400px] h-full sm:h-[550px] bg-white dark:bg-gray-900 sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
           {/* Header */}
           <div className="p-4 bg-primary text-white flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-3">
@@ -147,7 +158,7 @@ export default function FloatingAssistant() {
                 </div>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+            <button onClick={() => toggleOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
               <X size={20} />
             </button>
           </div>
@@ -236,7 +247,7 @@ export default function FloatingAssistant() {
 
       {/* Floating Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => toggleOpen(!isOpen)}
         className={cn(
           "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95",
           isOpen ? "bg-white dark:bg-gray-800 text-primary rotate-90" : "bg-primary text-white"
