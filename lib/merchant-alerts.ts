@@ -16,30 +16,59 @@ export async function getMerchantPhone(storeId: number) {
     where: { id: storeId },
     include: { owner: true }
   });
-  if (!store) return { store: null, phones: [] as string[] };
   
+  if (!store) {
+    console.error(`[MERCHANT_ALERT_ERROR] Store with ID ${storeId} not found`);
+    return { store: null, phones: [] as string[] };
+  }
+  
+  console.log(`[MERCHANT_ALERT_DEBUG] Store ${storeId} found: "${store.name}". Slug: "${store.slug}". WhatsApp in Identity: "${store.whatsapp}"`);
+
   const phones = new Set<string>();
-  if (store.whatsapp) phones.add(store.whatsapp);
-  if (store.owner?.phoneNumber) phones.add(store.owner.phoneNumber);
-  if (store.shippingSenderPhone) phones.add(store.shippingSenderPhone);
   
-  // Also try searching for all users associated with this store (cashiers)
+  // 1. STRONGLY PRIORITIZE store.whatsapp (Store Identity from screenshot)
+  if (store.whatsapp && store.whatsapp.trim().length > 5) {
+    phones.add(store.whatsapp.trim());
+    console.log(`[MERCHANT_ALERT_DEBUG] Added Store Identity Phone: ${store.whatsapp}`);
+  }
+  
+  // 2. Add Owner's Phone
+  if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
+    phones.add(store.owner.phoneNumber.trim());
+  }
+  
+  // 3. Add Shipping Sender Phone
+  if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
+    phones.add(store.shippingSenderPhone.trim());
+  }
+  
+  // 4. Add Staff Phones
   const staff = await prisma.user.findMany({
     where: { workedAtId: store.id },
     select: { phoneNumber: true }
   });
   staff.forEach(u => {
-    if (u.phoneNumber) phones.add(u.phoneNumber);
+    if (u.phoneNumber && u.phoneNumber.trim().length > 5) {
+      phones.add(u.phoneNumber.trim());
+    }
   });
   
   const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
     let clean = String(p).replace(/\D/g, "");
     if (clean.startsWith("0")) clean = "62" + clean.slice(1);
     else if (clean.startsWith("8")) clean = "62" + clean;
+    // Special case for Indonesia numbers starting with 62 but needing consistency
+    if (clean.startsWith("62")) {
+       // Just make sure it's valid digits
+       return clean;
+    }
     return clean;
   });
 
-  return { store, phones: Array.from(new Set(uniquePhones)) };
+  const finalPhones = Array.from(new Set(uniquePhones));
+  console.log(`[MERCHANT_ALERT_DEBUG] Final sanitized merchant phones for store ${storeId}:`, finalPhones);
+
+  return { store, phones: finalPhones };
 }
 
 export async function sendMerchantWhatsApp(storeId: number, text: string) {

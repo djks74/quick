@@ -117,6 +117,8 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   let formattedTo = to.replace(/\D/g, ''); 
   if (formattedTo.startsWith('0')) {
     formattedTo = '62' + formattedTo.substring(1);
+  } else if (formattedTo.startsWith('8')) {
+    formattedTo = '62' + formattedTo;
   }
 
   const resolved = await resolveWhatsAppConfig(storeId);
