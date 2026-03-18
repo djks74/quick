@@ -170,10 +170,19 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       if (usageLogId) {
         await finalizeWaMessageLog(usageLogId, null, "failed");
       }
+      
+      // FALLBACK 1: If CTA Button failed, try plain text
       if (result.usedInteractive && options?.buttonUrl) {
         console.log("[WHATSAPP] CTA Button failed, falling back to text...");
         return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
       }
+
+      // FALLBACK 2: If store-specific sending failed (and it's not already platform), try platform
+      if (storeId > 0) {
+        console.warn(`[WHATSAPP] Store ${storeId} sending failed, falling back to platform...`);
+        return await sendWhatsAppMessage(to, message, 0, options);
+      }
+
       return false;
     }
 

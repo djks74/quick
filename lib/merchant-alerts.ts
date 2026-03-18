@@ -16,28 +16,35 @@ export async function getMerchantPhone(storeId: number) {
     where: { id: storeId },
     include: { owner: true }
   });
-  if (!store) return { store: null, phone: null as string | null };
-  return { store, phone: store.whatsapp || store.owner?.phoneNumber || null };
+  if (!store) return { store: null, phones: [] as string[] };
+  
+  const phones = new Set<string>();
+  if (store.whatsapp) phones.add(store.whatsapp);
+  if (store.owner?.phoneNumber) phones.add(store.owner.phoneNumber);
+  if (store.shippingSenderPhone) phones.add(store.shippingSenderPhone);
+  
+  return { store, phones: Array.from(phones) };
 }
 
 export async function sendMerchantWhatsApp(storeId: number, text: string) {
-  const { store, phone } = await getMerchantPhone(storeId);
-  if (!store || !phone) return false;
+  const { store, phones } = await getMerchantPhone(storeId);
+  if (!store || phones.length === 0) return false;
   
-  // 1. Try sending using store config (if billable)
-  let sent = await sendWhatsAppMessage(phone, text, store.id);
-  if (sent) return true;
+  let overallSuccess = false;
 
-  // 2. If failed, try sending using platform config (storeId 0)
-  sent = await sendWhatsAppMessage(phone, text, 0);
-  if (sent) return true;
+  for (const phone of phones) {
+    // 1. Try sending using store config (if billable)
+    let sent = await sendWhatsAppMessage(phone, text, store.id);
+    
+    // 2. If failed, try sending using platform config (storeId 0)
+    if (!sent) {
+      sent = await sendWhatsAppMessage(phone, text, 0);
+    }
 
-  // 3. If failed and owner phone is different, try sending to owner using platform config
-  if (store.owner?.phoneNumber && store.owner.phoneNumber !== phone) {
-    return sendWhatsAppMessage(store.owner.phoneNumber, text, 0);
+    if (sent) overallSuccess = true;
   }
 
-  return false;
+  return overallSuccess;
 }
 
 export function resolvePaymentUrl(orderId: number, paymentUrl?: string | null) {
