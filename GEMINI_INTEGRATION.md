@@ -25,47 +25,37 @@ You can copy and paste these JSON definitions into Google AI Studio or use them 
 ```
 
 ### Create Manual Invoice
+... (existing) ...
+
+### Search Stores
 ```json
 {
-  "name": "create_manual_invoice",
-  "description": "Create a new payment link (invoice) for a customer.",
+  "name": "search_stores",
+  "description": "Find restaurants or stores by name or food category.",
   "parameters": {
     "type": "object",
     "properties": {
-      "slug": {
+      "query": {
         "type": "string",
-        "description": "The store slug."
-      },
-      "customer_phone": {
-        "type": "string",
-        "description": "Customer WhatsApp number (e.g., 08123456789)."
-      },
-      "amount": {
-        "type": "number",
-        "description": "The invoice amount in IDR."
-      },
-      "payment_method": {
-        "type": "string",
-        "enum": ["qris", "bank_transfer"],
-        "description": "The requested payment gateway."
+        "description": "Search keyword (e.g., 'Pizza', 'Coffee', 'Burger')."
       }
     },
-    "required": ["slug", "customer_phone", "amount", "payment_method"]
+    "required": ["query"]
   }
 }
 ```
 
-### List Recent Orders
+### List Store Products
 ```json
 {
-  "name": "list_recent_orders",
-  "description": "Get the last 10 orders for a store.",
+  "name": "get_store_products",
+  "description": "Get the menu/products list for a specific store slug.",
   "parameters": {
     "type": "object",
     "properties": {
       "slug": {
         "type": "string",
-        "description": "The store slug."
+        "description": "The unique slug of the store."
       }
     },
     "required": ["slug"]
@@ -73,21 +63,62 @@ You can copy and paste these JSON definitions into Google AI Studio or use them 
 }
 ```
 
+### Create Customer Order
+```json
+{
+  "name": "create_customer_order",
+  "description": "Place an order for a user at a specific store.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "slug": {
+        "type": "string",
+        "description": "Store slug."
+      },
+      "customer_phone": {
+        "type": "string",
+        "description": "User's WhatsApp number."
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "productId": { "type": "integer" },
+            "quantity": { "type": "integer" }
+          }
+        },
+        "description": "List of product IDs and quantities."
+      },
+      "order_type": {
+        "type": "string",
+        "enum": ["DINE_IN", "TAKEAWAY"],
+        "description": "Order type."
+      },
+      "address": {
+        "type": "string",
+        "description": "Delivery address (if takeaway)."
+      }
+    },
+    "required": ["slug", "customer_phone", "items", "order_type"]
+  }
+}
+```
+
 ## 2. API Endpoints (Base URL: https://gercep.click/api/ai)
+... (existing) ...
 
-All requests must include an `X-API-KEY` in the header for authentication.
+### POST /search-stores
+**Input**: `{ "query": "pizza" }`  
+**Output**: Array of `{ name, slug, image }`
 
-### POST /stats
+### POST /store-products
 **Input**: `{ "slug": "store-slug" }`  
-**Output**: Sales data, pending orders, and wallet balance.
+**Output**: Array of `{ id, name, price, category }`
 
-### POST /invoice
-**Input**: `{ "slug": "store-slug", "phone": "0812...", "amount": 50000, "method": "qris" }`  
-**Output**: `{ "orderId": 123, "paymentUrl": "https://..." }`
-
-### POST /orders
-**Input**: `{ "slug": "store-slug" }`  
-**Output**: Array of recent order objects with status and total.
+### POST /create-order
+**Input**: `{ "slug", "customer_phone", "items": [{ productId, quantity }], "order_type", "address" }`  
+**Output**: `{ success, orderId, paymentUrl }`
 
 ---
 
