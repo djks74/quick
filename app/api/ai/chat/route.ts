@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
           ]
         }
       ]
-    } as any);
+    } as any, { apiVersion: "v1" });
 
     const chat = model.startChat({
       history: history || [],
