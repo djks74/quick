@@ -81,7 +81,10 @@ export async function processPayment(orderId: number, amount: number, customerPh
   }
 
   if (method === 'midtrans') {
-    if (!settings.enableMidtrans) throw new Error("Midtrans payment is disabled for this store.");
+    const hasPlatformKeys = Boolean(platform?.midtransServerKey && platform?.midtransClientKey);
+    if (!settings.enableMidtrans && !hasPlatformKeys) {
+      throw new Error("Midtrans payment is disabled for this store and platform keys are not configured.");
+    }
     
     let serverKey = platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET;
     let clientKey = platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY;

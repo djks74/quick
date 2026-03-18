@@ -267,22 +267,20 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
 
     let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
-    if (store.enableMidtrans) {
-      try {
-        const payment = await processPayment(
-          order.id,
-          finalAmount,
-          cleanPhone,
-          "midtrans",
-          store.id,
-          payment_method
-        );
-        if (payment.paymentUrl) {
-          paymentUrl = payment.paymentUrl;
-        }
-      } catch (e) {
-        console.error("[AI_ORDER_PAYMENT_ERROR]", e);
+    try {
+      const payment = await processPayment(
+        order.id,
+        finalAmount,
+        cleanPhone,
+        "midtrans",
+        store.id,
+        payment_method
+      );
+      if (payment.paymentUrl) {
+        paymentUrl = payment.paymentUrl;
       }
+    } catch (e) {
+      console.error("[AI_ORDER_PAYMENT_ERROR]", e);
     }
 
     const breakdown = [
@@ -447,22 +445,20 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
 
     let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
-    if (store.enableMidtrans) {
-      try {
-        const payment = await processPayment(
-          order.id,
-          finalAmount,
-          cleanCustomerPhone,
-          "midtrans",
-          store.id,
-          payment_method
-        );
-        if (payment.paymentUrl) {
-          paymentUrl = payment.paymentUrl;
-        }
-      } catch (e) {
-        console.error("[AI_INVOICE_PAYMENT_ERROR]", e);
+    try {
+      const payment = await processPayment(
+        order.id,
+        finalAmount,
+        cleanCustomerPhone,
+        "midtrans",
+        store.id,
+        payment_method
+      );
+      if (payment.paymentUrl) {
+        paymentUrl = payment.paymentUrl;
       }
+    } catch (e) {
+      console.error("[AI_INVOICE_PAYMENT_ERROR]", e);
     }
 
     const breakdown = [
