@@ -116,13 +116,19 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
-    const options = await getShippingQuoteFromBiteship({
+    const quotes = await getShippingQuoteFromBiteship({
       store,
       destinationAddress: address,
       destinationLatitude: latitude,
       destinationLongitude: longitude,
       weightGrams: weightGrams || 1000
     });
+    
+    // Format options as a clear string list for the AI to present
+    const options = quotes.map((q: any) => 
+      `- ${q.courier_name} (${q.courier_service_name}): Rp ${new Intl.NumberFormat('id-ID').format(q.price)}`
+    ).join("\n");
+
     return { options };
   },
 
@@ -139,7 +145,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       const lineTotal = product.price * item.quantity;
       itemsAmount += lineTotal;
       orderItemsData.push({ productId: product.id, quantity: item.quantity, price: product.price });
-      details.push(`${product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(lineTotal)}`);
+      details.push(`📦 ${product.name}\n   ${item.quantity}x @ Rp ${new Intl.NumberFormat('id-ID').format(product.price)} = Rp ${new Intl.NumberFormat('id-ID').format(lineTotal)}`);
     }
 
     const taxAmount = itemsAmount * (store.taxPercent / 100);
@@ -177,15 +183,18 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
 
     const breakdown = [
-      `🛒 *Detail Pesanan #${order.id}*`,
+      `🛒 *GERCEP ORDER #${order.id}*`,
+      `--------------------------------`,
       ...details,
-      `------------------`,
+      `--------------------------------`,
+      `💵 *RINGKASAN BIAYA*`,
       `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(itemsAmount)}`,
       taxAmount > 0 ? `Pajak (${store.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}` : null,
       serviceCharge > 0 ? `Service (${store.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}` : null,
-      shippingCost > 0 ? `Ongkir (${shippingProvider}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
-      paymentFee > 0 ? `Biaya (${payment_method}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
-      `*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
+      shippingCost > 0 ? `🚛 Ongkir (${shippingProvider}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
+      paymentFee > 0 ? `💳 Biaya (${payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
+      `--------------------------------`,
+      `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
     ].filter(Boolean).join("\n");
 
     return {
