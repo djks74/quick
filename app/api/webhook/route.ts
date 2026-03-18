@@ -7,6 +7,7 @@ import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
 import { resolvePaymentUrl } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
+import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 
 type WaLang = "id" | "en";
 
@@ -295,6 +296,8 @@ export async function POST(req: NextRequest) {
 
     const message = value?.messages?.[0];
     if (!message) return NextResponse.json({ success: true });
+
+    await ensureStoreSettingsSchema();
 
     // 2. FAST DEDUPLICATION: Memory Check
     if (message.id) {

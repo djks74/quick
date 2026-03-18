@@ -105,6 +105,14 @@ export async function ensureStoreSettingsSchema() {
         ALTER TABLE "Order"
         ADD COLUMN IF NOT EXISTS "shippingEta" TEXT;
       `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "WhatsAppSession"
+        ADD COLUMN IF NOT EXISTS "metadata" JSONB;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "notes" TEXT;
+      `);
     })().catch((error) => {
       console.error("ensureStoreSettingsSchema error:", error);
     });
