@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   if (apiKey !== AI_API_KEY) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { slug, customer_phone, items, order_type, address } = await req.json();
+    const { slug, customer_phone, items, order_type, address, shippingFee, payment_method } = await req.json();
 
     if (!slug || !customer_phone || !items || !order_type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
 
-    // 1. Calculate Total Amount
-    let totalAmount = 0;
+    // 1. Calculate Items Total
+    let itemsAmount = 0;
     const orderItemsData = [];
 
     for (const item of items) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       if (!product) {
         return NextResponse.json({ error: `Product ID ${item.productId} not found for this store` }, { status: 400 });
       }
-      totalAmount += product.price * item.quantity;
+      itemsAmount += product.price * item.quantity;
       orderItemsData.push({
         productId: product.id,
         quantity: item.quantity,
@@ -37,15 +37,35 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. Create Order
+    // 2. Calculate Taxes and Fees
+    const taxAmount = itemsAmount * (store.taxPercent / 100);
+    const serviceCharge = itemsAmount * (store.serviceChargePercent / 100);
+    const shippingCost = Number(shippingFee) || 0;
+    
+    let paymentFee = 0;
+    const subtotal = itemsAmount + taxAmount + serviceCharge + shippingCost;
+    if (payment_method === "qris") {
+      paymentFee = subtotal * 0.01;
+    } else if (payment_method === "bank_transfer") {
+      paymentFee = 5000;
+    }
+
+    const finalTotal = subtotal + paymentFee;
+
+    // 3. Create Order
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
         customerPhone: customer_phone,
-        totalAmount: totalAmount,
+        totalAmount: finalTotal,
+        taxAmount,
+        serviceCharge,
+        paymentFee,
         status: "PENDING",
         orderType: order_type, // DINE_IN or TAKEAWAY
+        paymentMethod: payment_method || null,
         shippingAddress: address || null,
+        shippingCost,
         notes: JSON.stringify({ source: "AI_GEMINI_USER_ORDER" }),
         items: {
           create: orderItemsData
@@ -53,29 +73,32 @@ export async function POST(req: NextRequest) {
       } as any
     });
 
-    // 3. Generate Payment Link (Default to Midtrans if enabled)
+    // 4. Generate Payment Link
     let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
-    if (store.enableMidtrans) {
-      try {
-        const payment = await processPayment(
-          order.id,
-          totalAmount,
-          customer_phone,
-          "midtrans",
-          store.id
-        );
-        if ((payment as any).paymentUrl) {
-          paymentUrl = (payment as any).paymentUrl;
-        }
-      } catch (e) {
-        console.error("[AI_ORDER_PAYMENT_ERROR]", e);
+    try {
+      const payment = await processPayment(
+        order.id,
+        finalTotal,
+        customer_phone,
+        "midtrans",
+        store.id,
+        payment_method
+      );
+      if ((payment as any).paymentUrl) {
+        paymentUrl = (payment as any).paymentUrl;
       }
+    } catch (e) {
+      console.error("[AI_ORDER_PAYMENT_ERROR]", e);
     }
 
     return NextResponse.json({
       success: true,
       orderId: order.id,
-      totalAmount,
+      totalAmount: finalTotal,
+      taxAmount,
+      serviceCharge,
+      paymentFee,
+      shippingCost,
       paymentUrl
     });
 

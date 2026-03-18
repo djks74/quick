@@ -155,4 +155,31 @@ All requests must include an `X-API-KEY` in the header for authentication.
 3. In the right sidebar, find **Tools** > **Functions**.
 4. Click **Add Function** and paste the JSON array above.
 5. In your prompt, you can now say: *"Gemini, check the sales for my store 'pasar-segar' and create a 50k invoice for 0877..."*
-6. Gemini will generate the JSON call, which your server will execute.
+
+---
+
+## 4. How to Connect in the Gemini App (Mobile/Web)
+
+To use Gercep directly inside the consumer Gemini App (gemini.google.com), you need to create a **Gem** with an **OpenAPI Extension**.
+
+### Step A: Prepare the OpenAPI Spec
+The platform automatically hosts an OpenAPI specification at:
+`https://gercep.click/openapi.yaml`
+
+### Step B: Create a Custom Gem
+1. Open [Gemini](https://gemini.google.com/).
+2. Click on **Gems Manager** (or "Create a Gem").
+3. Give it a name like **"Gercep Assistant"**.
+4. In **Instructions**, paste:
+   > "You are the Gercep Platform Assistant. You help users search for stores, browse menus, and create orders. When a user asks for food, search for stores first. If they want to order, show them the products and then use create_order. Always ask for their WhatsApp number and preferred payment method (QRIS or Bank Transfer)."
+5. Click **Add Tool** or **Extensions**.
+6. Select **OpenAPI** (if available) or paste the content of `openapi.yaml`.
+7. For **Authentication**, choose **API Key**:
+   - **Key Name**: `X-API-KEY`
+   - **Value**: `gercep_ai_secret_123` (or your configured key)
+
+### Step C: Chat!
+You can now talk to your Gem on your phone:
+- *"Cari nasi uduk yang enak"*
+- *"Pesan 2 porsi dari resto 'nasi-uduk-bahari' ke nomor 08123456789 via QRIS"*
+- Gemini will execute the tool call, create the order, and give you the payment link.

@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { slug: { contains: query, mode: "insensitive" } },
-          { categories: { some: { name: { contains: query, mode: "insensitive" } } } }
+          { categories: { some: { name: { contains: query, mode: "insensitive" } } } },
+          { products: { some: { name: { contains: query, mode: "insensitive" } } } }
         ]
       },
       select: {

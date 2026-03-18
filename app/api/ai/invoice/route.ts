@@ -41,31 +41,32 @@ export async function POST(req: NextRequest) {
     }
 
     // Apply Fee Logic (QRIS 1%, Bank 5000)
-    let fee = 0;
-    let finalAmount = Number(amount);
+    let paymentFee = 0;
+    const itemsAmount = Number(amount);
     if (payment_method === "qris") {
-      fee = Math.ceil(finalAmount * 0.01);
-      finalAmount += fee;
+      paymentFee = itemsAmount * 0.01;
     } else if (payment_method === "bank_transfer") {
-      fee = 5000;
-      finalAmount += fee;
+      paymentFee = 5000;
     }
+
+    const finalTotal = itemsAmount + paymentFee;
 
     // Create Order
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
         customerPhone: customer_phone,
-        totalAmount: finalAmount,
-        paymentFee: fee,
+        totalAmount: finalTotal,
+        paymentFee,
         status: "PENDING",
         orderType: "TAKEAWAY",
+        paymentMethod: payment_method || null,
         notes: JSON.stringify({ kind: "MERCHANT_INVOICE", source: "AI_GEMINI" }),
         items: {
           create: {
             productId: product.id,
             quantity: 1,
-            price: finalAmount
+            price: itemsAmount
           }
         }
       } as any
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
     // Generate Payment Link via Midtrans
     const payment = await processPayment(
       order.id, 
-      finalAmount, 
+      finalTotal, 
       customer_phone, 
       "midtrans", 
       store.id, 
@@ -84,8 +85,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       orderId: order.id,
-      finalAmount,
-      fee,
+      finalTotal,
+      paymentFee,
       paymentUrl: (payment as any).paymentUrl || `https://gercep.click/checkout/pay/${order.id}`
     });
 

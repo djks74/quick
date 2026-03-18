@@ -57,20 +57,69 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       include: {
         products: {
           where: { category: { not: "System" } },
-          select: { id: true, name: true, price: true, category: true }
+          select: { id: true, name: true, price: true, category: true, variations: true, stock: true }
         }
       }
     });
     if (!store) return { error: "Store not found" };
-    return { products: store.products };
+    return { 
+      products: store.products,
+      taxPercent: store.taxPercent,
+      serviceChargePercent: store.serviceChargePercent
+    };
   },
 
-  async get_shipping_rates({ slug, address, weightGrams }: any) {
+  async update_product_price({ slug, productName, newPrice, variationName }: any) {
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) return { error: "Store not found" };
+    
+    const products = await prisma.product.findMany({
+      where: { storeId: store.id },
+      select: { id: true, name: true, variations: true, price: true }
+    });
+    
+    const product = products.find(p => p.name.toLowerCase().includes(productName.toLowerCase()));
+    if (!product) return { error: `Product "${productName}" not found.` };
+    
+    if (variationName && product.variations && Array.isArray(product.variations)) {
+      const variations = product.variations as any[];
+      const idx = variations.findIndex(v => v.name.toLowerCase().includes(variationName.toLowerCase()));
+      if (idx >= 0) {
+        variations[idx].price = Number(newPrice);
+        await prisma.product.update({ where: { id: product.id }, data: { variations } });
+        return { success: true, message: `Updated ${product.name} (${variations[idx].name}) to ${newPrice}` };
+      }
+    }
+    
+    await prisma.product.update({ where: { id: product.id }, data: { price: Number(newPrice) } });
+    return { success: true, message: `Updated ${product.name} price to ${newPrice}` };
+  },
+
+  async add_new_product({ slug, name, price, category }: any) {
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) return { error: "Store not found" };
+    
+    const product = await prisma.product.create({
+      data: {
+        storeId: store.id,
+        name,
+        price: Number(price),
+        category: category || "General",
+        stock: 100,
+        description: "Added via AI Assistant"
+      }
+    });
+    return { success: true, productId: product.id, message: `Added new product ${name}` };
+  },
+
+  async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
     const options = await getShippingQuoteFromBiteship({
       store,
       destinationAddress: address,
+      destinationLatitude: latitude,
+      destinationLongitude: longitude,
       weightGrams: weightGrams || 1000
     });
     return { options };
@@ -82,24 +131,29 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     let itemsAmount = 0;
     const orderItemsData = [];
+    const details = [];
     for (const item of items) {
       const product = await prisma.product.findUnique({ where: { id: item.productId, storeId: store.id } });
       if (!product) return { error: `Product ID ${item.productId} not found` };
-      itemsAmount += product.price * item.quantity;
+      const lineTotal = product.price * item.quantity;
+      itemsAmount += lineTotal;
       orderItemsData.push({ productId: product.id, quantity: item.quantity, price: product.price });
+      details.push(`${product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(lineTotal)}`);
     }
 
     const taxAmount = itemsAmount * (store.taxPercent / 100);
     const serviceCharge = itemsAmount * (store.serviceChargePercent / 100);
+    const shippingCost = Number(shippingFee) || 0;
     
     let paymentFee = 0;
+    const subtotal = itemsAmount + taxAmount + serviceCharge + shippingCost;
     if (payment_method === "qris") {
-      paymentFee = (itemsAmount + taxAmount + serviceCharge + (Number(shippingFee) || 0)) * 0.01;
+      paymentFee = subtotal * 0.01;
     } else if (payment_method === "bank_transfer") {
       paymentFee = 5000;
     }
 
-    const finalAmount = itemsAmount + taxAmount + serviceCharge + (Number(shippingFee) || 0) + paymentFee;
+    const finalAmount = subtotal + paymentFee;
 
     const order = await prisma.order.create({
       data: {
@@ -115,16 +169,29 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         shippingAddress: address || null,
         shippingProvider: shippingProvider || null,
         shippingService: shippingService || null,
-        shippingCost: shippingFee || 0,
+        shippingCost,
         notes: JSON.stringify({ source: "AI_CHAT_ASSISTANT" }),
         items: { create: orderItemsData }
       } as any
     });
 
+    const breakdown = [
+      `🛒 *Detail Pesanan #${order.id}*`,
+      ...details,
+      `------------------`,
+      `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(itemsAmount)}`,
+      taxAmount > 0 ? `Pajak (${store.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}` : null,
+      serviceCharge > 0 ? `Service (${store.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}` : null,
+      shippingCost > 0 ? `Ongkir (${shippingProvider}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
+      paymentFee > 0 ? `Biaya (${payment_method}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
+      `*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
+    ].filter(Boolean).join("\n");
+
     return {
       success: true,
       orderId: order.id,
       totalAmount: finalAmount,
+      breakdown,
       paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
     };
   },
@@ -216,10 +283,23 @@ export async function POST(req: NextRequest) {
       model: "gemini-3-flash-preview",
     }, { apiVersion: "v1beta" });
 
+    // Determine if the user is a Merchant for the system instruction
+    let userContextInfo = "";
+    if (context?.phoneNumber) {
+      const cleanPhone = context.phoneNumber.replace(/\D/g, "");
+      const user = await prisma.user.findFirst({
+        where: { phoneNumber: { contains: cleanPhone } },
+        include: { stores: true }
+      });
+      if (user && user.role === "MERCHANT" && user.stores.length > 0) {
+        userContextInfo = ` The user is a MERCHANT of the store '${user.stores[0].name}' (slug: ${user.stores[0].slug}). They can use merchant tools like 'get_store_stats' and 'create_merchant_invoice'. If they ask to 'tambah produk' or 'update harga', use the tools to help them.`;
+      }
+    }
+
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, use get_shipping_rates to show delivery options before calling create_customer_order. ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, you MUST ask the user to share their location or address and provide delivery options (GOSEND/JNE) via 'get_shipping_rates' before calling 'create_customer_order'. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -259,15 +339,45 @@ export async function POST(req: NextRequest) {
             },
             {
               name: "get_shipping_rates",
-              description: "Get delivery options and costs for an address.",
+              description: "Get delivery options and costs for an address. Requires a full address or coordinates.",
               parameters: {
                 type: "object",
                 properties: {
                   slug: { type: "string" },
                   address: { type: "string" },
+                  latitude: { type: "number" },
+                  longitude: { type: "number" },
                   weightGrams: { type: "integer" }
                 },
-                required: ["slug", "address"]
+                required: ["slug"]
+              }
+            },
+            {
+              name: "update_product_price",
+              description: "Update the price of an existing product or variation. Only for merchants.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  productName: { type: "string" },
+                  newPrice: { type: "number" },
+                  variationName: { type: "string" }
+                },
+                required: ["slug", "productName", "newPrice"]
+              }
+            },
+            {
+              name: "add_new_product",
+              description: "Add a new product to the store menu. Only for merchants.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  name: { type: "string" },
+                  price: { type: "number" },
+                  category: { type: "string" }
+                },
+                required: ["slug", "name", "price"]
               }
             },
             {

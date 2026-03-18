@@ -1,0 +1,228 @@
+openapi: 3.0.0
+info:
+  title: Gercep Platform AI API
+  description: API for searching stores, browsing menus, and creating orders on the Gercep platform.
+  version: 1.0.0
+servers:
+  - url: https://gercep.click/api/ai
+    description: Production server
+paths:
+  /search-stores:
+    post:
+      summary: Search for restaurants or stores
+      description: Find restaurants or stores by name, food category, or product name.
+      operationId: searchStores
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Search keyword (e.g., 'Pizza', 'Coffee', 'Nasi Uduk').
+              required:
+                - query
+      responses:
+        '200':
+          description: List of matching stores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stores:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        slug:
+                          type: string
+  /store-products:
+    post:
+      summary: Get menu items for a store
+      description: Retrieve the list of products/menu items for a specific store slug.
+      operationId: getStoreProducts
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+                  description: The unique slug of the store.
+              required:
+                - slug
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    price:
+                      type: number
+                    category:
+                      type: string
+  /create-order:
+    post:
+      summary: Create a customer order
+      description: Place an order for a customer. Requires store slug, phone, and items.
+      operationId: createOrder
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+                customer_phone:
+                  type: string
+                  description: User's WhatsApp number.
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId:
+                        type: integer
+                      quantity:
+                        type: integer
+                order_type:
+                  type: string
+                  enum: [DINE_IN, TAKEAWAY]
+                address:
+                  type: string
+                  description: Delivery address for takeaway.
+                shippingFee:
+                  type: number
+                  description: Optional shipping fee from get_shipping_rates.
+                payment_method:
+                  type: string
+                  enum: [qris, bank_transfer]
+              required:
+                - slug
+                - customer_phone
+                - items
+                - order_type
+      responses:
+        '200':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  orderId:
+                    type: integer
+                  totalAmount:
+                    type: number
+                  paymentUrl:
+                    type: string
+  /invoice:
+    post:
+      summary: Create a manual merchant invoice
+      description: Generate a payment link for a specific amount. Only for merchants.
+      operationId: createInvoice
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+                customer_phone:
+                  type: string
+                amount:
+                  type: number
+                payment_method:
+                  type: string
+                  enum: [qris, bank_transfer]
+              required:
+                - slug
+                - customer_phone
+                - amount
+                - payment_method
+      responses:
+        '200':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  orderId:
+                    type: integer
+                  finalTotal:
+                    type: number
+                  paymentUrl:
+                    type: string
+  /stats:
+    post:
+      summary: Get store sales statistics
+      description: Retrieve sales and wallet balance for a merchant's store.
+      operationId: getStoreStats
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slug:
+                  type: string
+              required:
+                - slug
+      responses:
+        '200':
+          description: Store statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storeName:
+                    type: string
+                  totalSales:
+                    type: number
+                  walletBalance:
+                    type: number
+                  waBalance:
+                    type: number
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY

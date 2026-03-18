@@ -376,7 +376,8 @@ export async function POST(req: NextRequest) {
               isPublic: true,
               context: {
                 phoneNumber: from,
-                channel: "WHATSAPP"
+                channel: "WHATSAPP",
+                location: (message as any).location // Pass location if available
               }
             })
           });
@@ -392,7 +393,18 @@ export async function POST(req: NextRequest) {
                 } 
               } as any
             });
-            await sendWhatsAppMessage(from, `🤖 *AI Assistant*:\n\n${data.text}\n\n_(Balas 'Exit' untuk berhenti)_`, 0);
+
+            // If there's a breakdown, show it before the main text
+            const responseText = data.breakdown 
+              ? `${data.breakdown}\n\n${data.text}`
+              : data.text;
+
+            // If there's a payment link, add a button
+            const options = data.paymentUrl 
+              ? { buttonText: "Pay Now", buttonUrl: data.paymentUrl }
+              : undefined;
+
+            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, 0, options);
           } else {
             await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", 0);
           }
