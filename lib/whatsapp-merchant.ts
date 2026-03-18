@@ -133,12 +133,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   if (lowerText === "mau kirim barang" || lowerText === "kirim barang") {
-    if (merchantSession) {
-      await prisma.whatsAppSession.update({
-        where: { id: merchantSession.id },
-        data: { step: "MERCHANT_SHIP_RECIPIENT_NAME", cart: [] }
-      });
-    }
+    await prisma.whatsAppSession.upsert({
+      where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+      update: { step: "MERCHANT_SHIP_RECIPIENT_NAME", cart: [] },
+      create: { phoneNumber: from, storeId: 0, step: "MERCHANT_SHIP_RECIPIENT_NAME", cart: [] }
+    });
     await sendWhatsAppMessage(from, "📦 *Kirim Barang*\n\nSiapa nama penerimanya?", store.id);
     return;
   }
@@ -171,7 +170,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         where: { id: merchantSession.id },
         data: { step: "MERCHANT_SHIP_ADDRESS", cart: updatedCart }
       });
-      await sendWhatsAppMessage(from, `📱 Nomor: *${phone}*\n\nKe mana alamat tujuannya? (Kirim teks alamat atau Share Location)`, store.id);
+      await sendWhatsAppMessage(from, `📱 Nomor: *${phone}*\n\n📍 Ke mana alamat tujuannya?\nKirim *teks alamat + kode pos (5 digit)* atau *Share Location*.`, store.id);
       return;
     }
 
@@ -190,18 +189,23 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         }
       } else {
         address = textBody.trim();
+        // If providing text, clear previous coordinates to avoid mismatch
+        lat = undefined;
+        lng = undefined;
       }
 
       if (!address && !location) {
-        await sendWhatsAppMessage(from, "❌ Alamat belum terbaca. Tolong ketik alamat lengkap + kode pos (5 digit).", store.id);
+        await sendWhatsAppMessage(from, "❌ Alamat belum terbaca.\nSilakan kirim *alamat lengkap + kode pos (5 digit)* atau *Share Location*.", store.id);
         return;
       }
 
       const hasPostal = /\b\d{5}\b/.test(address);
       const updatedCart = [...cart];
-      if (address) updatedCart[0].address = address;
-      if (lat) updatedCart[0].lat = lat;
-      if (lng) updatedCart[0].lng = lng;
+      
+      // Update data - if providing new text, ensure lat/lng are updated/cleared
+      updatedCart[0].address = address || updatedCart[0].address || "";
+      updatedCart[0].lat = lat; 
+      updatedCart[0].lng = lng;
 
       // If we got location but no specific text address or no postal code, ask for detail
       if (location && (!address || !hasPostal)) {
@@ -217,7 +221,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       if (!hasPostal) {
-        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat agar ongkir akurat.", store.id);
+        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat agar ongkir akurat (contoh: 40111).", store.id);
         return;
       }
 
@@ -410,11 +414,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           if (d.shippingStatus !== "courier_selected") {
             await prisma.whatsAppSession.update({
               where: { id: merchantSession.id },
-              data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: info?.lat, lng: info?.lng }] }
+              data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: undefined, lng: undefined }] }
             });
             await sendWhatsAppMessage(
               from,
-              "❌ Kurir belum bisa dipilih otomatis.\nPastikan alamat lengkap + kode pos benar, lalu kirim ulang alamatnya.",
+              "❌ Kurir belum bisa dipilih otomatis.\nSilakan kirim ulang *alamat lengkap + kode pos (5 digit)* atau *Share Location*.",
               store.id
             );
             return;
@@ -487,9 +491,9 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       if (choice === "edit" || choice === "ubah") {
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
-          data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: info?.lat, lng: info?.lng }] }
+          data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: undefined, lng: undefined }] }
         });
-        await sendWhatsAppMessage(from, "📍 Silakan kirim ulang alamat lengkap + kode pos.", store.id);
+        await sendWhatsAppMessage(from, "📍 Ke mana alamat tujuannya?\nKirim *teks alamat + kode pos (5 digit)* atau *Share Location*.", store.id);
         return;
       }
 

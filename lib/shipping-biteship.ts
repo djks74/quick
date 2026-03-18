@@ -152,7 +152,12 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     if (pricing.length === 0) {
        console.log("BITESHIP_NO_RATES_RETURNED", {
           payload: JSON.stringify(payload),
-          rawResponse: JSON.stringify(data)
+          rawResponse: JSON.stringify(data),
+          storeSettings: {
+            jne: store?.shippingEnableJne,
+            gosend: store?.shippingEnableGosend,
+            jneOnly: store?.shippingJneOnly
+          }
        });
     }
 
