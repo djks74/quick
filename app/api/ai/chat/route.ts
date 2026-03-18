@@ -111,6 +111,10 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.0-flash",
+    }, { apiVersion: "v1beta" });
+
+    const chat = model.startChat({
+      history: history || [],
       systemInstruction: "You are the Gercep Platform Assistant. You help manage stores and orders. Use the available tools to find information. If a user wants to order, first search_stores, then get_store_products, then create_customer_order.",
       tools: [
         {
@@ -174,11 +178,7 @@ export async function POST(req: NextRequest) {
             }
           ]
         }
-      ]
-    } as any, { apiVersion: "v1beta" });
-
-    const chat = model.startChat({
-      history: history || [],
+      ] as any,
       generationConfig: { maxOutputTokens: 1000 }
     });
 
