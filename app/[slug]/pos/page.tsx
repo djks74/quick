@@ -112,7 +112,6 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
         slug: store.slug,
         enableManualTransfer: store.enableManualTransfer,
         enableMidtrans: store.enableMidtrans,
-        enableXendit: store.enableXendit,
         bankAccount: store.bankAccount,
         taxPercent: store.taxPercent,
         serviceChargePercent: store.serviceChargePercent,

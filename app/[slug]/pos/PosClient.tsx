@@ -227,9 +227,9 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const legacyFallbackMethods = useMemo<PosPaymentMethod[]>(() => {
     const methods: PosPaymentMethod[] = [{ id: "cash", name: "Cash", mode: "cash" }];
     if (store.enableManualTransfer) methods.push({ id: "transfer", name: "Bank Transfer", mode: "transfer" });
-    if (store.enableMidtrans || store.enableXendit) methods.push({ id: "qris", name: "QRIS / E-Wallet", mode: "qris" });
+    if (store.enableMidtrans) methods.push({ id: "qris", name: "QRIS / E-Wallet", mode: "qris" });
     return methods;
-  }, [store.enableManualTransfer, store.enableMidtrans, store.enableXendit]);
+  }, [store.enableManualTransfer, store.enableMidtrans]);
 
   const paymentMethods = configuredPosMethods.length > 0 ? configuredPosMethods : legacyFallbackMethods;
   const activePaymentMethod = paymentMethods.find((method) => method.id === paymentMethod) || paymentMethods[0];

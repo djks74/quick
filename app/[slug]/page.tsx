@@ -64,7 +64,6 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     feePaidBy: store.feePaidBy,
     enableWhatsApp: store.enableWhatsApp,
     enableMidtrans: store.enableMidtrans,
-    enableXendit: store.enableXendit,
     enableManualTransfer: store.enableManualTransfer,
     enableTakeawayDelivery: store.enableTakeawayDelivery,
     shippingEnableJne: store.shippingEnableJne,

@@ -191,7 +191,6 @@ export async function updateStoreSettings(storeId: number, data: any) {
           themeColor: data.themeColor,
           enableWhatsApp: data.enableWhatsApp,
           enableMidtrans: data.enableMidtrans,
-          enableXendit: data.enableXendit,
           enableManualTransfer: data.enableManualTransfer,
           posEnabled: data.posEnabled ?? data.enablePos,
           taxPercent: data.taxPercent,

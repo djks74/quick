@@ -186,6 +186,7 @@ model Order {
   shippingAddress String?
   shippingCost Float       @default(0.0)
   shippingEta String?
+  notes       String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]
@@ -228,6 +229,7 @@ model WhatsAppSession {
   step        String   @default("START")
   tableNumber String?
   cart        Json?    @default("[]")
+  metadata    Json?
   updatedAt   DateTime @updatedAt
 
   @@unique([phoneNumber, storeId]) // Session per user per store
