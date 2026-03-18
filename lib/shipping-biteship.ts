@@ -128,6 +128,10 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     ]
   };
 
+  if (store?.shippingEnableGosend && (!payload.origin_latitude || !payload.origin_longitude)) {
+     console.warn("BITESHIP_MISSING_ORIGIN_COORDINATES", { storeId: store.id, storeName: store.name });
+  }
+
   try {
     const response = await fetch("https://api.biteship.com/v1/rates/couriers", {
       method: "POST",

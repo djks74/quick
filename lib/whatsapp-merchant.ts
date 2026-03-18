@@ -179,6 +179,9 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       let lat: number | undefined;
       let lng: number | undefined;
 
+      const updatedCart = [...cart];
+      const existingInfo = updatedCart[0] || {};
+
       if (location) {
         lat = location.latitude;
         lng = location.longitude;
@@ -189,9 +192,12 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         }
       } else {
         address = textBody.trim();
-        // If providing text, clear previous coordinates to avoid mismatch
-        lat = undefined;
-        lng = undefined;
+        // Preserve coordinates if they already exist in the session and we're just getting text
+        lat = existingInfo.lat;
+        lng = existingInfo.lng;
+        
+        // However, if the text address is completely different, we might want to clear coords.
+        // For now, let's assume if they are in this step, they are providing the text for the location.
       }
 
       if (!address && !location) {
@@ -200,12 +206,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       const hasPostal = /\b\d{5}\b/.test(address);
-      const updatedCart = [...cart];
       
-      // Update data - if providing new text, ensure lat/lng are updated/cleared
-      updatedCart[0].address = address || updatedCart[0].address || "";
-      updatedCart[0].lat = lat; 
-      updatedCart[0].lng = lng;
+      // Update data
+      updatedCart[0].address = address || existingInfo.address || "";
+      if (lat !== undefined) updatedCart[0].lat = lat; 
+      if (lng !== undefined) updatedCart[0].lng = lng;
 
       // If we got location but no specific text address or no postal code, ask for detail
       if (location && (!address || !hasPostal)) {
@@ -214,14 +219,14 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           data: { step: "MERCHANT_SHIP_ADDRESS_DETAIL", cart: updatedCart }
         });
         const prompt = !address 
-          ? "📍 Lokasi diterima. Sekarang ketik *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\""
-          : "📍 Lokasi diterima, tapi alamat kurang lengkap. Mohon ketik *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"";
+          ? "📍 Lokasi diterima.\nSekarang ketik *alamat lengkap + kode pos (5 digit)*.\n\nContoh: \"Jl. Sudirman No 1, Bandung 40111\""
+          : "📍 Lokasi diterima, tapi alamat kurang lengkap.\nMohon ketik *alamat lengkap + kode pos (5 digit)*.\n\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"";
         await sendWhatsAppMessage(from, prompt, store.id);
         return;
       }
 
       if (!hasPostal) {
-        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat agar ongkir akurat (contoh: 40111).", store.id);
+        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat agar ongkir akurat (contoh: 40111).\n\nAtau kamu bisa *Share Location* ulang.", store.id);
         return;
       }
 
@@ -398,7 +403,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           order,
           items: [{ name: itemName, quantity: 1, price: 0, weight }],
           destinationCoordinate:
-            typeof info?.lat === "number" && typeof info?.lng === "number"
+            info?.lat && info?.lng
               ? { latitude: Number(info.lat), longitude: Number(info.lng) }
               : undefined
         });
