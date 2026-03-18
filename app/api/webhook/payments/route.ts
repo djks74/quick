@@ -82,9 +82,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Update Order
+    let profit = 0;
+    if (status === 'PAID') {
+      const paymentType = String(body.payment_type || body.paymentType || '').toLowerCase();
+      // Calculate Platform Profit (Gercep Profit)
+      if (paymentType.includes('qris')) {
+        // QRIS: 1% fee added, 0.7% Midtrans, 0.3% Gercep profit
+        profit = Math.floor(Number(gross_amount || 0) * 0.003);
+      } else if (paymentType.includes('bank_transfer') || paymentType.includes('va')) {
+        // Bank: Rp 5.000 fee added, Rp 4.000 Midtrans, Rp 1.000 Gercep profit
+        profit = 1000;
+      }
+    }
+
     let order = await prisma.order.update({
       where: { id },
-      data: { status }
+      data: { 
+        status,
+        transactionFee: profit > 0 ? profit : undefined 
+      }
     });
 
     if (status === 'CANCELLED') {

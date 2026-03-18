@@ -24,7 +24,9 @@ export default async function AnalyticsPage() {
     totalOrders,
     orderStats,
     recentTrafficCount,
-    allOrders
+    allOrders,
+    enterpriseStoreCount,
+    totalWaMessages
   ] = await Promise.all([
     prisma.store.count(),
     prisma.user.count(),
@@ -42,14 +44,25 @@ export default async function AnalyticsPage() {
       take: 10,
       orderBy: { createdAt: "desc" },
       include: { store: true }
+    }),
+    prisma.store.count({
+      where: { subscriptionPlan: { in: ["PRO", "ENTERPRISE"] } }
+    }),
+    prisma.waUsageLog.count({
+      where: { type: "MESSAGE" }
     })
   ]);
 
   const formatMoney = (val: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Math.round(val || 0))}`;
 
+  const paymentProfit = orderStats._sum.transactionFee || 0;
+  const enterpriseProfit = enterpriseStoreCount * 249000;
+  const waProfit = totalWaMessages * 200; // 350 charge - 150 cost
+  const totalPlatformProfit = paymentProfit + enterpriseProfit + waProfit;
+
   const stats = [
     { label: "Total Revenue (Paid)", value: formatMoney(orderStats._sum.totalAmount || 0), icon: DollarSign, color: "text-green-600 bg-green-100 dark:bg-green-900/20" },
-    { label: "Platform Profit", value: formatMoney(orderStats._sum.transactionFee || 0), icon: TrendingUp, color: "text-blue-600 bg-blue-100 dark:bg-blue-900/20" },
+    { label: "Platform Profit", value: formatMoney(totalPlatformProfit), icon: TrendingUp, color: "text-blue-600 bg-blue-100 dark:bg-blue-900/20" },
     { label: "Total Orders", value: totalOrders.toString(), icon: ShoppingBag, color: "text-orange-600 bg-orange-100 dark:bg-orange-900/20" },
     { label: "24h Traffic", value: recentTrafficCount.toString(), icon: Activity, color: "text-purple-600 bg-blue-100 dark:bg-purple-900/20" },
   ];
@@ -119,6 +132,31 @@ export default async function AnalyticsPage() {
 
           {/* Quick Stats */}
           <div className="space-y-6">
+             <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
+                <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2">
+                   <TrendingUp className="w-5 h-5 text-primary" />
+                   Profit Breakdown
+                </h3>
+                <div className="space-y-4">
+                   <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Payments (0.3% / 1k)</span>
+                      <span className="font-bold text-green-600">{formatMoney(paymentProfit)}</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Enterprise Subs (Rp 249k)</span>
+                      <span className="font-bold text-blue-600">{formatMoney(enterpriseProfit)}</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">WA Profit (Rp 200/msg)</span>
+                      <span className="font-bold text-purple-600">{formatMoney(waProfit)}</span>
+                   </div>
+                   <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                      <span className="text-sm font-bold dark:text-white">Total Platform Profit</span>
+                      <span className="font-bold text-lg text-primary">{formatMoney(totalPlatformProfit)}</span>
+                   </div>
+                </div>
+             </div>
+
              <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
                 <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2">
                    <Users className="w-5 h-5 text-primary" />
