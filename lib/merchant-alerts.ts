@@ -73,47 +73,33 @@ export async function getMerchantPhone(storeId: number) {
 
 export async function sendMerchantWhatsApp(storeId: number, text: string) {
   const { store, phones } = await getMerchantPhone(storeId);
-  console.log(`[MERCHANT_ALERT] Starting alerts for store ${storeId} (${store?.name}). Target phones:`, phones);
+  console.log(`[MERCHANT_ALERT] Starting alerts for store ${storeId} (${store?.name}). Recipients:`, phones);
   
   if (!store || phones.length === 0) {
-    console.warn(`[MERCHANT_ALERT] No phones found for store ${storeId}`);
+    console.warn(`[MERCHANT_ALERT] No recipients found for store ${storeId}`);
     return false;
   }
   
   let overallSuccess = false;
 
   for (const phone of phones) {
-    console.log(`[MERCHANT_ALERT] processing phone: ${phone}`);
+    console.log(`[MERCHANT_ALERT] Attempting send to ${phone} using store account ${storeId}`);
     
-    // Check if the recipient phone is the same as the store's bot number (Store Identity)
-    // We normalize both to ensure a match even if formats differ (08... vs 62...)
-    const cleanStoreWa = store.whatsapp ? store.whatsapp.replace(/\D/g, '').replace(/^0/, '62') : "";
-    const cleanTargetPhone = phone.replace(/\D/g, '').replace(/^0/, '62');
-    
-    console.log(`[MERCHANT_ALERT_COMPARE] Recipient: "${cleanTargetPhone}", StoreBot: "${cleanStoreWa}"`);
-    
-    const isStoreSelf = cleanStoreWa && cleanTargetPhone === cleanStoreWa;
-    
-    if (isStoreSelf) {
-      console.log(`[MERCHANT_ALERT] Detected send-to-self (${cleanTargetPhone}). Forcing platform account (storeId 0) for delivery.`);
-      const sent = await sendWhatsAppMessage(phone, text, 0);
-      if (sent) overallSuccess = true;
-      continue;
-    }
-
-    // Otherwise, try sending from the store's own account
+    // 1. Always try the store's own account first as requested by the user
+    // (They want it to come from the store's identity/bot)
     let sent = await sendWhatsAppMessage(phone, text, store.id);
     
-    // If it failed, try sending from the platform account (storeId 0)
+    // 2. If it fails, then and only then try the platform account as a backup
     if (!sent) {
-      console.log(`[MERCHANT_ALERT] Store account send failed for ${phone}, retrying with platform account (storeId 0)`);
+      console.log(`[MERCHANT_ALERT] Store account send failed for ${phone}, trying platform fallback (storeId 0)`);
       sent = await sendWhatsAppMessage(phone, text, 0);
     }
 
     if (sent) {
       overallSuccess = true;
+      console.log(`[MERCHANT_ALERT] Successfully sent to ${phone}`);
     } else {
-      console.error(`[MERCHANT_ALERT] FAILED all attempts for ${phone}`);
+      console.error(`[MERCHANT_ALERT] FAILED to send to ${phone} from both store and platform accounts`);
     }
   }
 

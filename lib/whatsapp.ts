@@ -66,10 +66,12 @@ async function dispatchWhatsAppMessage(formattedTo: string, message: string, tok
 
   if (!res.ok) {
     const errText = await res.text();
+    console.error(`[WHATSAPP_API_ERROR] Status: ${res.status}. Body: ${errText}`);
     return { ok: false as const, error: errText, usedInteractive: body.type === "interactive" };
   }
 
   const payload = await res.json().catch(() => ({}));
+  console.log(`[WHATSAPP_API_SUCCESS] Message ID: ${payload?.messages?.[0]?.id}`);
   const messageId = payload?.messages?.[0]?.id || null;
   return { ok: true as const, messageId };
 }
