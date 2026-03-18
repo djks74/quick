@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { processPayment } from "@/lib/payment";
 
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
@@ -193,6 +194,25 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       } as any
     });
 
+    let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+    if (store.enableMidtrans) {
+      try {
+        const payment = await processPayment(
+          order.id,
+          finalAmount,
+          cleanPhone,
+          "midtrans",
+          store.id,
+          payment_method
+        );
+        if (payment.paymentUrl) {
+          paymentUrl = payment.paymentUrl;
+        }
+      } catch (e) {
+        console.error("[AI_ORDER_PAYMENT_ERROR]", e);
+      }
+    }
+
     const breakdown = [
       `🛒 *GERCEP ORDER #${order.id}*`,
       `--------------------------------`,
@@ -213,7 +233,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       orderId: order.id,
       totalAmount: finalAmount,
       breakdown,
-      paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
+      paymentUrl: paymentUrl
     };
   },
 
@@ -280,14 +300,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       ...details,
       `--------------------------------`,
       `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}`,
-      `Link Bayar: https://gercep.click/checkout/pay/${order.id}`
+      `Link Bayar: ${order.paymentUrl || `https://gercep.click/checkout/pay/${order.id}`}`
     ].join("\n");
 
     return { 
       success: true, 
       orderId: order.id, 
       breakdown, 
-      paymentUrl: `https://gercep.click/checkout/pay/${order.id}`,
+      paymentUrl: order.paymentUrl || `https://gercep.click/checkout/pay/${order.id}`,
       status: order.status
     };
   },
@@ -347,11 +367,30 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       } as any
     });
 
+    let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+    if (store.enableMidtrans) {
+      try {
+        const payment = await processPayment(
+          order.id,
+          finalAmount,
+          cleanCustomerPhone,
+          "midtrans",
+          store.id,
+          payment_method
+        );
+        if (payment.paymentUrl) {
+          paymentUrl = payment.paymentUrl;
+        }
+      } catch (e) {
+        console.error("[AI_INVOICE_PAYMENT_ERROR]", e);
+      }
+    }
+
     return {
       success: true,
       orderId: order.id,
       totalAmount: finalAmount,
-      paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
+      paymentUrl: paymentUrl
     };
   }
 };
