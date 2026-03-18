@@ -254,6 +254,44 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { success: true, message: "Order details sent to WhatsApp." };
   },
 
+  async get_last_order_by_phone({ phoneNumber }: { phoneNumber: string }) {
+    const cleanPhone = normalizePhoneNumber(phoneNumber);
+    const order = await prisma.order.findFirst({
+      where: { customerPhone: cleanPhone },
+      orderBy: { createdAt: "desc" },
+      include: { 
+        store: { select: { name: true, slug: true } },
+        items: { include: { product: { select: { name: true } } } }
+      }
+    });
+
+    if (!order) return { error: "No orders found for this phone number." };
+
+    const details = order.items.map(item => 
+      `${item.product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)}`
+    );
+
+    const breakdown = [
+      `🛒 *Order Terakhir #${order.id}*`,
+      `Toko: ${order.store.name}`,
+      `Tanggal: ${new Date(order.createdAt).toLocaleString('id-ID')}`,
+      `Status: ${order.status}`,
+      `--------------------------------`,
+      ...details,
+      `--------------------------------`,
+      `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}`,
+      `Link Bayar: https://gercep.click/checkout/pay/${order.id}`
+    ].join("\n");
+
+    return { 
+      success: true, 
+      orderId: order.id, 
+      breakdown, 
+      paymentUrl: `https://gercep.click/checkout/pay/${order.id}`,
+      status: order.status
+    };
+  },
+
   async create_merchant_invoice({ amount, customer_phone, merchant_phone, payment_method }: any) {
     const cleanCustomerPhone = normalizePhoneNumber(customer_phone);
     const cleanMerchantPhone = normalizePhoneNumber(merchant_phone);
@@ -499,6 +537,17 @@ Once an order is created:
                 },
                 required: ["orderId", "phoneNumber"]
               }
+            },
+            {
+              name: "get_last_order_by_phone",
+              description: "Get the latest order details for a specific customer phone number.",
+              parameters: {
+                type: "object",
+                properties: {
+                  phoneNumber: { type: "string", description: "The customer's WhatsApp number." }
+                },
+                required: ["phoneNumber"]
+              }
             }
           ]
         }
@@ -534,6 +583,10 @@ Once an order is created:
           
           // Capture structured data for the response
           if (call.name === "create_customer_order" && data.success) {
+            finalBreakdown = data.breakdown;
+            finalPaymentUrl = data.paymentUrl;
+          }
+          if (call.name === "get_last_order_by_phone" && data.success) {
             finalBreakdown = data.breakdown;
             finalPaymentUrl = data.paymentUrl;
           }
