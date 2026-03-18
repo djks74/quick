@@ -1474,6 +1474,11 @@ export async function POST(req: NextRequest) {
           metadata: { orderType: "TAKEAWAY", shippingProvider: selected?.provider || ctx.provider, shippingCost, shippingAddress: addressText }
         }).catch(() => null);
 
+        await sendMerchantWhatsApp(
+          targetStore.id,
+          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${selected?.provider || ctx.provider} ${selected?.service || ""}`
+        ).catch(() => null);
+
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
         cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });

@@ -23,25 +23,45 @@ export async function getMerchantPhone(storeId: number) {
   if (store.owner?.phoneNumber) phones.add(store.owner.phoneNumber);
   if (store.shippingSenderPhone) phones.add(store.shippingSenderPhone);
   
-  return { store, phones: Array.from(phones) };
+  // Also try searching for all users associated with this store (cashiers)
+  const staff = await prisma.user.findMany({
+    where: { workedAtId: store.id },
+    select: { phoneNumber: true }
+  });
+  staff.forEach(u => {
+    if (u.phoneNumber) phones.add(u.phoneNumber);
+  });
+  
+  const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
+    let clean = String(p).replace(/\D/g, "");
+    if (clean.startsWith("0")) clean = "62" + clean.slice(1);
+    return clean;
+  });
+
+  return { store, phones: Array.from(new Set(uniquePhones)) };
 }
 
 export async function sendMerchantWhatsApp(storeId: number, text: string) {
   const { store, phones } = await getMerchantPhone(storeId);
-  if (!store || phones.length === 0) return false;
+  console.log(`[MERCHANT_ALERT] Sending to store ${storeId} (${store?.name}). Target phones:`, phones);
+  
+  if (!store || phones.length === 0) {
+    console.warn(`[MERCHANT_ALERT] No phones found for store ${storeId}`);
+    return false;
+  }
   
   let overallSuccess = false;
 
   for (const phone of phones) {
-    // 1. Try sending using store config (if billable)
-    let sent = await sendWhatsAppMessage(phone, text, store.id);
-    
-    // 2. If failed, try sending using platform config (storeId 0)
-    if (!sent) {
-      sent = await sendWhatsAppMessage(phone, text, 0);
+    // sendWhatsAppMessage already has internal fallback to platform (storeId 0)
+    console.log(`[MERCHANT_ALERT] Attempting send to ${phone} for store ${storeId}`);
+    const sent = await sendWhatsAppMessage(phone, text, store.id);
+    if (sent) {
+      console.log(`[MERCHANT_ALERT] Success sending to ${phone}`);
+      overallSuccess = true;
+    } else {
+      console.error(`[MERCHANT_ALERT] Failed sending to ${phone}`);
     }
-
-    if (sent) overallSuccess = true;
   }
 
   return overallSuccess;

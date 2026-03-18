@@ -5,6 +5,8 @@ import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
 
+import { sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+
 export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
@@ -80,6 +82,11 @@ export async function POST(req: NextRequest) {
         tableNumber: customerInfo?.tableNumber || null
       }
     });
+
+    await sendMerchantWhatsApp(
+      parseInt(storeId),
+      `🛒 *Order Pending (Web)*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${customerInfo?.phone || "GUEST"}${customerInfo?.tableNumber ? `\nMeja: ${customerInfo.tableNumber}` : ""}\nTotal: Rp ${Math.round(total).toLocaleString("id-ID")}`
+    ).catch(() => null);
 
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.
