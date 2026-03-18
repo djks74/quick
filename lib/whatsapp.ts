@@ -148,11 +148,13 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     );
     if (!reserve.ok) {
       if (reserve.reason === "INSUFFICIENT_BALANCE") {
-        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}`);
+        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}. Falling back to platform account.`);
+        // FALLBACK: If store has no credit, try sending from platform (storeId 0)
+        return await sendWhatsAppMessage(to, message, 0, options);
       } else {
-        console.warn(`[WHATSAPP_CREDIT] Failed reserving credit for store ${storeId}`);
+        console.warn(`[WHATSAPP_CREDIT] Failed reserving credit for store ${storeId}. Falling back to platform.`);
+        return await sendWhatsAppMessage(to, message, 0, options);
       }
-      return false;
     }
     usageLogId = reserve.logId;
     if (reserve.shouldAlert && reserve.alertPhone) {
@@ -248,7 +250,8 @@ export async function sendWhatsAppTemplateMessage(
       externalRef
     );
     if (!reserve.ok) {
-      return false;
+      console.warn(`[WHATSAPP_CREDIT] Credit reservation failed for template. Falling back to platform.`);
+      return await sendWhatsAppTemplateMessage(to, 0, templateName, languageCode);
     }
     usageLogId = reserve.logId;
   }

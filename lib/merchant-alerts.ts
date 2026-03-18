@@ -35,6 +35,7 @@ export async function getMerchantPhone(storeId: number) {
   const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
     let clean = String(p).replace(/\D/g, "");
     if (clean.startsWith("0")) clean = "62" + clean.slice(1);
+    else if (clean.startsWith("8")) clean = "62" + clean;
     return clean;
   });
 
