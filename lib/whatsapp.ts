@@ -141,6 +141,7 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   const maskedToken = token.length > 10 ? `${token.substring(0, 5)}...${token.substring(token.length - 5)}` : "SHORT_TOKEN";
   console.log('SEND_WHATSAPP_DEBUG:', { 
     to, 
+    formattedTo,
     storeId, 
     phoneNumberId, 
     token: maskedToken, 
