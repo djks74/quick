@@ -71,7 +71,7 @@ export async function getMerchantPhone(storeId: number) {
   return { store, phones: finalPhones };
 }
 
-export async function sendMerchantWhatsApp(storeId: number, text: string) {
+export async function sendMerchantWhatsApp(storeId: number, text: string, orderId?: number) {
   const { store, phones } = await getMerchantPhone(storeId);
   console.log(`[MERCHANT_ALERT] Starting alerts for store ${storeId} (${store?.name}). Recipients:`, phones);
   
@@ -84,12 +84,9 @@ export async function sendMerchantWhatsApp(storeId: number, text: string) {
 
   for (const phone of phones) {
     console.log(`[MERCHANT_ALERT] Attempting send to ${phone} using store account ${storeId}`);
-    
-    // 1. Always try the store's own account first as requested by the user
-    // (They want it to come from the store's identity/bot)
+
     let sent = await sendWhatsAppMessage(phone, text, store.id);
-    
-    // 2. If it fails, then and only then try the platform account as a backup
+
     if (!sent) {
       console.log(`[MERCHANT_ALERT] Store account send failed for ${phone}, trying platform fallback (storeId 0)`);
       sent = await sendWhatsAppMessage(phone, text, 0);
