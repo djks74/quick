@@ -132,20 +132,36 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
-    const quotes = await getShippingQuoteFromBiteship({
-      store,
-      destinationAddress: address,
-      destinationLatitude: latitude,
-      destinationLongitude: longitude,
-      weightGrams: weightGrams || 1000
-    });
     
-    // Format options as a clear string list for the AI to present
-    const options = quotes.map((q: any) => 
-      `- ${q.courier_name} (${q.courier_service_name}): Rp ${new Intl.NumberFormat('id-ID').format(q.price)}`
-    ).join("\n");
+    try {
+      const quotes = await getShippingQuoteFromBiteship({
+        store,
+        destinationAddress: address,
+        destinationLatitude: latitude,
+        destinationLongitude: longitude,
+        weightGrams: weightGrams || 1000
+      });
+      
+      if (!quotes || quotes.length === 0) {
+        return { 
+          error: "No shipping options available for this location.",
+          suggestManual: true 
+        };
+      }
 
-    return { options };
+      // Format options as a clear string list for the AI to present
+      const options = quotes.map((q: any) => 
+        `- ${q.provider} ${q.service}: Rp ${new Intl.NumberFormat('id-ID').format(q.fee)}`
+      ).join("\n");
+
+      return { options };
+    } catch (e) {
+      console.error("[AI_SHIPPING_ERROR]", e);
+      return { 
+        error: "Technical issue calculating rates. Please try again or provide a more specific address.",
+        suggestManual: true
+      };
+    }
   },
 
   async create_customer_order({ slug, customer_phone, items, order_type, address, shippingProvider, shippingService, shippingFee, payment_method }: any) {

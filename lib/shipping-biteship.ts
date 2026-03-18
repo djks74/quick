@@ -175,10 +175,12 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
         if (provider === "GOSEND" && (!store?.shippingEnableGosend || store?.shippingJneOnly)) return null;
         
         const fee = Number(item?.price || item?.final_price || item?.amount || 0);
+        if (isNaN(fee)) return null;
+        
         return {
           provider,
           service: String(item?.courier_service_name || item?.courier_type || item?.service_type || "-"),
-          fee: Number.isFinite(fee) ? fee : 0,
+          fee: fee,
           eta: parseEta(item),
           type: provider === "GOSEND" ? "instant" : "regular"
         } as ShippingOption;
