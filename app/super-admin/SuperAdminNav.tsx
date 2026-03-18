@@ -3,7 +3,7 @@
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Users, Store, Settings, Wallet } from "lucide-react";
+import { LogOut, Users, Store, Settings, Wallet, BarChart3, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -24,6 +24,30 @@ export default function SuperAdminNav({ totalStores }: { totalStores?: number })
         >
           <Store className="w-4 h-4 mr-2" />
           Stores
+        </Link>
+        <Link 
+          href="/super-admin/analytics" 
+          className={cn(
+            "px-4 py-2 rounded-md text-sm font-medium flex items-center transition-colors",
+            pathname === "/super-admin/analytics" 
+              ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" 
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
+          )}
+        >
+          <BarChart3 className="w-4 h-4 mr-2" />
+          Analytics
+        </Link>
+        <Link 
+          href="/super-admin/traffic" 
+          className={cn(
+            "px-4 py-2 rounded-md text-sm font-medium flex items-center transition-colors",
+            pathname === "/super-admin/traffic" 
+              ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" 
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
+          )}
+        >
+          <Globe className="w-4 h-4 mr-2" />
+          Traffic
         </Link>
         <Link 
           href="/super-admin/withdrawals" 

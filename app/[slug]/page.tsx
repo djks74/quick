@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import DigitalMenuClient from "@/components/DigitalMenuClient";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
+import { logTraffic } from "@/lib/traffic";
 
 export const revalidate = 60; // Revalidate every minute (ISR)
 
@@ -17,6 +18,9 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   if (!store) {
     notFound();
   }
+
+  // Log Web Traffic
+  await logTraffic(store.id, "WEB");
 
   const productsData = await prisma.product.findMany({
     where: { storeId: store.id },

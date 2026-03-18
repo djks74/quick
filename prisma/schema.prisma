@@ -289,6 +289,31 @@ model Table {
   @@unique([storeId, identifier])
 }
 
+model TrafficLog {
+  id          Int      @id @default(autoincrement())
+  storeId     Int?
+  path        String
+  ip          String?
+  userAgent   String?
+  source      String   @default("WEB") // WEB, WHATSAPP
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([ip])
+}
+
+model AnalyticsDaily {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @unique
+  totalOrders   Int      @default(0)
+  totalSales    Float    @default(0)
+  totalProfit   Float    @default(0) // Platform fee
+  totalTraffic  Int      @default(0)
+  metadata      Json?
+  updatedAt     DateTime @updatedAt
+}
+
 model PlatformSettings {
   key                String   @id @default("default")
   whatsappToken      String?
