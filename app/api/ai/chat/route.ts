@@ -292,16 +292,23 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     );
 
     const breakdown = [
-      `🛒 *Order Terakhir #${order.id}*`,
+      `🛒 *ORDER TERAKHIR #${order.id}*`,
       `Toko: ${order.store.name}`,
       `Tanggal: ${new Date(order.createdAt).toLocaleString('id-ID')}`,
       `Status: ${order.status}`,
       `--------------------------------`,
       ...details,
       `--------------------------------`,
-      `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}`,
+      `💵 *RINGKASAN BIAYA*`,
+      `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount - order.taxAmount - order.serviceCharge - order.paymentFee - (order.shippingCost || 0))}`,
+      order.taxAmount > 0 ? `Pajak: Rp ${new Intl.NumberFormat('id-ID').format(order.taxAmount)}` : null,
+      order.serviceCharge > 0 ? `Service: Rp ${new Intl.NumberFormat('id-ID').format(order.serviceCharge)}` : null,
+      order.shippingCost > 0 ? `🚛 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost)}` : null,
+      order.paymentFee > 0 ? `💳 Biaya (${order.paymentMethod?.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
+      `--------------------------------`,
+      `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`,
       `Link Bayar: ${order.paymentUrl || `https://gercep.click/checkout/pay/${order.id}`}`
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     return { 
       success: true, 
@@ -386,10 +393,21 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     }
 
+    const breakdown = [
+      `🛒 *TAGIHAN MANUAL #${order.id}*`,
+      `--------------------------------`,
+      `🏷️ Deskripsi: Tagihan Manual`,
+      `💰 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
+      `💳 Biaya (${payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}`,
+      `--------------------------------`,
+      `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
+    ].join("\n");
+
     return {
       success: true,
       orderId: order.id,
       totalAmount: finalAmount,
+      breakdown,
       paymentUrl: paymentUrl
     };
   }
@@ -630,6 +648,7 @@ Once an order is created:
             finalPaymentUrl = data.paymentUrl;
           }
           if (call.name === "create_merchant_invoice" && data.success) {
+            finalBreakdown = data.breakdown;
             finalPaymentUrl = data.paymentUrl;
           }
         }
