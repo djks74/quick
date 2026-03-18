@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
     }, { apiVersion: "v1beta" });
 
     const chat = model.startChat({
