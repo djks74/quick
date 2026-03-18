@@ -15,7 +15,7 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
   let phoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID || null;
   let useEnterpriseConfig = false;
 
-  if (store?.slug !== "demo" && store?.subscriptionPlan === "ENTERPRISE" && store.whatsappToken && store.whatsappPhoneId) {
+  if (store?.slug !== "demo" && store?.whatsappToken && store?.whatsappPhoneId) {
     token = store.whatsappToken;
     phoneNumberId = store.whatsappPhoneId;
     useEnterpriseConfig = true;
