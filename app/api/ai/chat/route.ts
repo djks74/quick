@@ -357,6 +357,36 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     if (!order) return { error: "No orders found for this phone number." };
 
+    let resolvedPaymentUrl = order.paymentUrl || null;
+    const isInternalCheckoutLink = Boolean(resolvedPaymentUrl && resolvedPaymentUrl.includes("/checkout/pay/"));
+    if ((!resolvedPaymentUrl || isInternalCheckoutLink) && order.status === "PENDING") {
+      try {
+        const preferredType =
+          order.paymentMethod === "qris" || order.paymentMethod === "bank_transfer"
+            ? order.paymentMethod
+            : undefined;
+        const payment = await processPayment(
+          order.id,
+          order.totalAmount,
+          cleanPhone,
+          "midtrans",
+          order.storeId,
+          preferredType
+        );
+        if (payment?.paymentUrl) {
+          resolvedPaymentUrl = payment.paymentUrl;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { paymentUrl: resolvedPaymentUrl }
+          });
+        }
+      } catch (e) {
+        console.error("[AI_LAST_ORDER_PAYMENT_URL_ERROR]", e);
+      }
+    }
+
+    const fallbackCheckoutUrl = `https://gercep.click/checkout/pay/${order.id}`;
+
     const details = order.items.map(item => 
       `${item.product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)}`
     );
@@ -377,14 +407,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       order.paymentFee > 0 ? `💳 Biaya (${order.paymentMethod?.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
       `--------------------------------`,
       `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`,
-      `Link Bayar: ${order.paymentUrl || `https://gercep.click/checkout/pay/${order.id}`}`
+      `Link Bayar: ${resolvedPaymentUrl || fallbackCheckoutUrl}`
     ].filter(Boolean).join("\n");
 
     return { 
       success: true, 
       orderId: order.id, 
       breakdown, 
-      paymentUrl: order.paymentUrl || `https://gercep.click/checkout/pay/${order.id}`,
+      paymentUrl: resolvedPaymentUrl || fallbackCheckoutUrl,
       status: order.status
     };
   },
