@@ -723,6 +723,8 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         await sendWhatsAppMessage(from, msg, store.id, { buttonText: "Bayar QRIS", buttonUrl: paymentUrl });
         
         if (info.isInvoice) {
+          // Delay 3 seconds before sending to customer to prevent Meta blocking
+          await new Promise(r => setTimeout(r, 3000));
           await sendWhatsAppMessage(order.customerPhone, msg, store.id, { buttonText: "Bayar QRIS", buttonUrl: paymentUrl });
         }
         return;
@@ -748,6 +750,8 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         await sendWhatsAppMessage(from, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
 
         if (info.isInvoice) {
+          // Delay 3 seconds before sending to customer to prevent Meta blocking
+          await new Promise(r => setTimeout(r, 3000));
           await sendWhatsAppMessage(order.customerPhone, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
         }
         return;

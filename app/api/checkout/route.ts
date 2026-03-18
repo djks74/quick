@@ -84,9 +84,12 @@ export async function POST(req: NextRequest) {
     });
 
     await sendMerchantWhatsApp(
-      parseInt(storeId),
-      `🛒 *Order Pending (Web)*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${customerInfo?.phone || "GUEST"}${customerInfo?.tableNumber ? `\nMeja: ${customerInfo.tableNumber}` : ""}\nTotal: Rp ${Math.round(total).toLocaleString("id-ID")}`
-    ).catch(() => null);
+       parseInt(storeId),
+       `🛒 *Order Pending (Web)*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${customerInfo?.phone || "GUEST"}${customerInfo?.tableNumber ? `\nMeja: ${customerInfo.tableNumber}` : ""}\nTotal: Rp ${Math.round(total).toLocaleString("id-ID")}`
+     ).catch(() => null);
+
+    // Delay 3 seconds before continuing (likely leading to payment process or more notifications)
+    await new Promise(r => setTimeout(r, 3000));
 
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.

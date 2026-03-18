@@ -15,9 +15,11 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
   let phoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID || null;
   let useEnterpriseConfig = false;
 
-  if (store?.slug !== "demo" && store?.whatsappToken && store?.whatsappPhoneId) {
-    token = store.whatsappToken;
-    phoneNumberId = store.whatsappPhoneId;
+  if (store?.slug !== "demo" && 
+      store?.whatsappToken && store.whatsappToken.trim().length > 10 && 
+      store?.whatsappPhoneId && store.whatsappPhoneId.trim().length > 5) {
+    token = store.whatsappToken.trim();
+    phoneNumberId = store.whatsappPhoneId.trim();
     useEnterpriseConfig = true;
   }
 
@@ -121,8 +123,16 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   const token = resolved.token;
   const phoneNumberId = resolved.phoneNumberId;
   
-  if (!token) {
-    console.log(`[WHATSAPP_MOCK] (No Token Configured) Sending to ${to}: ${message}`);
+  if (!token || !phoneNumberId) {
+    const errorMsg = `[WHATSAPP_CONFIG_ERROR] Missing ${!token ? 'Token' : ''} ${!phoneNumberId ? 'PhoneID' : ''} for store ${storeId}`;
+    console.error(errorMsg);
+    // If it's a store-specific config failure, we should definitely fallback to platform if possible
+    if (storeId > 0) {
+      console.log(`[WHATSAPP_FALLBACK] Falling back to platform because store ${storeId} config is incomplete`);
+      return await sendWhatsAppMessage(to, message, 0, options);
+    }
+    // If even platform config is missing, we can't do anything but mock
+    console.log(`[WHATSAPP_MOCK] Sending to ${to}: ${message}`);
     return true;
   }
 
@@ -135,11 +145,6 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     useEnterprise: resolved.useEnterpriseConfig,
     options 
   });
-
-  if (!phoneNumberId) {
-    console.log(`[WHATSAPP_MOCK] (No Phone ID) Sending to ${to}: ${message}`);
-    return true;
-  }
 
   const isBillable = storeId > 0 && !resolved.useEnterpriseConfig;
   const externalRef = `WA-${storeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

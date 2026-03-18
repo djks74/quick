@@ -361,6 +361,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}${isTakeaway ? `\nKurir: ${shippingProvider || "-"} ${shippingService || "-"}` : ""}`
     ).catch(() => null);
 
+    // Delay 3 seconds before customer notif to prevent Meta blocking
+    await new Promise(r => setTimeout(r, 3000));
+
     await sendWhatsAppMessage(
       cleanPhone,
       `⏳ Order #${order.id} masih *menunggu pembayaran*.\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.`,
