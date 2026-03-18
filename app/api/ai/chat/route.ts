@@ -152,7 +152,20 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
 
       // Format options as a clear string list for the AI to present
-      const options = quotes.map((q: any) => 
+      const enabledProviders: string[] = [];
+      if (store.shippingEnableJne) enabledProviders.push("JNE");
+      if (store.shippingEnableGosend && !store.shippingJneOnly) enabledProviders.push("GOSEND");
+
+      const filtered = quotes.filter((q: any) => enabledProviders.includes(q.provider));
+
+      if (filtered.length === 0) {
+        return { 
+          error: `Metode pengiriman tidak tersedia untuk rute ini. Toko hanya mendukung: ${enabledProviders.join(", ") || "Pickup"}.`,
+          suggestManual: true 
+        };
+      }
+
+      const options = filtered.map((q: any) => 
         `- ${q.provider} ${q.service}: Rp ${new Intl.NumberFormat('id-ID').format(q.fee)}`
       ).join("\n");
 
