@@ -290,7 +290,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
 
     const breakdown = [
-      `🛒 *GERCEP ORDER #${order.id}*`,
+      `🛒 *${store.name} ORDER #${order.id}*`,
       `--------------------------------`,
       ...details,
       `--------------------------------`,
@@ -327,7 +327,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     );
 
     const breakdown = [
-      `🛒 *Gercep Order #${order.id}*`,
+      `🛒 *${order.store.name} ORDER #${order.id}*`,
       ...details,
       `------------------`,
       `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount - order.taxAmount - order.serviceCharge - order.paymentFee - order.shippingCost)}`,
@@ -532,7 +532,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
 
     const breakdown = [
-      `🛒 *TAGIHAN MANUAL #${order.id}*`,
+      `🛒 *${store.name} TAGIHAN MANUAL #${order.id}*`,
       `--------------------------------`,
       `🏷️ Deskripsi: Tagihan Manual`,
       `💰 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
