@@ -99,6 +99,15 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
   const apiKey = await getApiKey(store);
   if (!apiKey) return getFallbackOptions(store);
 
+  const originAddress = String(store?.shippingSenderAddress || "").trim();
+  let originPostal = store?.shippingSenderPostalCode
+    ? String(store.shippingSenderPostalCode).replace(/\D/g, "")
+    : "";
+  if (!originPostal) {
+    const match = originAddress.match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
+    if (match) originPostal = match[1];
+  }
+
   let postal = input.destinationPostalCode;
   if (!postal) {
     const match = String(input.destinationAddress || "").match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
@@ -106,12 +115,18 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
   }
 
   // Debug log for postal code
-  console.log(`[BITESHIP_RATES] Address: ${input.destinationAddress}, Derived Postal: ${postal}`);
+  console.log(
+    `[BITESHIP_RATES] OriginPostal: ${originPostal || "-"}, DestPostal: ${postal || "-"}, Address: ${input.destinationAddress}`
+  );
 
   const payload = {
-    origin_area_id: store?.biteshipOriginAreaId || undefined,
-    origin_latitude: typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
-    origin_longitude: typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : undefined,
+    origin_postal_code: originPostal ? Number(originPostal) : undefined,
+    origin_address: originAddress || undefined,
+    origin_area_id: originPostal ? undefined : store?.biteshipOriginAreaId || undefined,
+    origin_latitude:
+      store?.shippingEnableGosend && typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
+    origin_longitude:
+      store?.shippingEnableGosend && typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : undefined,
     destination_postal_code: postal || undefined,
     destination_address: input.destinationAddress,
     destination_latitude: typeof input.destinationLatitude === "number" ? input.destinationLatitude : undefined,
