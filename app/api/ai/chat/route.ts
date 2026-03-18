@@ -176,6 +176,11 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       if (!trimmedAddress || trimmedAddress.length < 8) {
         return { error: "Alamat pengiriman wajib diisi untuk order takeaway." };
       }
+      const hasPostal = /\b\d{5}\b/.test(trimmedAddress);
+      const hasCoordinate = typeof latitude === "number" && typeof longitude === "number";
+      if (!hasPostal && !hasCoordinate) {
+        return { error: "Alamat pengiriman wajib mencantumkan Kode Pos (5 digit) atau share lokasi (GPS)." };
+      }
       if (!shippingProvider || !shippingService || shippingFee === undefined || shippingFee === null) {
         return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };
       }
@@ -284,12 +289,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
             where: { id: order.id },
             data: { shippingStatus: "draft_failed" } as any
           });
+          return { error: "Gagal membuat draft pengiriman. Mohon cek alamat & pilih kurir ulang." };
         }
       } catch (e) {
         console.error("[BITESHIP_DRAFT_ERROR]", e);
         await prisma.order
           .update({ where: { id: order.id }, data: { shippingStatus: "draft_failed" } as any })
           .catch(() => null);
+        return { error: "Gagal membuat draft pengiriman. Mohon coba lagi." };
       }
     }
 

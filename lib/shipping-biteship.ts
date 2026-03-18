@@ -550,12 +550,11 @@ export async function createBiteshipDraftForPendingOrder(input: BiteshipCreateOr
       code: (applied as any)?.code
     });
     return {
-      ok: true,
+      ok: false,
+      error: (applied as any)?.error || "COURIER_NOT_SET",
+      code: (applied as any)?.code || null,
       draftOrderId: draft.draftOrderId,
-      shippingStatus: "draft_created" as const,
-      courierSelected: false,
-      applyError: (applied as any)?.error || null,
-      applyCode: (applied as any)?.code || null
+      detail: (applied as any)?.detail || null
     };
   }
   return { ok: true, draftOrderId: draft.draftOrderId, shippingStatus: "courier_selected" as const, courierSelected: true };
