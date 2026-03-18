@@ -183,28 +183,41 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       if (location) {
         lat = location.latitude;
         lng = location.longitude;
-        address = location.address || location.name || "";
+        const rawAddress = (location.address || location.name || "").trim();
+        // Ignore generic WhatsApp location labels
+        if (rawAddress && !rawAddress.toLowerCase().includes("lokasi via share location")) {
+          address = rawAddress;
+        }
       } else {
         address = textBody.trim();
       }
 
-      if (!address) {
+      if (!address && !location) {
         await sendWhatsAppMessage(from, "❌ Alamat belum terbaca. Tolong ketik alamat lengkap + kode pos (5 digit).", store.id);
         return;
       }
 
       const hasPostal = /\b\d{5}\b/.test(address);
       const updatedCart = [...cart];
-      updatedCart[0].address = address;
+      if (address) updatedCart[0].address = address;
       if (lat) updatedCart[0].lat = lat;
       if (lng) updatedCart[0].lng = lng;
 
-      if (location && !hasPostal) {
+      // If we got location but no specific text address or no postal code, ask for detail
+      if (location && (!address || !hasPostal)) {
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_SHIP_ADDRESS_DETAIL", cart: updatedCart }
         });
-        await sendWhatsAppMessage(from, "📍 Lokasi diterima. Sekarang kirim *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"", store.id);
+        const prompt = !address 
+          ? "📍 Lokasi diterima. Sekarang ketik *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\""
+          : "📍 Lokasi diterima, tapi alamat kurang lengkap. Mohon ketik *alamat lengkap + kode pos (5 digit)*.\nContoh: \"Jl. Sudirman No 1, Bandung 40111\"";
+        await sendWhatsAppMessage(from, prompt, store.id);
+        return;
+      }
+
+      if (!hasPostal) {
+        await sendWhatsAppMessage(from, "❌ Mohon sertakan *kode pos 5 digit* di alamat agar ongkir akurat.", store.id);
         return;
       }
 
@@ -279,7 +292,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
 
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
-          data: { step: "MERCHANT_SHIP_OPTIONS", cart: updatedCart, metadata: quotes }
+          data: { step: "MERCHANT_SHIP_OPTIONS", cart: updatedCart, metadata: quotes } as any
         });
         await sendWhatsAppMessage(from, msg, store.id);
       } catch (err) {
@@ -373,7 +386,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             shippingCost: shippingFee,
             shippingEta: eta || null,
             notes
-          }
+          } as any
         });
 
         const draft = await createBiteshipDraftForPendingOrder({
@@ -423,7 +436,9 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             `1) WA Credit\n` +
             `2) QRIS (Midtrans)\n` +
             `3) Transfer Bank\n\n` +
-            `Balas: 1 / 2 / 3`,
+            `Atau balas:\n` +
+            `- *Edit* (Ubah alamat/kurir)\n` +
+            `- *Batal* (Batalkan booking)`,
           store.id
         );
       } catch (err) {
@@ -459,6 +474,24 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       const amount = Math.max(0, Number(order.totalAmount || 0));
       const itemName = String(info?.itemName || "Barang").trim();
       const weight = Math.max(1, Number(info?.weight || 1000));
+
+      if (choice === "batal" || choice === "cancel") {
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+        await sendWhatsAppMessage(from, "❌ Booking dibatalkan.", store.id);
+        return;
+      }
+
+      if (choice === "edit" || choice === "ubah") {
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_SHIP_ADDRESS", cart: [{ ...info, address: "", lat: info?.lat, lng: info?.lng }] }
+        });
+        await sendWhatsAppMessage(from, "📍 Silakan kirim ulang alamat lengkap + kode pos.", store.id);
+        return;
+      }
 
       if (choice === "1" || choice === "wa" || choice === "wa credit" || choice === "whatsapp credit") {
         await ensureWaCreditSchema();
@@ -498,6 +531,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         });
 
         let tracking = "";
+        let driverInfo = "";
         if (booked.ok) {
           const b = booked as any;
           await prisma.order.update({
@@ -509,6 +543,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             }
           });
           if (b.trackingNo) tracking = b.trackingNo;
+          if (b.driverName || b.driverPhone || b.vehicleNumber) {
+            driverInfo = `\n👨‍✈️ Driver: ${b.driverName || "-"}\n`;
+            if (b.driverPhone) driverInfo += `📱 Driver Telp: ${b.driverPhone}\n`;
+            if (b.vehicleNumber) driverInfo += `🚗 Plat: ${b.vehicleNumber}\n`;
+          }
         }
 
         await prisma.whatsAppSession.update({
@@ -520,6 +559,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           from,
           `✅ Pembayaran via WA Credit berhasil.\nOrder #${order.id}\nKurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
             (tracking ? `Resi: ${tracking}\n` : "") +
+            driverInfo +
             `\nBalas "Cek Resi ${order.id}" untuk tracking.`,
           store.id
         );
@@ -528,6 +568,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           order.customerPhone,
           `📦 Pengiriman dibuat!\nOrder #${order.id}\nKurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
             (tracking ? `Resi: ${tracking}\n` : "") +
+            driverInfo +
             `\nBalas "Cek Resi ${order.id}" untuk lihat status.`,
           store.id
         );

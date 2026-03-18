@@ -28,7 +28,7 @@ function parseCourierProvider(value?: string): "JNE" | "GOSEND" | null {
   const text = String(value || "").toLowerCase();
   const normalized = text.replace(/[^a-z0-9]/g, "");
   if (normalized.includes("jne")) return "JNE";
-  if (normalized.includes("gojek") || normalized.includes("gosend")) return "GOSEND";
+  if (normalized.includes("gojek") || normalized.includes("gosend") || normalized.includes("grab")) return "GOSEND";
   return null;
 }
 
@@ -113,7 +113,10 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     destination_address: input.destinationAddress,
     destination_latitude: typeof input.destinationLatitude === "number" ? input.destinationLatitude : undefined,
     destination_longitude: typeof input.destinationLongitude === "number" ? input.destinationLongitude : undefined,
-    couriers: [store?.shippingEnableJne ? "jne" : null, store?.shippingEnableGosend && !store?.shippingJneOnly ? "gojek" : null].filter(Boolean).join(","),
+    couriers: [
+      store?.shippingEnableJne ? "jne" : null,
+      store?.shippingEnableGosend ? "gojek,grab" : null
+    ].filter(Boolean).join(","),
     items: [
       {
         name: "Order",
@@ -136,17 +139,32 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     });
 
     if (!response.ok) {
+      console.error("BITESHIP_RATES_ERROR", {
+        status: response.status,
+        payload: JSON.stringify(payload)
+      });
       return getFallbackOptions(store);
     }
 
     const data = await response.json();
     const pricing = Array.isArray(data?.pricing) ? data.pricing : Array.isArray(data?.data?.pricing) ? data.data.pricing : [];
+    
+    if (pricing.length === 0) {
+       console.log("BITESHIP_NO_RATES_RETURNED", {
+          payload: JSON.stringify(payload),
+          rawResponse: JSON.stringify(data)
+       });
+    }
+
     const mapped: ShippingOption[] = pricing
       .map((item: any) => {
         const provider = parseCourierProvider(item?.courier_company || item?.courier_name || item?.courier_code);
         if (!provider) return null;
+        
+        // Final filtering based on store settings
         if (provider === "JNE" && !store?.shippingEnableJne) return null;
         if (provider === "GOSEND" && (!store?.shippingEnableGosend || store?.shippingJneOnly)) return null;
+        
         const fee = Number(item?.price || item?.final_price || item?.amount || 0);
         return {
           provider,
@@ -158,7 +176,17 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
       })
       .filter(Boolean);
 
-    if (mapped.length === 0) return getFallbackOptions(store);
+    if (mapped.length === 0) {
+      console.log("BITESHIP_NO_MAPPED_OPTIONS", {
+        pricingCount: pricing.length,
+        storeSettings: {
+          jne: store?.shippingEnableJne,
+          gosend: store?.shippingEnableGosend,
+          jneOnly: store?.shippingJneOnly
+        }
+      });
+      return getFallbackOptions(store);
+    }
     return mapped.sort((a, b) => a.fee - b.fee);
   } catch {
     return getFallbackOptions(store);
