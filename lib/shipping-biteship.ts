@@ -114,20 +114,21 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     if (match) postal = match[1];
   }
 
+  const destinationAreaId = !postal ? await lookupBiteshipAreaIdFromInput(store, input.destinationAddress).catch(() => null) : null;
+
   // Debug log for postal code
   console.log(
-    `[BITESHIP_RATES] OriginPostal: ${originPostal || "-"}, DestPostal: ${postal || "-"}, Address: ${input.destinationAddress}`
+    `[BITESHIP_RATES] OriginPostal: ${originPostal || "-"}, OriginArea: ${store?.biteshipOriginAreaId || "-"}, OriginAddress: ${originAddress || "-"}, DestPostal: ${postal || "-"}, DestArea: ${destinationAreaId || "-"}, Address: ${input.destinationAddress}`
   );
 
   const payload = {
     origin_postal_code: originPostal ? Number(originPostal) : undefined,
     origin_address: originAddress || undefined,
-    origin_area_id: originPostal ? undefined : store?.biteshipOriginAreaId || undefined,
-    origin_latitude:
-      store?.shippingEnableGosend && typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
-    origin_longitude:
-      store?.shippingEnableGosend && typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : undefined,
+    origin_area_id: store?.biteshipOriginAreaId || undefined,
+    origin_latitude: typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : undefined,
+    origin_longitude: typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : undefined,
     destination_postal_code: postal || undefined,
+    destination_area_id: destinationAreaId || undefined,
     destination_address: input.destinationAddress,
     destination_latitude: typeof input.destinationLatitude === "number" ? input.destinationLatitude : undefined,
     destination_longitude: typeof input.destinationLongitude === "number" ? input.destinationLongitude : undefined,
