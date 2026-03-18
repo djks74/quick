@@ -6,6 +6,16 @@ import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
+function normalizePhoneNumber(phone: string) {
+  let clean = phone.replace(/\D/g, "");
+  if (clean.startsWith("0")) {
+    clean = "62" + clean.slice(1);
+  } else if (clean.startsWith("8")) {
+    clean = "62" + clean;
+  }
+  return clean;
+}
+
 const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
 // These are the actual implementations of the tools Gemini will call
@@ -136,6 +146,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
+    const cleanPhone = normalizePhoneNumber(customer_phone);
     let itemsAmount = 0;
     const orderItemsData = [];
     const details = [];
@@ -165,7 +176,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
-        customerPhone: customer_phone,
+        customerPhone: cleanPhone,
         totalAmount: finalAmount,
         taxAmount,
         serviceCharge,
@@ -207,6 +218,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async send_order_to_whatsapp({ orderId, phoneNumber }: { orderId: number; phoneNumber: string }) {
+    const cleanPhone = normalizePhoneNumber(phoneNumber);
     const order = await prisma.order.findUnique({
       where: { id: Number(orderId) },
       include: { store: true, items: { include: { product: true } } }
@@ -233,8 +245,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
 
     await sendWhatsAppMessage(
-      phoneNumber,
-      `${breakdown}\n\nSilakan klik tombol di bawah untuk membayar.`,
+      cleanPhone, 
+      `${breakdown}\n\nSilakan klik tombol di bawah untuk membayar.`, 
       order.storeId,
       { buttonText: "Pay Now", buttonUrl: paymentUrl }
     );
@@ -243,8 +255,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async create_merchant_invoice({ amount, customer_phone, merchant_phone, payment_method }: any) {
+    const cleanCustomerPhone = normalizePhoneNumber(customer_phone);
+    const cleanMerchantPhone = normalizePhoneNumber(merchant_phone);
     const user = await prisma.user.findFirst({
-      where: { phoneNumber: { contains: merchant_phone.replace(/\D/g, "") } },
+      where: { phoneNumber: { contains: cleanMerchantPhone } },
       include: { stores: true }
     });
     const store = user?.stores[0];
@@ -278,13 +292,13 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
-        customerPhone: customer_phone,
+        customerPhone: cleanCustomerPhone,
         totalAmount: finalAmount,
         paymentFee,
         status: "PENDING",
         orderType: "TAKEAWAY",
         paymentMethod: payment_method || null,
-        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: merchant_phone }),
+        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", requestedBy: cleanMerchantPhone }),
         items: {
           create: {
             productId: product.id,

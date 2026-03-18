@@ -341,13 +341,16 @@ export async function POST(req: NextRequest) {
         lowerText?.startsWith("tanya ") || 
         lowerText?.startsWith("ask ") || 
         lowerText?.startsWith("cari ") ||
-        lowerText?.startsWith("search ") ||
+        lowerText?.startsWith("search ") || 
         lowerText?.startsWith("find ") ||
         lowerText?.startsWith("tolong ") ||
         (lowerText?.includes("cari ") && lowerText?.length > 8) ||
         (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
         (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
-        (lowerText?.includes("tolong ") && lowerText?.length > 8);
+        (lowerText?.includes("tolong ") && lowerText?.length > 8) ||
+        // Special case for searching across all stores
+        (lowerText?.includes("cari ") && lowerText?.includes("gercep")) ||
+        (lowerText?.includes("find ") && lowerText?.includes("gercep"));
 
       let aiSession = await prisma.whatsAppSession.findFirst({
         where: { phoneNumber: from, step: "AI_MODE" }
