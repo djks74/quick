@@ -336,7 +336,7 @@ export async function POST(req: NextRequest) {
       await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
 
       // --- AI AGENT HANDLER ---
-      const isAICommand = lowerText?.startsWith("ai ") || lowerText?.startsWith("tanya ") || lowerText?.startsWith("ask ");
+      const isAICommand = lowerText?.startsWith("ai ") || lowerText?.startsWith("tanya ") || lowerText?.startsWith("ask ") || lowerText?.startsWith("cari ");
       const aiSession = await prisma.whatsAppSession.findFirst({
         where: { phoneNumber: from, step: "AI_MODE" }
       });
@@ -352,23 +352,28 @@ export async function POST(req: NextRequest) {
         }
 
         // Handle "exit" to leave AI mode
-        if (lowerText === "exit" || lowerText === "stop" || lowerText === "keluar") {
+        if (lowerText === "exit" || lowerText === "stop" || lowerText === "keluar" || lowerText === "menu") {
           await prisma.whatsAppSession.update({
             where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
             data: { step: "START" }
           });
-          await sendWhatsAppMessage(from, "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu biasa.", 0);
+          await sendWhatsAppMessage(from, "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu utama.", 0);
           return NextResponse.json({ success: true });
         }
 
         // Call the AI Chat API
-        const prompt = isAICommand ? textBody?.replace(/^(ai|tanya|ask)\s+/i, "") : textBody;
+        const prompt = isAICommand 
+          ? textBody?.replace(/^(ai|tanya|ask|cari)\s+/i, (match: string) => match.toLowerCase() === "cari " ? "cari " : "") 
+          : textBody;
+        
+        // If the command was JUST "cari ...", we keep "cari" so Gemini knows the intent
+        const finalPrompt = (isAICommand && lowerText?.startsWith("cari ")) ? `cari ${prompt}` : prompt;
         try {
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
           const res = await fetch(`${baseUrl}/api/ai/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: prompt, isPublic: true })
+            body: JSON.stringify({ message: finalPrompt, isPublic: true })
           });
           const data = await res.json();
           if (data.text) {
