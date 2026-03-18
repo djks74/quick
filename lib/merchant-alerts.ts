@@ -54,14 +54,24 @@ export async function sendMerchantWhatsApp(storeId: number, text: string) {
   let overallSuccess = false;
 
   for (const phone of phones) {
-    // sendWhatsAppMessage already has internal fallback to platform (storeId 0)
     console.log(`[MERCHANT_ALERT] Attempting send to ${phone} for store ${storeId}`);
-    const sent = await sendWhatsAppMessage(phone, text, store.id);
+    
+    // 1. First, try sending from the store's own account (billable or own token)
+    let sent = await sendWhatsAppMessage(phone, text, store.id);
+    
+    // 2. If it failed, try sending from the platform account (storeId 0)
+    // This is crucial if the store's own bot number is the same as the merchant's phone number
+    // (Meta API often blocks sending a message to yourself)
+    if (!sent) {
+      console.log(`[MERCHANT_ALERT] Retrying with platform account (storeId 0) for phone ${phone}`);
+      sent = await sendWhatsAppMessage(phone, text, 0);
+    }
+
     if (sent) {
       console.log(`[MERCHANT_ALERT] Success sending to ${phone}`);
       overallSuccess = true;
     } else {
-      console.error(`[MERCHANT_ALERT] Failed sending to ${phone}`);
+      console.error(`[MERCHANT_ALERT] Critical failure sending to ${phone} from both store and platform account`);
     }
   }
 

@@ -126,7 +126,15 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     return true;
   }
 
-  console.log('SEND_WHATSAPP_DEBUG:', { to, message, phoneNumberId, token: token ? 'EXISTS' : 'MISSING', options });
+  const maskedToken = token.length > 10 ? `${token.substring(0, 5)}...${token.substring(token.length - 5)}` : "SHORT_TOKEN";
+  console.log('SEND_WHATSAPP_DEBUG:', { 
+    to, 
+    storeId, 
+    phoneNumberId, 
+    token: maskedToken, 
+    useEnterprise: resolved.useEnterpriseConfig,
+    options 
+  });
 
   if (!phoneNumberId) {
     console.log(`[WHATSAPP_MOCK] (No Phone ID) Sending to ${to}: ${message}`);
