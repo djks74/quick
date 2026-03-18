@@ -52,7 +52,6 @@ model Store {
   // Payment Config
   enableWhatsApp          Boolean   @default(true)
   enableMidtrans          Boolean   @default(false)
-  enableXendit            Boolean   @default(false)
   enableManualTransfer    Boolean   @default(false)
   posEnabled              Boolean   @default(false)
   isOpen                  Boolean   @default(true)
@@ -294,7 +293,6 @@ model PlatformSettings {
   whatsappPhoneId    String?
   midtransServerKey  String?
   midtransClientKey  String?
-  xenditSecretKey    String?
   biteshipApiKey     String?
   bankName           String?
   bankAccountNumber  String?

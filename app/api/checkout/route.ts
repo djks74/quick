@@ -90,7 +90,6 @@ export async function POST(req: NextRequest) {
        // Fallback logic
        const settings = await prisma.store.findUnique({ where: { id: parseInt(storeId) } });
        if (settings?.enableMidtrans) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'midtrans', parseInt(storeId), specificType);
-       else if (settings?.enableXendit) result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', 'xendit', parseInt(storeId), specificType);
        else throw new Error("No gateway enabled");
     } else {
        result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', method, parseInt(storeId), specificType);

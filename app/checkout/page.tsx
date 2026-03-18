@@ -12,7 +12,7 @@ export default function CheckoutPage() {
   const { cart, cartTotal, paymentSettings, clearCart } = useShop();
   const [step, setStep] = useState<"details" | "payment" | "success">("details");
   const [loading, setLoading] = useState(false);
-  const [selectedGateway, setSelectedGateway] = useState<"xendit" | "midtrans" | "cod" | null>(null);
+  const [selectedGateway, setSelectedGateway] = useState<"midtrans" | "cod" | null>(null);
   const [address, setAddress] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [shippingProvider, setShippingProvider] = useState<"gosend" | "jne" | null>(null);
@@ -206,29 +206,6 @@ export default function CheckoutPage() {
                   <h2 className="text-xl font-black italic uppercase tracking-wider mb-6">Select Payment Method</h2>
                   
                   <div className="space-y-4">
-                    {paymentSettings.xenditEnabled && (
-                      <label className={cn(
-                        "flex items-center p-4 border rounded-xl cursor-pointer transition-all",
-                        selectedGateway === "xendit" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-gray-200 hover:border-gray-300"
-                      )}>
-                        <input 
-                          type="radio" 
-                          name="gateway" 
-                          className="hidden" 
-                          checked={selectedGateway === "xendit"} 
-                          onChange={() => setSelectedGateway("xendit")} 
-                        />
-                        <div className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center mr-4">
-                          {selectedGateway === "xendit" && <div className="w-3 h-3 rounded-full bg-primary" />}
-                        </div>
-                        <div className="flex-1">
-                          <span className="font-bold text-gray-900 block">Xendit</span>
-                          <span className="text-xs text-gray-500">Credit Card, Virtual Account, E-Wallet</span>
-                        </div>
-                        <div className="bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded">SECURE</div>
-                      </label>
-                    )}
-
                     {paymentSettings.midtransEnabled && (
                       <label className={cn(
                         "flex items-center p-4 border rounded-xl cursor-pointer transition-all",
@@ -273,7 +250,7 @@ export default function CheckoutPage() {
                     </label>
                   </div>
 
-                  {!paymentSettings.xenditEnabled && !paymentSettings.midtransEnabled && (
+                  {!paymentSettings.midtransEnabled && (
                     <div className="mt-4 p-4 bg-yellow-50 text-yellow-800 text-xs rounded-lg border border-yellow-100">
                       No payment gateways are enabled in Admin Settings. Only COD is available or please contact support.
                     </div>

@@ -453,7 +453,7 @@ export async function POST(req: NextRequest) {
                   (user as any).stores = [stores[idx], ...stores.slice(0, idx), ...stores.slice(idx + 1)];
                 }
               }
-              await handleMerchantMessage(user, message, from);
+              await handleMerchantMessage(user, message, from, merchantSession);
             }
             return NextResponse.json({ success: true });
         }

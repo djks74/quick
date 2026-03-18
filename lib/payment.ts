@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import midtransClient from "midtrans-client";
-import { Xendit } from "xendit-node";
 
 // Generate unique code for manual transfer (001-999)
 function generateUniqueCode() {
@@ -26,7 +25,6 @@ export async function processPayment(orderId: number, amount: number, customerPh
   const platform = {
       midtransServerKey: platformSettings?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY,
       midtransClientKey: platformSettings?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY,
-      xenditSecretKey: platformSettings?.xenditSecretKey || process.env.XENDIT_SECRET_KEY,
       bankName: platformSettings?.bankName || 'BCA',
       bankAccountNumber: platformSettings?.bankAccountNumber || process.env.PLATFORM_BANK_NUMBER,
       bankAccountName: platformSettings?.bankAccountName || process.env.PLATFORM_BANK_NAME
@@ -182,50 +180,6 @@ export async function processPayment(orderId: number, amount: number, customerPh
     }
   }
 
-  if (method === 'xendit') {
-    if (!settings.enableXendit) throw new Error("Xendit payment is disabled for this store.");
-    
-    let secretKey = platform?.xenditSecretKey || process.env.XENDIT_SECRET_KEY;
-    
-    if (canOverridePlatformConfig && settings.paymentGatewaySecret) {
-       secretKey = settings.paymentGatewaySecret;
-    }
-
-    if (!secretKey) {
-      throw new Error("Xendit API Key not configured");
-    }
-
-    const xendit = new Xendit({
-      secretKey: secretKey,
-    });
-
-    const resp = await xendit.Invoice.createInvoice({
-      data: {
-        externalId: `ORDER-${orderId}-${Date.now()}`,
-        amount: amount,
-        payerEmail: 'guest@example.com', // Optional if phone provided
-        description: `Payment for Order #${orderId}`,
-        customer: {
-          mobileNumber: customerPhone.startsWith('0') ? customerPhone.replace('0', '+62') : customerPhone
-        }
-      }
-    });
-
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { 
-        paymentMethod: 'xendit',
-        paymentUrl: resp.invoiceUrl
-      }
-    });
-
-    return {
-      success: true,
-      type: 'xendit',
-      paymentUrl: resp.invoiceUrl
-    };
-  }
-
   throw new Error(`Payment method ${method} not supported or enabled`);
 }
 
@@ -244,16 +198,6 @@ export async function createPaymentLink(orderId: number, amount: number, custome
     } catch (e) {
       console.error("Failed to generate Midtrans link:", e);
       // Fallback to manual? No, let's return error or fallback to WhatsApp confirmation
-    }
-  }
-
-  // Try Xendit
-  if (settings?.enableXendit) {
-     try {
-      await processPayment(orderId, amount, customerPhone, 'xendit', storeId, specificType);
-      return internalCheckoutUrl;
-    } catch (e) {
-      console.error("Failed to generate Xendit link:", e);
     }
   }
   

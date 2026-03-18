@@ -167,7 +167,7 @@ export default function CartPage() {
                       ) : (
                         <>
                           <CreditCard className="w-5 h-5 mr-2" />
-                          Pay Now ({settings?.paymentProvider === 'midtrans' ? 'Midtrans' : settings?.paymentProvider === 'xendit' ? 'Xendit' : 'Gateway'})
+                          Pay Now ({settings?.paymentProvider === 'midtrans' ? 'Midtrans' : 'Gateway'})
                         </>
                       )}
                     </button>

@@ -22,8 +22,6 @@ export interface HeaderSettings {
 }
 
 export interface PaymentSettings {
-  xenditEnabled: boolean;
-  xenditApiKey: string;
   midtransEnabled: boolean;
   midtransServerKey: string;
   midtransClientKey: string;
@@ -89,8 +87,6 @@ const initialHeaderSettings: HeaderSettings = {
 };
 
 const initialPaymentSettings: PaymentSettings = {
-  xenditEnabled: false,
-  xenditApiKey: "",
   midtransEnabled: false,
   midtransServerKey: "",
   midtransClientKey: ""

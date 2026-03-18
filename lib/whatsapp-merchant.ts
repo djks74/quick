@@ -1,20 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { getWaUsageDashboard } from "@/lib/wa-credit";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
 
 // Mock Transcription (Replace with OpenAI Whisper)
 async function transcribeAudio(audioId: string): Promise<string | null> {
   console.log('TODO: Transcribe Audio ID:', audioId);
-  // In real implementation:
-  // 1. Fetch media URL from Facebook Graph API
-  // 2. Download file
-  // 3. Send to OpenAI Whisper API
   return null;
 }
 
-export async function handleMerchantMessage(user: any, message: any, from: string) {
+export async function handleMerchantMessage(user: any, message: any, from: string, merchantSession?: any) {
   const textBody = message.text?.body || "";
   const audioId = message.audio?.id;
+  const location = message.location;
   
   let commandText = textBody;
 
@@ -30,7 +28,6 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   // Identify Store Context
-  // For MVP, if user has 1 store, use it. If multiple, just use first one or ask (simpler: use first).
   const store = user.stores[0];
   if (!store) {
     await sendWhatsAppMessage(from, "Kamu belum punya toko yang terhubung.", 0);
@@ -60,41 +57,18 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `*Pembayaran*\n` +
       `- Payment option\n` +
       `- Set payment midtrans on/off\n` +
-      `- Set payment xendit on/off\n` +
       `- Set payment transfer on/off\n\n` +
       `*Operasional*\n` +
       `- Buka toko / Tutup toko\n\n` +
       `*Keuangan & Report*\n` +
       `- WA balance\n` +
-      `- Report\n\n` +
+      `- Report\n` +
+      `- Mau kirim barang (Order GoSend/JNE)\n\n` +
       `*Pengiriman (Manual)*\n` +
       `- Update resi [OrderID] [NoResi] [Kurir] [Service]\n` +
       `  Contoh: "Update resi 123 JX123456789 JNE REG"\n\n` +
       `*Bahasa*\n` +
       `- EN / ID`,
-      store.id
-    );
-    return;
-  }
-
-  if (
-    lowerText === "wa balance" ||
-    lowerText === "saldo wa" ||
-    lowerText === "saldo whatsapp" ||
-    lowerText === "whatsapp balance"
-  ) {
-    const dash = await getWaUsageDashboard(store.id).catch(() => null);
-    if (!dash) {
-      await sendWhatsAppMessage(from, `❌ Gagal ambil WA balance. Coba lagi ya.`, store.id);
-      return;
-    }
-    await sendWhatsAppMessage(
-      from,
-      `💬 *WA Balance (${store.name})*\n` +
-        `Saldo: ${formatMoney(dash.balance)}\n` +
-        `Harga/Msg: ${formatMoney(dash.pricePerMessage)}\n` +
-        `Perkiraan sisa msg: ${dash.remainingMessages}\n\n` +
-        `Balas "Report" untuk ringkasan order.`,
       store.id
     );
     return;
@@ -131,6 +105,226 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
 
     await sendWhatsAppMessage(from, msg, store.id);
     return;
+  }
+
+  if (
+    lowerText === "wa balance" ||
+    lowerText === "saldo wa" ||
+    lowerText === "saldo whatsapp" ||
+    lowerText === "whatsapp balance"
+  ) {
+    const dash = await getWaUsageDashboard(store.id).catch(() => null);
+    if (!dash) {
+      await sendWhatsAppMessage(from, `❌ Gagal ambil WA balance. Coba lagi ya.`, store.id);
+      return;
+    }
+    await sendWhatsAppMessage(
+      from,
+      `💬 *WA Balance (${store.name})*\n` +
+        `Saldo: ${formatMoney(dash.balance)}\n` +
+        `Harga/Msg: ${formatMoney(dash.pricePerMessage)}\n` +
+        `Perkiraan sisa msg: ${dash.remainingMessages}\n\n` +
+        `Balas "Report" untuk ringkasan order.`,
+      store.id
+    );
+    return;
+  }
+
+  if (lowerText === "mau kirim barang" || lowerText === "kirim barang") {
+    if (merchantSession) {
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_RECIPIENT_NAME", cart: [] }
+      });
+    }
+    await sendWhatsAppMessage(from, "📦 *Kirim Barang*\n\nSiapa nama penerimanya?", store.id);
+    return;
+  }
+
+  // State Machine for Merchant Shipping
+  if (merchantSession?.step?.startsWith("MERCHANT_SHIP_")) {
+    const step = merchantSession.step;
+    const cart = (merchantSession.cart as any[]) || [];
+
+    if (step === "MERCHANT_SHIP_RECIPIENT_NAME") {
+      const name = textBody.trim();
+      if (!name) return;
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_RECIPIENT_PHONE", cart: [{ recipientName: name }] }
+      });
+      await sendWhatsAppMessage(from, `👤 Penerima: *${name}*\n\nBerapa nomor teleponnya?`, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_RECIPIENT_PHONE") {
+      const phone = textBody.replace(/\D/g, "");
+      if (phone.length < 9) {
+        await sendWhatsAppMessage(from, "❌ Nomor telepon tidak valid. Silakan kirim nomor yang benar.", store.id);
+        return;
+      }
+      const updatedCart = [...cart];
+      updatedCart[0].recipientPhone = phone;
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_ADDRESS", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(from, `📱 Nomor: *${phone}*\n\nKe mana alamat tujuannya? (Kirim teks alamat atau Share Location)`, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_ADDRESS") {
+      let address = "";
+      let lat: number | undefined;
+      let lng: number | undefined;
+
+      if (location) {
+        lat = location.latitude;
+        lng = location.longitude;
+        address = location.address || location.name || "Lokasi via Share Location";
+      } else {
+        address = textBody.trim();
+      }
+
+      if (!address) return;
+
+      const updatedCart = [...cart];
+      updatedCart[0].address = address;
+      if (lat) updatedCart[0].lat = lat;
+      if (lng) updatedCart[0].lng = lng;
+
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_ITEM_NAME", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(from, `📍 Alamat: *${address}*\n\nApa nama barang yang dikirim?`, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_ITEM_NAME") {
+      const itemName = textBody.trim();
+      if (!itemName) return;
+      const updatedCart = [...cart];
+      updatedCart[0].itemName = itemName;
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_ITEM_WEIGHT", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(from, `📦 Barang: *${itemName}*\n\nBerapa beratnya dalam gram? (Contoh: 1000 untuk 1kg)`, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_ITEM_WEIGHT") {
+      const weight = parseInt(textBody.replace(/\D/g, "")) || 1000;
+      const updatedCart = [...cart];
+      updatedCart[0].weight = weight;
+
+      const shipInfo = updatedCart[0];
+      await sendWhatsAppMessage(from, "⏳ Sedang mengecek ongkir...", store.id);
+
+      try {
+        const quotes = await getShippingQuoteFromBiteship({
+          store,
+          destinationAddress: shipInfo.address,
+          destinationLatitude: shipInfo.lat,
+          destinationLongitude: shipInfo.lng,
+          weightGrams: weight
+        });
+
+        if (quotes.length === 0) {
+          await sendWhatsAppMessage(from, "❌ Tidak ditemukan opsi pengiriman untuk alamat tersebut. Silakan ketik 'Mau kirim barang' untuk mengulang.", store.id);
+          await prisma.whatsAppSession.update({
+            where: { id: merchantSession.id },
+            data: { step: "MERCHANT_MODE", cart: [] }
+          });
+          return;
+        }
+
+        let msg = `🚚 *Pilih Kurir*\n\n`;
+        quotes.forEach((q, i) => {
+          msg += `${i + 1}. ${q.provider} ${q.service} - ${formatMoney(q.fee)} (${q.eta})\n`;
+        });
+        msg += `\nBalas dengan nomor kurir (1-${quotes.length}).`;
+
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_SHIP_OPTIONS", cart: updatedCart, metadata: quotes }
+        });
+        await sendWhatsAppMessage(from, msg, store.id);
+      } catch (err) {
+        console.error("Biteship Quote Error:", err);
+        await sendWhatsAppMessage(from, "❌ Gagal mengecek ongkir. Pastikan Biteship API Key sudah benar.", store.id);
+      }
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_OPTIONS") {
+      const index = parseInt(textBody.replace(/\D/g, "")) - 1;
+      const quotes = merchantSession.metadata as any[];
+      if (isNaN(index) || !quotes || !quotes[index]) {
+        await sendWhatsAppMessage(from, `❌ Pilihan tidak valid. Silakan balas 1-${quotes?.length || 0}.`, store.id);
+        return;
+      }
+
+      const selected = quotes[index];
+      const updatedCart = [...cart];
+      updatedCart[0].selectedCourier = selected;
+
+      const info = updatedCart[0];
+      const summary = 
+        `📝 *Konfirmasi Pengiriman*\n\n` +
+        `Penerima: ${info.recipientName}\n` +
+        `Telp: ${info.recipientPhone}\n` +
+        `Alamat: ${info.address}\n` +
+        `Barang: ${info.itemName} (${info.weight}g)\n` +
+        `Kurir: ${selected.provider} ${selected.service}\n` +
+        `Ongkir: ${formatMoney(selected.fee)}\n\n` +
+        `Ketik "OK" untuk konfirmasi booking.`;
+
+      await prisma.whatsAppSession.update({
+        where: { id: merchantSession.id },
+        data: { step: "MERCHANT_SHIP_CONFIRM", cart: updatedCart }
+      });
+      await sendWhatsAppMessage(from, summary, store.id);
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_CONFIRM") {
+      if (lowerText !== "ok") {
+        await sendWhatsAppMessage(from, 'Ketik "OK" untuk konfirmasi atau "Mau kirim barang" untuk mengulang.', store.id);
+        return;
+      }
+
+      const info = cart[0];
+      await sendWhatsAppMessage(from, "🚀 Sedang memproses booking...", store.id);
+
+      try {
+        const order = await prisma.order.create({
+          data: {
+            storeId: store.id,
+            customerPhone: info.recipientPhone,
+            shippingAddress: info.address,
+            shippingProvider: info.selectedCourier.provider,
+            shippingService: info.selectedCourier.service,
+            totalAmount: 0,
+            status: "PAID",
+            paymentMethod: "manual",
+            notes: `Merchant Shipment: ${info.itemName}`
+          }
+        });
+
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+
+        await sendWhatsAppMessage(from, `✅ Berhasil booking pengiriman!\nOrder ID: #${order.id}\n\nKurir akan segera memproses.`, store.id);
+      } catch (err) {
+        console.error("Merchant Booking Error:", err);
+        await sendWhatsAppMessage(from, "❌ Gagal memproses booking. Silakan coba lagi nanti.", store.id);
+      }
+      return;
+    }
   }
 
   if (
@@ -200,18 +394,16 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       from,
       `💳 *Payment Option (${store.name})*\n\n` +
         `Midtrans: ${onOff(store.enableMidtrans)}\n` +
-        `Xendit: ${onOff(store.enableXendit)}\n` +
         `Manual Transfer: ${onOff(store.enableManualTransfer)}\n\n` +
         `Update:\n` +
         `- Set payment midtrans on/off\n` +
-        `- Set payment xendit on/off\n` +
         `- Set payment transfer on/off`,
       store.id
     );
     return;
   }
 
-  const setPaymentMatch = lowerText.match(/^(?:set|ubah|update)\s+(?:payment|pembayaran)\s+(midtrans|xendit|transfer|manual)\s+(on|off|enable|disable)$/i);
+  const setPaymentMatch = lowerText.match(/^(?:set|ubah|update)\s+(?:payment|pembayaran)\s+(midtrans|transfer|manual)\s+(on|off|enable|disable)$/i);
   if (setPaymentMatch) {
     const target = setPaymentMatch[1].toLowerCase();
     const action = setPaymentMatch[2].toLowerCase();
@@ -221,13 +413,11 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       data:
         target === "midtrans"
           ? { enableMidtrans: enabled }
-          : target === "xendit"
-            ? { enableXendit: enabled }
-            : { enableManualTransfer: enabled }
+          : { enableManualTransfer: enabled }
     });
     await sendWhatsAppMessage(
       from,
-      `✅ Payment updated.\nMidtrans: ${onOff(updated.enableMidtrans)}\nXendit: ${onOff(updated.enableXendit)}\nManual Transfer: ${onOff(updated.enableManualTransfer)}`,
+      `✅ Payment updated.\nMidtrans: ${onOff(updated.enableMidtrans)}\nManual Transfer: ${onOff(updated.enableManualTransfer)}`,
       store.id
     );
     return;
@@ -298,30 +488,23 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   // 3. Update Price
-  // Regex: update price <name_and_variation> <amount>
   const updateMatch = commandText.match(/(?:update|ubah)\s+(?:price|harga)\s+(.+?)\s+(\d+)/i);
   if (updateMatch) {
-    const inputString = updateMatch[1].trim(); // "Nasi Goreng Small"
+    const inputString = updateMatch[1].trim(); 
     const newPrice = parseInt(updateMatch[2]);
 
-    // Better Search Strategy: Fetch all products and find best match
     const products = await prisma.product.findMany({
       where: { storeId: store.id },
       select: { id: true, name: true, variations: true, price: true }
     });
 
-    // Sort by name length desc to match longest name first (e.g. "Nasi Goreng Spesial" before "Nasi Goreng")
     const sortedProducts = products.sort((a, b) => b.name.length - a.name.length);
-    
     const product = sortedProducts.find(p => inputString.toLowerCase().includes(p.name.toLowerCase()));
 
     if (product) {
-      // Check for variation in the remainder of the string
-      // e.g. input: "Nasi Goreng Small", product: "Nasi Goreng" -> remainder: "Small"
       const remainder = inputString.replace(new RegExp(product.name, 'i'), '').trim();
       
       if (remainder && product.variations && Array.isArray(product.variations)) {
-         // Update specific variation
          const variations = product.variations as any[];
          const variationIndex = variations.findIndex(v => v.name.toLowerCase() === remainder.toLowerCase());
          
@@ -333,10 +516,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             });
             await sendWhatsAppMessage(from, `✅ Harga *${product.name} (${variations[variationIndex].name})* diubah jadi ${newPrice}`, store.id);
          } else {
-            // Variation not found, maybe create it?
-            // For now, let's error or assume user meant base price if simple typo?
-            // Or Add new variation? "Auto-add variation" feature
-            variations.push({ name: remainder, price: newPrice }); // Auto-add variation!
+            variations.push({ name: remainder, price: newPrice }); 
             await prisma.product.update({
                where: { id: product.id },
                data: { variations: variations }
@@ -344,7 +524,6 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             await sendWhatsAppMessage(from, `✅ Varian *${remainder}* ditambahkan ke *${product.name}* dengan harga ${newPrice}`, store.id);
          }
       } else {
-         // No variation specified or product has no variations -> Update Base Price
          await prisma.product.update({
             where: { id: product.id },
             data: { price: newPrice }
@@ -358,7 +537,6 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   // 4. Add Product
-  // Regex: add product <name> <amount>
   const addMatch = commandText.match(/(?:add|tambah)\s+(?:product|produk|menu)\s+(.+?)\s+(\d+)/i);
   if (addMatch) {
     const newName = addMatch[1].trim();
@@ -370,7 +548,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         name: newName,
         price: newPrice,
         description: "Added via WhatsApp",
-        stock: 100 // Set default stock to 100
+        stock: 100 
       }
     });
     await sendWhatsAppMessage(from, `✅ Produk baru *${newName}* ditambahkan dengan harga ${newPrice}`, store.id);

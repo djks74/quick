@@ -185,7 +185,6 @@ export async function updatePlatformSettings(data: {
   whatsappPhoneId?: string;
   midtransServerKey?: string;
   midtransClientKey?: string;
-  xenditSecretKey?: string;
   biteshipApiKey?: string;
   bankName?: string;
   bankAccountNumber?: string;
@@ -204,7 +203,6 @@ export async function updatePlatformSettings(data: {
         whatsappPhoneId: data.whatsappPhoneId || null,
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
-        xenditSecretKey: data.xenditSecretKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,
@@ -218,7 +216,6 @@ export async function updatePlatformSettings(data: {
         whatsappPhoneId: data.whatsappPhoneId || null,
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
-        xenditSecretKey: data.xenditSecretKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
         bankName: data.bankName || null,
         bankAccountNumber: data.bankAccountNumber || null,

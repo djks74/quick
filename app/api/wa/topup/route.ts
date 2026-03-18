@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import midtransClient from "midtrans-client";
-import { Xendit } from "xendit-node";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
@@ -35,26 +34,6 @@ export async function POST(req: NextRequest) {
 
     const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
     const topupRef = `TOPUP-${store.id}-${Date.now()}`;
-
-    const xenditSecret = store.paymentGatewaySecret || platform?.xenditSecretKey || process.env.XENDIT_SECRET_KEY;
-    if (store.enableXendit && xenditSecret) {
-      const xendit = new Xendit({ secretKey: xenditSecret });
-      const invoice = await xendit.Invoice.createInvoice({
-        data: {
-          externalId: topupRef,
-          amount,
-          payerEmail: store.owner.email || "merchant@example.com",
-          description: `Top-up Saldo WhatsApp ${store.name}`,
-        }
-      });
-
-      return NextResponse.json({
-        success: true,
-        provider: "xendit",
-        reference: topupRef,
-        checkoutUrl: invoice.invoiceUrl
-      });
-    }
 
     const midtransServerKey = store.paymentGatewaySecret || platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY;
     const midtransClientKey = store.paymentGatewayClientKey || platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY;

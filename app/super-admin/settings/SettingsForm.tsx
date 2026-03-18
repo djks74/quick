@@ -11,7 +11,6 @@ type PlatformSettings = {
   whatsappPhoneId?: string | null;
   midtransServerKey?: string | null;
   midtransClientKey?: string | null;
-  xenditSecretKey?: string | null;
   biteshipApiKey?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
@@ -28,7 +27,6 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
       whatsappPhoneId: initialSettings?.whatsappPhoneId || "",
       midtransServerKey: initialSettings?.midtransServerKey || "",
       midtransClientKey: initialSettings?.midtransClientKey || "",
-      xenditSecretKey: initialSettings?.xenditSecretKey || "",
       biteshipApiKey: initialSettings?.biteshipApiKey || "",
       bankName: initialSettings?.bankName || "",
       bankAccountNumber: initialSettings?.bankAccountNumber || "",
