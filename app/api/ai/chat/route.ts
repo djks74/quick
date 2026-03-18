@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
 
 const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
@@ -55,27 +56,43 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { products: store.products };
   },
 
-  async create_customer_order({ slug, customer_phone, items, order_type, address }: any) {
+  async get_shipping_rates({ slug, address, weightGrams }: any) {
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) return { error: "Store not found" };
+    const options = await getShippingQuoteFromBiteship({
+      store,
+      destinationAddress: address,
+      weightGrams: weightGrams || 1000
+    });
+    return { options };
+  },
+
+  async create_customer_order({ slug, customer_phone, items, order_type, address, shippingProvider, shippingService, shippingFee }: any) {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
-    let totalAmount = 0;
+    let itemsAmount = 0;
     const orderItemsData = [];
     for (const item of items) {
       const product = await prisma.product.findUnique({ where: { id: item.productId, storeId: store.id } });
       if (!product) return { error: `Product ID ${item.productId} not found` };
-      totalAmount += product.price * item.quantity;
+      itemsAmount += product.price * item.quantity;
       orderItemsData.push({ productId: product.id, quantity: item.quantity, price: product.price });
     }
+
+    const finalAmount = itemsAmount + (Number(shippingFee) || 0);
 
     const order = await prisma.order.create({
       data: {
         storeId: store.id,
         customerPhone: customer_phone,
-        totalAmount,
+        totalAmount: finalAmount,
         status: "PENDING",
         orderType: order_type,
         shippingAddress: address || null,
+        shippingProvider: shippingProvider || null,
+        shippingService: shippingService || null,
+        shippingCost: shippingFee || 0,
         notes: JSON.stringify({ source: "AI_CHAT_ASSISTANT" }),
         items: { create: orderItemsData }
       } as any
@@ -84,7 +101,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return {
       success: true,
       orderId: order.id,
-      totalAmount,
+      totalAmount: finalAmount,
       paymentUrl: `https://gercep.click/checkout/pay/${order.id}`
     };
   }
@@ -118,7 +135,7 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
-        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products, then create_customer_order." }]
+        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, use get_shipping_rates to show delivery options before calling create_customer_order." }]
       } as any,
       tools: [
         {
@@ -157,6 +174,19 @@ export async function POST(req: NextRequest) {
               }
             },
             {
+              name: "get_shipping_rates",
+              description: "Get delivery options and costs for an address.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  address: { type: "string" },
+                  weightGrams: { type: "integer" }
+                },
+                required: ["slug", "address"]
+              }
+            },
+            {
               name: "create_customer_order",
               description: "Create an order for a user.",
               parameters: {
@@ -175,7 +205,10 @@ export async function POST(req: NextRequest) {
                     }
                   },
                   order_type: { type: "string", enum: ["DINE_IN", "TAKEAWAY"] },
-                  address: { type: "string" }
+                  address: { type: "string" },
+                  shippingProvider: { type: "string" },
+                  shippingService: { type: "string" },
+                  shippingFee: { type: "number" }
                 },
                 required: ["slug", "customer_phone", "items", "order_type"]
               }
