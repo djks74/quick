@@ -20,7 +20,7 @@ type BiteshipRateInput = {
 type BiteshipCreateOrderInput = {
   store: any;
   order: any;
-  items: Array<{ name?: string; quantity?: number; price?: number }>;
+  items: Array<{ name?: string; quantity?: number; price?: number; weight?: number }>;
   destinationCoordinate?: { latitude: number; longitude: number };
 };
 
@@ -308,6 +308,18 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
 
   const destinationAddress = String(order?.shippingAddress || "").trim();
   if (!destinationAddress) return { ok: false, error: "DESTINATION_ADDRESS_MISSING" as const };
+  
+  const resolveRecipientName = () => {
+    const raw = String(order?.notes || "").trim();
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const name = parsed?.recipientName;
+      if (typeof name === "string" && name.trim()) return name.trim();
+    } catch {
+    }
+    return null;
+  };
 
   const destinationPostalMatch = destinationAddress.match(/\b(\d{5})\b(?!.*\b\d{5}\b)/);
   const destinationPostalCode = destinationPostalMatch ? Number(destinationPostalMatch[1]) : undefined;
@@ -332,7 +344,7 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
       typeof store?.biteshipOriginLat === "number" && typeof store?.biteshipOriginLng === "number"
         ? { latitude: store.biteshipOriginLat, longitude: store.biteshipOriginLng }
         : undefined,
-    destination_contact_name: "Customer",
+    destination_contact_name: resolveRecipientName() || "Customer",
     destination_contact_phone: customerPhone || senderPhone,
     destination_address: destinationAddress,
     destination_postal_code: destinationPostalCode,
@@ -340,12 +352,12 @@ async function createBiteshipDraftOrder(input: BiteshipCreateOrderInput) {
       ? { latitude: destinationCoordinate.latitude, longitude: destinationCoordinate.longitude }
       : undefined,
     delivery_type: "now",
-    items: (items || []).map((item) => ({
+    items: (items && items.length > 0 ? items : [{ name: "Order Item", quantity: 1, price: 0, weight: 200 }]).map((item) => ({
       name: item?.name || "Order Item",
       description: "WhatsApp Order",
       value: Number(item?.price || 0),
       quantity: Math.max(1, Number(item?.quantity || 1)),
-      weight: 200 // Use more realistic weight (200g per item)
+      weight: Math.max(1, Number(item?.weight || 200))
     }))
   };
 
@@ -489,12 +501,28 @@ export async function createBiteshipOrderForPaidOrder(input: BiteshipCreateOrder
       const courier = confirmData?.courier || confirmData?.order?.courier || {};
        const trackingNo = courier?.waybill_id || courier?.courier_waybill_id || courier?.tracking_id || null;
        const status = normalizeBiteshipStatus(confirmData?.status || confirmData?.order?.status || "confirmed");
+      const driverName =
+        courier?.driver_name ||
+        courier?.courier_name ||
+        courier?.name ||
+        confirmData?.courier?.name ||
+        null;
+      const driverPhone =
+        courier?.driver_phone ||
+        courier?.courier_phone ||
+        courier?.phone ||
+        confirmData?.courier?.phone ||
+        null;
+      const vehicleNumber = courier?.vehicle_number || courier?.plate_number || null;
 
       return {
         ok: true,
         biteshipOrderId,
         trackingNo,
-        shippingStatus: status
+        shippingStatus: status,
+        driverName: driverName ? String(driverName) : null,
+        driverPhone: driverPhone ? String(driverPhone) : null,
+        vehicleNumber: vehicleNumber ? String(vehicleNumber) : null
       };
     }
 

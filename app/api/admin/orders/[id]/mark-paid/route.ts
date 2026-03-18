@@ -32,6 +32,18 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       where: { id: orderId },
       data: { status: "PAID" }
     });
+    
+    const parseShipmentMeta = () => {
+      const raw = String(order.notes || "").trim();
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed?.kind === "MERCHANT_SHIPMENT") return parsed;
+      } catch {
+      }
+      return null;
+    };
+    const shipmentMeta = parseShipmentMeta();
 
     const store = await prisma.store.findUnique({
       where: { id: order.storeId },
@@ -41,19 +53,27 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
     // Notify Customer
     await sendWhatsAppMessage(
       order.customerPhone,
-      `✅ *Pembayaran Terverifikasi*\n` +
-      `Order #${order.id} telah ditandai sebagai PAID oleh Admin.\n` +
-      `Pesanan akan segera diproses.`,
+      shipmentMeta
+        ? `📦 Pengiriman dibuat!\nOrder #${order.id}\nKurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n\nBalas "Cek Resi ${order.id}" untuk tracking.`
+        : `✅ *Pembayaran Terverifikasi*\n` +
+          `Order #${order.id} telah ditandai sebagai PAID oleh Admin.\n` +
+          `Pesanan akan segera diproses.`,
       order.storeId
     ).catch(() => null);
 
     // Notify Merchant
     await sendMerchantWhatsApp(
       order.storeId,
-      `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n` +
-      `Customer: ${order.customerPhone}\n` +
-      `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n` +
-      `Mohon segera diproses.`
+      shipmentMeta
+        ? `🚚 *Pengiriman Baru #${order.id} (Sudah Dibayar)*\n` +
+          `Penerima: ${shipmentMeta?.recipientName || "-"} (${order.customerPhone})\n` +
+          `Kurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
+          `Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || order.totalAmount || 0)}\n` +
+          `Alamat: ${order.shippingAddress || "-"}\n`
+        : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n` +
+          `Customer: ${order.customerPhone}\n` +
+          `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n` +
+          `Mohon segera diproses.`
     ).catch(() => null);
 
     const providerCode = String(order.shippingProvider || "").toUpperCase();
@@ -73,11 +93,23 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       const booking = await createBiteshipOrderForPaidOrder({
         store,
         order,
-        items: existing.items.map((item) => ({
-          name: item.product?.name,
-          quantity: item.quantity,
-          price: item.price
-        }))
+        items:
+          existing.items.length > 0
+            ? existing.items.map((item) => ({
+                name: item.product?.name,
+                quantity: item.quantity,
+                price: item.price
+              }))
+            : shipmentMeta
+              ? [
+                  {
+                    name: String(shipmentMeta?.itemName || "Barang"),
+                    quantity: 1,
+                    price: 0,
+                    weight: Number(shipmentMeta?.weightGrams || 1000)
+                  }
+                ]
+              : [{ name: "Order Item", quantity: 1, price: 0, weight: 200 }]
       });
 
       if (booking.ok) {

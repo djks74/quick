@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { getWaUsageDashboard } from "@/lib/wa-credit";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
+import { ensureWaCreditSchema } from "@/lib/wa-credit";
+import { createPaymentLink } from "@/lib/payment";
+import { createBiteshipDraftForPendingOrder, createBiteshipOrderForPaidOrder, getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
 
 // Mock Transcription (Replace with OpenAI Whisper)
 async function transcribeAudio(audioId: string): Promise<string | null> {
@@ -53,7 +55,8 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `- Shipping option\n` +
       `- Set shipping jne on/off\n` +
       `- Set shipping gosend on/off\n` +
-      `- Set jne only on/off\n\n` +
+      `- Set jne only on/off\n` +
+      `- Mau kirim barang (Order GoSend/JNE)\n\n` +
       `*Pembayaran*\n` +
       `- Payment option\n` +
       `- Set payment midtrans on/off\n` +
@@ -62,8 +65,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `- Buka toko / Tutup toko\n\n` +
       `*Keuangan & Report*\n` +
       `- WA balance\n` +
-      `- Report\n` +
-      `- Mau kirim barang (Order GoSend/JNE)\n\n` +
+      `- Report\n\n` +
       `*Pengiriman (Manual)*\n` +
       `- Update resi [OrderID] [NoResi] [Kurir] [Service]\n` +
       `  Contoh: "Update resi 123 JX123456789 JNE REG"\n\n` +
@@ -296,33 +298,222 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       }
 
       const info = cart[0];
-      await sendWhatsAppMessage(from, "🚀 Sedang memproses booking...", store.id);
+      await sendWhatsAppMessage(from, "⏳ Sedang membuat draft pengiriman...", store.id);
 
       try {
+        const recipientName = String(info?.recipientName || "").trim();
+        const recipientPhone = String(info?.recipientPhone || "").trim();
+        const address = String(info?.address || "").trim();
+        const itemName = String(info?.itemName || "Barang").trim();
+        const weight = Math.max(1, Number(info?.weight || 1000));
+        const selected = info?.selectedCourier;
+        const shippingFee = Math.max(0, Number(selected?.fee || 0));
+        const provider = String(selected?.provider || "").toUpperCase();
+        const service = String(selected?.service || "").trim();
+        const eta = String(selected?.eta || "").trim();
+
+        const notes = JSON.stringify({
+          kind: "MERCHANT_SHIPMENT",
+          recipientName,
+          itemName,
+          weightGrams: weight,
+          requestedBy: from
+        });
+
         const order = await prisma.order.create({
           data: {
             storeId: store.id,
-            customerPhone: info.recipientPhone,
-            shippingAddress: info.address,
-            shippingProvider: info.selectedCourier.provider,
-            shippingService: info.selectedCourier.service,
-            totalAmount: 0,
-            status: "PAID",
-            paymentMethod: "manual",
-            notes: `Merchant Shipment: ${info.itemName}`
+            customerPhone: recipientPhone,
+            totalAmount: shippingFee,
+            status: "PENDING",
+            orderType: "TAKEAWAY",
+            paymentMethod: null,
+            shippingAddress: address,
+            shippingProvider: provider,
+            shippingService: service,
+            shippingCost: shippingFee,
+            shippingEta: eta || null,
+            notes
           }
         });
+
+        const draft = await createBiteshipDraftForPendingOrder({
+          store,
+          order,
+          items: [{ name: itemName, quantity: 1, price: 0, weight }]
+        });
+        if (draft.ok) {
+          const d = draft as any;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: d.draftOrderId || undefined,
+              shippingStatus: d.shippingStatus || "draft_created"
+            }
+          });
+        }
+
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_SHIP_PAYMENT_METHOD", cart: [{ ...info, orderId: order.id }] }
+        });
+
+        await sendWhatsAppMessage(
+          from,
+          `📦 Draft pengiriman dibuat.\n` +
+            `Order ID: #${order.id}\n` +
+            `Kurir: ${provider} ${service}\n` +
+            `Ongkir: ${formatMoney(shippingFee)}\n\n` +
+            `Pilih pembayaran:\n` +
+            `1) WA Credit\n` +
+            `2) QRIS (Midtrans)\n` +
+            `3) Transfer Bank\n\n` +
+            `Balas: 1 / 2 / 3`,
+          store.id
+        );
+      } catch (err) {
+        console.error("Merchant Booking Error:", err);
+        await sendWhatsAppMessage(from, "❌ Gagal membuat draft pengiriman. Pastikan alamat pengirim + Biteship sudah benar.", store.id);
+      }
+      return;
+    }
+
+    if (step === "MERCHANT_SHIP_PAYMENT_METHOD") {
+      const info = cart[0] || {};
+      const orderId = Number(info?.orderId || 0);
+      if (!orderId) {
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+        await sendWhatsAppMessage(from, "❌ Session pengiriman tidak valid. Ketik 'Mau kirim barang' untuk mulai lagi.", store.id);
+        return;
+      }
+
+      const order = await prisma.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+        await sendWhatsAppMessage(from, "❌ Order tidak ditemukan. Ketik 'Mau kirim barang' untuk mulai lagi.", store.id);
+        return;
+      }
+
+      const choice = lowerText.replace(/\s+/g, " ").trim();
+      const amount = Math.max(0, Number(order.totalAmount || 0));
+      const itemName = String(info?.itemName || "Barang").trim();
+      const weight = Math.max(1, Number(info?.weight || 1000));
+
+      if (choice === "1" || choice === "wa" || choice === "wa credit" || choice === "whatsapp credit") {
+        await ensureWaCreditSchema();
+        const ok = await prisma.$transaction(async (tx) => {
+          const updated = await tx.store.updateMany({
+            where: { id: store.id, waBalance: { gte: amount } },
+            data: { waBalance: { decrement: amount } }
+          });
+          if (!updated.count) return false;
+          const after = await tx.store.findUnique({ where: { id: store.id }, select: { waBalance: true } });
+          await tx.waUsageLog.create({
+            data: {
+              storeId: store.id,
+              type: "SHIPMENT_PAYMENT",
+              amount: -amount,
+              description: `Shipment payment for order #${order.id}`,
+              balanceAfter: Number((after?.waBalance || 0).toFixed(2)),
+              externalRef: `SHIPMENT-${order.id}`
+            }
+          });
+          await tx.order.update({
+            where: { id: order.id },
+            data: { status: "PAID", paymentMethod: "wa_credit" }
+          });
+          return true;
+        }).catch(() => false);
+
+        if (!ok) {
+          await sendWhatsAppMessage(from, `❌ Saldo WA tidak cukup. Total: ${formatMoney(amount)}\nBalas 2 untuk QRIS atau 3 untuk Transfer.`, store.id);
+          return;
+        }
+
+        const booked = await createBiteshipOrderForPaidOrder({
+          store,
+          order: { ...order, status: "PAID" },
+          items: [{ name: itemName, quantity: 1, price: 0, weight }]
+        });
+
+        let tracking = "";
+        if (booked.ok) {
+          const b = booked as any;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: b.biteshipOrderId || order.biteshipOrderId || null,
+              shippingTrackingNo: b.trackingNo || order.shippingTrackingNo || null,
+              shippingStatus: b.shippingStatus || order.shippingStatus || "confirmed"
+            }
+          });
+          if (b.trackingNo) tracking = b.trackingNo;
+        }
 
         await prisma.whatsAppSession.update({
           where: { id: merchantSession.id },
           data: { step: "MERCHANT_MODE", cart: [] }
         });
 
-        await sendWhatsAppMessage(from, `✅ Berhasil booking pengiriman!\nOrder ID: #${order.id}\n\nKurir akan segera memproses.`, store.id);
-      } catch (err) {
-        console.error("Merchant Booking Error:", err);
-        await sendWhatsAppMessage(from, "❌ Gagal memproses booking. Silakan coba lagi nanti.", store.id);
+        await sendWhatsAppMessage(
+          from,
+          `✅ Pembayaran via WA Credit berhasil.\nOrder #${order.id}\nKurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
+            (tracking ? `Resi: ${tracking}\n` : "") +
+            `\nBalas "Cek Resi ${order.id}" untuk tracking.`,
+          store.id
+        );
+
+        await sendWhatsAppMessage(
+          order.customerPhone,
+          `📦 Pengiriman dibuat!\nOrder #${order.id}\nKurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
+            (tracking ? `Resi: ${tracking}\n` : "") +
+            `\nBalas "Cek Resi ${order.id}" untuk lihat status.`,
+          store.id
+        );
+        return;
       }
+
+      if (choice === "2" || choice === "qris" || choice === "midtrans") {
+        const paymentUrl = await createPaymentLink(order.id, amount, from, store.id, "shipment");
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+        await sendWhatsAppMessage(
+          from,
+          `💳 Silakan bayar via QRIS (Midtrans).\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\nSetelah dibayar, sistem akan booking kurir otomatis.`,
+          store.id,
+          { buttonText: "Bayar QRIS", buttonUrl: paymentUrl }
+        );
+        return;
+      }
+
+      if (choice === "3" || choice === "bank" || choice === "transfer") {
+        const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
+        const bankName = platform?.bankName || "BCA";
+        const bankAccountNumber = platform?.bankAccountNumber || "-";
+        const bankAccountName = platform?.bankAccountName || "GERCEP";
+        await prisma.whatsAppSession.update({
+          where: { id: merchantSession.id },
+          data: { step: "MERCHANT_MODE", cart: [] }
+        });
+        await sendWhatsAppMessage(
+          from,
+          `🏦 Transfer Bank\nOrder #${order.id}\nTotal: ${formatMoney(amount)}\n\n` +
+            `${bankName}\nNo Rek: ${bankAccountNumber}\nA/N: ${bankAccountName}\n\n` +
+            `Catatan: tulis berita transfer "SHIP#${order.id}".\nSetelah transfer, admin akan verifikasi lalu booking kurir.`,
+          store.id
+        );
+        return;
+      }
+
+      await sendWhatsAppMessage(from, "❌ Pilihan tidak valid. Balas 1 / 2 / 3.", store.id);
       return;
     }
   }

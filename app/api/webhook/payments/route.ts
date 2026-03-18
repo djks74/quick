@@ -5,7 +5,7 @@ import { applyWaTopup, grantBundleCredit } from '@/lib/wa-credit';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { acquireNotificationLock, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
-import { createBiteshipOrderForPaidOrder } from '@/lib/shipping-biteship';
+import { createBiteshipOrderForPaidOrder, getBiteshipOrderStatus } from '@/lib/shipping-biteship';
 
 type IngredientUOM = 'gram' | 'kg' | 'pcs';
 
@@ -125,12 +125,26 @@ export async function POST(req: NextRequest) {
 
     // Send WhatsApp Notification if PAID
     if (status === 'PAID') {
+      const parseShipmentMeta = () => {
+        const raw = String(order.notes || "").trim();
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.kind === "MERCHANT_SHIPMENT") return parsed;
+        } catch {
+        }
+        return null;
+      };
+      const shipmentMeta = parseShipmentMeta();
+
       // Update Store Balance (Net Amount)
       const netAmount = order.totalAmount - (order.paymentFee || 0) - (order.transactionFee || 0);
-      await prisma.store.update({
-        where: { id: order.storeId },
-        data: { balance: { increment: netAmount } }
-      });
+      if (!shipmentMeta) {
+        await prisma.store.update({
+          where: { id: order.storeId },
+          data: { balance: { increment: netAmount } }
+        });
+      }
 
       const store = await prisma.store.findUnique({
         where: { id: order.storeId },
@@ -141,6 +155,23 @@ export async function POST(req: NextRequest) {
         where: { orderId: order.id },
         include: { product: true }
       });
+      const shippingItems =
+        itemsForShipping.length > 0
+          ? itemsForShipping.map((item) => ({
+              name: item.product?.name,
+              quantity: item.quantity,
+              price: item.price
+            }))
+          : shipmentMeta
+            ? [
+                {
+                  name: String(shipmentMeta?.itemName || "Barang"),
+                  quantity: 1,
+                  price: 0,
+                  weight: Number(shipmentMeta?.weightGrams || 1000)
+                }
+              ]
+            : [{ name: "Order Item", quantity: 1, price: 0, weight: 200 }];
 
       const providerCode = String(order.shippingProvider || "").toUpperCase();
       const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";
@@ -158,11 +189,7 @@ export async function POST(req: NextRequest) {
         const booking = await createBiteshipOrderForPaidOrder({
           store,
           order,
-          items: itemsForShipping.map((item) => ({
-            name: item.product?.name,
-            quantity: item.quantity,
-            price: item.price
-          }))
+          items: shippingItems
         });
 
         if (booking.ok) {
@@ -198,16 +225,43 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 1. Notify Customer
-      await sendWhatsAppMessage(
-        order.customerPhone,
-        `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n` +
-          `${order.orderType === 'TAKEAWAY' ? `\nTipe: Takeaway / Delivery\nKurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` : `\nTipe: Dine In`}` +
-          `${order.biteshipOrderId ? `\nBiteship ID: ${order.biteshipOrderId}` : ``}` +
-          `${order.shippingTrackingNo ? `\nResi: ${order.shippingTrackingNo}` : ``}` +
-          `\n\nTerima kasih! Pesanan sedang kami siapkan.`,
-        order.storeId
-      );
+      const bookedDetails = await (async () => {
+        if (!order?.biteshipOrderId || !store) return null;
+        const b = await getBiteshipOrderStatus(store, String(order.biteshipOrderId)).catch(() => null);
+        const courier = (b as any)?.courier || (b as any)?.order?.courier || {};
+        const driverName = courier?.driver_name || courier?.courier_name || courier?.name || null;
+        const driverPhone = courier?.driver_phone || courier?.courier_phone || courier?.phone || null;
+        const vehicleNumber = courier?.vehicle_number || courier?.plate_number || null;
+        return {
+          driverName: driverName ? String(driverName) : null,
+          driverPhone: driverPhone ? String(driverPhone) : null,
+          vehicleNumber: vehicleNumber ? String(vehicleNumber) : null
+        };
+      })();
+
+      // 1. Notify Recipient / Customer
+      if (shipmentMeta) {
+        await sendWhatsAppMessage(
+          order.customerPhone,
+          `📦 Pengiriman dibuat!\n\n` +
+            `Order #${order.id}\n` +
+            `Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n` +
+            `${order.shippingTrackingNo ? `Resi: ${order.shippingTrackingNo}\n` : ``}` +
+            `${order.shippingStatus ? `Status: ${order.shippingStatus}\n` : ``}` +
+            `\nBalas "Cek Resi ${order.id}" untuk lihat status terbaru.`,
+          order.storeId
+        );
+      } else {
+        await sendWhatsAppMessage(
+          order.customerPhone,
+          `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n` +
+            `${order.orderType === 'TAKEAWAY' ? `\nTipe: Takeaway / Delivery\nKurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` : `\nTipe: Dine In`}` +
+            `${order.biteshipOrderId ? `\nBiteship ID: ${order.biteshipOrderId}` : ``}` +
+            `${order.shippingTrackingNo ? `\nResi: ${order.shippingTrackingNo}` : ``}` +
+            `\n\nTerima kasih! Pesanan sedang kami siapkan.`,
+          order.storeId
+        );
+      }
 
       // 2. Notify Merchant (IMMEDIATELY)
       if (store) {
@@ -216,9 +270,13 @@ export async function POST(req: NextRequest) {
               include: { product: true }
           });
 
-          let msg = `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
+          let msg = shipmentMeta
+            ? `🚚 *Pengiriman Baru #${order.id} (Sudah Dibayar)*\n`
+            : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
           if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
-          msg += `👤 Customer: ${order.customerPhone}\n`;
+          msg += shipmentMeta
+            ? `👤 Penerima: ${shipmentMeta?.recipientName || "-"} (${order.customerPhone})\n`
+            : `👤 Customer: ${order.customerPhone}\n`;
           msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
           msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
           if (order.orderType === 'TAKEAWAY') {
@@ -235,12 +293,21 @@ export async function POST(req: NextRequest) {
             if (order.shippingStatus) {
               msg += `📮 Status: ${order.shippingStatus}\n`;
             }
+            if (bookedDetails?.driverName || bookedDetails?.driverPhone || bookedDetails?.vehicleNumber) {
+              msg += `👨‍✈️ Driver: ${bookedDetails?.driverName || "-"}\n`;
+              if (bookedDetails?.driverPhone) msg += `📱 Driver: ${bookedDetails.driverPhone}\n`;
+              if (bookedDetails?.vehicleNumber) msg += `🚗 Plat: ${bookedDetails.vehicleNumber}\n`;
+            }
             msg += `\n`;
           }
           msg += `*Item:*\n`;
-          items.forEach(item => {
-              msg += `${item.quantity}x ${item.product.name}\n`;
-          });
+          if (shipmentMeta) {
+            msg += `1x ${shipmentMeta?.itemName || "Barang"}\n`;
+          } else {
+            items.forEach(item => {
+                msg += `${item.quantity}x ${item.product.name}\n`;
+            });
+          }
           msg += `\n⚠️ Mohon segera proses pesanan ini!`;
 
           // Send notification and don't wait for inventory logic
