@@ -355,8 +355,8 @@ export async function POST(req: NextRequest) {
       let preferredMerchantStoreId: number | null = null;
       let isStoreWhatsappNumber = false;
 
-      // Fallback: Check if this number is listed as a Store WhatsApp Number
-      if (!user) {
+      // Fallback or verify: Check if this number is listed as a Store WhatsApp Number
+      if (true) { // Always check to set preferredMerchantStoreId
           const storeByPhone = await prisma.store.findFirst({ 
             where: { whatsapp: { in: senderPhoneVariants } }, 
             include: { owner: true },
@@ -366,16 +366,29 @@ export async function POST(req: NextRequest) {
           if (storeByPhone) {
               isStoreWhatsappNumber = true;
               preferredMerchantStoreId = storeByPhone.id;
-              user = await prisma.user.findFirst({
-                  where: { id: storeByPhone.ownerId, role: { in: ["MERCHANT", "SUPER_ADMIN"] } },
-                  include: { stores: true }
-              });
+              
+              if (!user) {
+                // Try finding the owner as the user
+                user = await prisma.user.findFirst({
+                    where: { id: storeByPhone.ownerId },
+                    include: { stores: true }
+                });
+                
+                // If owner found but not MERCHANT/SUPER_ADMIN, force MERCHANT role for this session
+                if (user && !["MERCHANT", "SUPER_ADMIN"].includes(user.role)) {
+                  (user as any).role = "MERCHANT";
+                }
+              }
           }
       }
 
       // Check if Merchant is in "User Mode"
       let isMerchant = !!user && (user.role === 'MERCHANT' || user.role === 'SUPER_ADMIN');
       let forceUserMode = false;
+
+      if (user) {
+        console.log(`[WHATSAPP] Found User: ${user.phoneNumber || from}, Role: ${user.role}, isStoreWhatsappNumber: ${isStoreWhatsappNumber}`);
+      }
 
       // Detect User Intent that overrides Merchant Mode
       if (isMerchant) {
@@ -424,7 +437,11 @@ export async function POST(req: NextRequest) {
 
         // Logic to bypass merchant handler
         const forceMerchantMode = isStoreWhatsappNumber && !forceUserMode;
-        if ((merchantSession.step === 'USER_MODE' || forceUserMode) && !forceMerchantMode) {
+        
+        // If command is help/menu/report/balance, force merchant mode for merchants
+        const isMerchantAdminCommand = ["help", "menu", "report", "balance", "wa balance", "saldo", "saldo wa"].includes(lowerText || "");
+        
+        if ((merchantSession.step === 'USER_MODE' || forceUserMode) && !forceMerchantMode && !isMerchantAdminCommand) {
             // Proceed to User Logic (below)
         } else {
             // Default: Merchant Handler
@@ -471,17 +488,19 @@ export async function POST(req: NextRequest) {
            }
          }
          
-         const recentSession = await prisma.whatsAppSession.findFirst({
-            where: { phoneNumber: from },
-            orderBy: { updatedAt: 'desc' }
-         });
-         
-        if (recentSession && recentSession.storeId) {
-            const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
-            if (s) {
-                targetStore = s;
-                console.log(`[WHATSAPP] Resolved target store from session: ${targetStore.name}`);
-            }
+         if (!targetStore) {
+           const recentSession = await prisma.whatsAppSession.findFirst({
+              where: { phoneNumber: from },
+              orderBy: { updatedAt: 'desc' }
+           });
+           
+           if (recentSession && recentSession.storeId) {
+              const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
+              if (s) {
+                  targetStore = s;
+                  console.log(`[WHATSAPP] Resolved target store from session: ${targetStore.name}`);
+              }
+           }
          }
          
          if (!targetStore) {
