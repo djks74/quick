@@ -115,7 +115,9 @@ export async function POST(req: NextRequest) {
 
     const chat = model.startChat({
       history: history || [],
-      systemInstruction: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user wants to order, first search_stores, then get_store_products, then create_customer_order.",
+      systemInstruction: {
+        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user wants to order, first search_stores, then get_store_products, then create_customer_order." }]
+      } as any,
       tools: [
         {
           functionDeclarations: [
