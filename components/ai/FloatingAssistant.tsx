@@ -1,16 +1,25 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Sparkles, X, MessageCircle } from "lucide-react";
+import { Send, Bot, User, Loader2, Sparkles, X, MessageCircle, MapPin, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface Message {
+  role: string;
+  text: string;
+  breakdown?: string;
+  paymentUrl?: string;
+}
 
 export default function FloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<{ role: string; text: string }[]>([
+  const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", text: "Halo! Saya Asisten AI Gercep. Mau cari makan atau pesan sesuatu hari ini?" }
   ]);
+  const [history, setHistory] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,6 +27,57 @@ export default function FloatingAssistant() {
       scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  const shareLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const locMsg = `📍 Shared Location: ${latitude}, ${longitude}`;
+        
+        setMessages(prev => [...prev, { role: "user", text: locMsg }]);
+        setIsLoading(true);
+        setIsLocating(false);
+
+        try {
+          const res = await fetch("/api/ai/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              message: locMsg, 
+              history,
+              isPublic: true,
+              context: {
+                channel: "WEB",
+                location: { latitude, longitude }
+              }
+            })
+          });
+          const data = await res.json();
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            text: data.text,
+            breakdown: data.breakdown,
+            paymentUrl: data.paymentUrl
+          }]);
+          if (data.history) setHistory(data.history);
+        } catch (e) {
+          setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);
+        } finally {
+          setIsLoading(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        alert("Unable to retrieve your location");
+      }
+    );
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -31,13 +91,24 @@ export default function FloatingAssistant() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg, isPublic: true })
+        body: JSON.stringify({ 
+          message: userMsg, 
+          history,
+          isPublic: true,
+          context: { channel: "WEB" }
+        })
       });
       const data = await res.json();
       if (data.error) {
         setMessages(prev => [...prev, { role: "assistant", text: `❌ Error: ${data.error}` }]);
       } else {
-        setMessages(prev => [...prev, { role: "assistant", text: data.text }]);
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          text: data.text,
+          breakdown: data.breakdown,
+          paymentUrl: data.paymentUrl
+        }]);
+        if (data.history) setHistory(data.history);
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);
@@ -72,12 +143,28 @@ export default function FloatingAssistant() {
                   }`}>
                     {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
                   </div>
-                  <div className={`p-3 rounded-xl text-[13px] leading-relaxed ${
+                  <div className={`p-3 rounded-xl text-[13px] leading-relaxed shadow-sm ${
                     m.role === "user" 
                       ? "bg-primary text-white rounded-tr-none" 
-                      : "bg-gray-50 dark:bg-gray-800/50 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm"
+                      : "bg-gray-50 dark:bg-gray-800/50 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700"
                   }`}>
-                    {m.text}
+                    {m.breakdown && (
+                      <div className="mb-2 p-2 bg-white/50 dark:bg-black/20 rounded-lg font-mono text-[11px] border border-black/5 dark:border-white/5 whitespace-pre-wrap">
+                        {m.breakdown}
+                      </div>
+                    )}
+                    <div>{m.text}</div>
+                    {m.paymentUrl && (
+                      <a 
+                        href={m.paymentUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-3 flex items-center justify-center gap-2 w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs transition-colors shadow-md"
+                      >
+                        <ExternalLink size={14} />
+                        Pay Now
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
@@ -88,7 +175,7 @@ export default function FloatingAssistant() {
                   <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                     <Loader2 size={14} className="animate-spin text-primary" />
                   </div>
-                  Thinking...
+                  {isLocating ? "Getting location..." : "Thinking..."}
                 </div>
               </div>
             )}
@@ -97,22 +184,32 @@ export default function FloatingAssistant() {
 
           {/* Input */}
           <div className="p-3 bg-gray-50 dark:bg-gray-800/20 border-t dark:border-gray-800">
-            <div className="relative">
-              <input
-                type="text"
-                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 pr-10 text-xs focus:ring-2 focus:ring-primary outline-none dark:text-white transition-all shadow-sm"
-                placeholder="Tanya apa saja..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              />
-              <button 
-                onClick={handleSend}
+            <div className="flex gap-2">
+              <button
+                onClick={shareLocation}
                 disabled={isLoading}
-                className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-xl transition-all disabled:opacity-50"
+                title="Share Location"
               >
-                <Send size={16} />
+                <MapPin size={18} />
               </button>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 pr-10 text-xs focus:ring-2 focus:ring-primary outline-none dark:text-white transition-all shadow-sm"
+                  placeholder="Tanya apa saja..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                />
+                <button 
+                  onClick={handleSend}
+                  disabled={isLoading}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Send size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>

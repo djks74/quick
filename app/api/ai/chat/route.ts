@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship } from "@/lib/shipping-biteship";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
@@ -196,6 +197,42 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
+  async send_order_to_whatsapp({ orderId, phoneNumber }: { orderId: number; phoneNumber: string }) {
+    const order = await prisma.order.findUnique({
+      where: { id: Number(orderId) },
+      include: { store: true, items: { include: { product: true } } }
+    });
+
+    if (!order) return { error: "Order not found" };
+
+    const details = order.items.map(item =>
+      `${item.product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)}`
+    );
+
+    const breakdown = [
+      `🛒 *Gercep Order #${order.id}*`,
+      ...details,
+      `------------------`,
+      `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount - order.taxAmount - order.serviceCharge - order.paymentFee - order.shippingCost)}`,
+      order.taxAmount > 0 ? `Pajak: Rp ${new Intl.NumberFormat('id-ID').format(order.taxAmount)}` : null,
+      order.serviceCharge > 0 ? `Service: Rp ${new Intl.NumberFormat('id-ID').format(order.serviceCharge)}` : null,
+      order.shippingCost > 0 ? `Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost)}` : null,
+      order.paymentFee > 0 ? `Biaya: Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
+      `*Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`
+    ].filter(Boolean).join("\n");
+
+    const paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+
+    await sendWhatsAppMessage(
+      phoneNumber,
+      `${breakdown}\n\nSilakan klik tombol di bawah untuk membayar.`,
+      order.storeId,
+      { buttonText: "Pay Now", buttonUrl: paymentUrl }
+    );
+
+    return { success: true, message: "Order details sent to WhatsApp." };
+  },
+
   async create_merchant_invoice({ amount, customer_phone, merchant_phone, payment_method }: any) {
     const user = await prisma.user.findFirst({
       where: { phoneNumber: { contains: merchant_phone.replace(/\D/g, "") } },
@@ -299,7 +336,13 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, you MUST ask the user to share their location or address and provide delivery options (GOSEND/JNE) via 'get_shipping_rates' before calling 'create_customer_order'. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products. If it's a takeaway order, you MUST ask the user to share their location or address and provide delivery options (GOSEND/JNE) via 'get_shipping_rates' before calling 'create_customer_order'.
+
+Once an order is created:
+1. Show the user the 'breakdown' of the order.
+2. Tell them they can pay directly here or have the payment link sent to their WhatsApp.
+3. If they want to pay on WhatsApp, ask for their WhatsApp number and call 'send_order_to_whatsapp'.
+4. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -421,6 +464,18 @@ export async function POST(req: NextRequest) {
                 },
                 required: ["amount", "customer_phone", "merchant_phone"]
               }
+            },
+            {
+              name: "send_order_to_whatsapp",
+              description: "Send order details and payment link to the user's WhatsApp number.",
+              parameters: {
+                type: "object",
+                properties: {
+                  orderId: { type: "integer" },
+                  phoneNumber: { type: "string", description: "The WhatsApp number to send the order to." }
+                },
+                required: ["orderId", "phoneNumber"]
+              }
             }
           ]
         }
@@ -450,6 +505,12 @@ export async function POST(req: NextRequest) {
               response: { content: data }
             }
           });
+          
+          // Capture structured data for the response
+          if (call.name === "create_customer_order" && data.success) {
+            (response as any).breakdown = data.breakdown;
+            (response as any).paymentUrl = data.paymentUrl;
+          }
         }
       }
 
@@ -462,7 +523,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       text: response.text(),
-      history: await chat.getHistory()
+      history: await chat.getHistory(),
+      breakdown: (response as any).breakdown,
+      paymentUrl: (response as any).paymentUrl
     });
 
   } catch (error: any) {
