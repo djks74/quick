@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import FloatingAssistant from "@/components/ai/FloatingAssistant";
 
 export const metadata: Metadata = {
   title: "Gercep",
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="font-sans antialiased min-h-screen bg-white">
         <Providers>
           {children}
+          <FloatingAssistant />
         </Providers>
       </body>
     </html>
