@@ -14,6 +14,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { slug: { contains: query, mode: "insensitive" } },
+          { categories: { some: { name: { contains: query, mode: "insensitive" } } } },
+          { products: { some: { name: { contains: query, mode: "insensitive" } } } }
         ]
       },
       select: { name: true, slug: true },
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: history || [],
       systemInstruction: {
-        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user wants to order, first search_stores, then get_store_products, then create_customer_order." }]
+        parts: [{ text: "You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products, then create_customer_order." }]
       } as any,
       tools: [
         {
