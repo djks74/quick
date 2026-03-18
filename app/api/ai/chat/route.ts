@@ -266,7 +266,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     }
 
-    let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+    let paymentUrl: string | null = null;
     try {
       const payment = await processPayment(
         order.id,
@@ -281,6 +281,12 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     } catch (e) {
       console.error("[AI_ORDER_PAYMENT_ERROR]", e);
+    }
+
+    if (!paymentUrl) {
+      return {
+        error: "Actual payment link is unavailable right now. Please retry."
+      };
     }
 
     const breakdown = [
@@ -303,7 +309,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       orderId: order.id,
       totalAmount: finalAmount,
       breakdown,
-      paymentUrl: paymentUrl
+      paymentUrl
     };
   },
 
@@ -332,13 +338,43 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       `*Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`
     ].filter(Boolean).join("\n");
 
-    const paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+    let resolvedPaymentUrl = order.paymentUrl || null;
+    const isInternalCheckoutLink = Boolean(resolvedPaymentUrl && resolvedPaymentUrl.includes("/checkout/pay/"));
+    if ((!resolvedPaymentUrl || isInternalCheckoutLink) && order.status === "PENDING") {
+      try {
+        const preferredType =
+          order.paymentMethod === "qris" || order.paymentMethod === "bank_transfer"
+            ? order.paymentMethod
+            : undefined;
+        const payment = await processPayment(
+          order.id,
+          order.totalAmount,
+          order.customerPhone,
+          "midtrans",
+          order.storeId,
+          preferredType
+        );
+        if (payment?.paymentUrl) {
+          resolvedPaymentUrl = payment.paymentUrl;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { paymentUrl: resolvedPaymentUrl }
+          });
+        }
+      } catch (e) {
+        console.error("[AI_SEND_WHATSAPP_PAYMENT_URL_ERROR]", e);
+      }
+    }
+
+    if (!resolvedPaymentUrl || (resolvedPaymentUrl && resolvedPaymentUrl.includes("/checkout/pay/"))) {
+      return { error: "Actual payment link unavailable for this order." };
+    }
 
     await sendWhatsAppMessage(
       cleanPhone, 
       `${breakdown}\n\nSilakan klik tombol di bawah untuk membayar.`, 
       order.storeId,
-      { buttonText: "Pay Now", buttonUrl: paymentUrl }
+      { buttonText: "Pay Now", buttonUrl: resolvedPaymentUrl }
     );
 
     return { success: true, message: "Order details sent to WhatsApp." };
@@ -385,8 +421,6 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     }
 
-    const fallbackCheckoutUrl = `https://gercep.click/checkout/pay/${order.id}`;
-
     const details = order.items.map(item => 
       `${item.product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)}`
     );
@@ -407,14 +441,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       order.paymentFee > 0 ? `💳 Biaya (${order.paymentMethod?.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
       `--------------------------------`,
       `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`,
-      `Link Bayar: ${resolvedPaymentUrl || fallbackCheckoutUrl}`
+      resolvedPaymentUrl ? `Link Bayar: ${resolvedPaymentUrl}` : null
     ].filter(Boolean).join("\n");
 
     return { 
       success: true, 
       orderId: order.id, 
       breakdown, 
-      paymentUrl: resolvedPaymentUrl || fallbackCheckoutUrl,
+      paymentUrl: resolvedPaymentUrl,
       status: order.status
     };
   },
@@ -474,7 +508,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       } as any
     });
 
-    let paymentUrl = `https://gercep.click/checkout/pay/${order.id}`;
+    let paymentUrl: string | null = null;
     try {
       const payment = await processPayment(
         order.id,
@@ -489,6 +523,12 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     } catch (e) {
       console.error("[AI_INVOICE_PAYMENT_ERROR]", e);
+    }
+
+    if (!paymentUrl) {
+      return {
+        error: "Actual payment link is unavailable right now. Please retry."
+      };
     }
 
     const breakdown = [
@@ -506,7 +546,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       orderId: order.id,
       totalAmount: finalAmount,
       breakdown,
-      paymentUrl: paymentUrl
+      paymentUrl
     };
   }
 };
