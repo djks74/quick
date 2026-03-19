@@ -337,6 +337,20 @@ export async function POST(req: NextRequest) {
           // Send notification and don't wait for inventory logic
           sendMerchantWhatsApp(order.storeId, msg).catch((e) => console.error("MERCHANT_NOTIF_FAILED", e));
 
+          // 2.5 Notify Admin Dashboard & POS
+          await createOrderNotification({
+            storeId: order.storeId,
+            orderId: order.id,
+            source: isShipment ? "MERCHANT_SHIPMENT" : (isInvoice ? "MERCHANT_INVOICE" : "PAYMENT_SUCCESS"),
+            title: isShipment ? `Pengiriman baru #${order.id}` : (isInvoice ? `Tagihan lunas #${order.id}` : `Order baru #${order.id} (Lunas)`),
+            body: `${order.customerPhone} • Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}`,
+            metadata: {
+              orderType: order.orderType,
+              totalAmount: order.totalAmount,
+              tableNumber: order.tableNumber
+            }
+          }).catch(() => null);
+
           // 3. Update Inventory (Async / Non-blocking for notification)
           try {
              const itemsWithIngredients = await prisma.orderItem.findMany({

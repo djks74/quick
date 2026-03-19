@@ -559,9 +559,9 @@ export default function AdminShell({
               <div className="p-3 text-xs italic text-gray-500 dark:text-gray-500">No notifications</div>
             ) : (
               notifications.slice(0, 10).map((n) => (
-                <div key={n.id} className="p-3 border-b border-gray-100 dark:border-gray-800">
+                <div key={n.id} className={cn("p-3 border-b border-gray-100 dark:border-gray-800", !n.readAt ? "bg-orange-50/40 dark:bg-orange-900/10" : "")}>
                   <div className="text-[12px] font-bold text-gray-800 dark:text-gray-200">{n.title}</div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-500 mt-1">{n.body}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{n.body}</div>
                   <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-1">
                     {n.source} • #{n.orderId}
                   </div>

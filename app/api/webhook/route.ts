@@ -843,7 +843,7 @@ export async function POST(req: NextRequest) {
         }).catch(() => null);
         await sendMerchantWhatsApp(
           targetStore.id,
-          `🛒 *Order Pending*\nOrder delivery #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${selected?.provider === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (selected?.provider || "GOSEND")}${selected?.service ? ` ${selected.service}` : ""}${selected?.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+          `🛒 *Order Pending*\nOrder delivery #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${selected?.provider === "STORE_COURIER" ? "Kurir Toko" : (selected?.provider || "GOSEND")}${selected?.service ? ` ${selected.service}` : ""}${selected?.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
           order.id
         ).catch(() => null);
 
@@ -1658,7 +1658,7 @@ export async function POST(req: NextRequest) {
 
         await sendMerchantWhatsApp(
           targetStore.id,
-          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${ctx.provider === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (selected?.provider || ctx.provider)}${selected?.service ? ` ${selected.service}` : ""}${ctx.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${ctx.provider === "STORE_COURIER" ? "Kurir Toko" : (selected?.provider || ctx.provider)}${selected?.service ? ` ${selected.service}` : ""}${ctx.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
           order.id
         ).catch(() => null);
 

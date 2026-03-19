@@ -205,13 +205,13 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
       if (filtered.length === 0) {
         return { 
-          error: `Metode pengiriman tidak tersedia untuk rute ini. Toko hanya mendukung: ${enabledProviders.join(", ") || "Pickup"}.`,
+          error: `Metode pengiriman tidak tersedia untuk rute ini. Toko hanya mendukung: ${enabledProviders.map(p => p === "STORE_COURIER" ? "Kurir Toko" : p).join(", ") || "Pickup"}.`,
           suggestManual: true 
         };
       }
 
       const options = filtered.map((q: any) => 
-        `- ${q.provider} ${q.service}: Rp ${new Intl.NumberFormat('id-ID').format(q.fee)}`
+        `- ${q.provider === "STORE_COURIER" ? "Kurir Toko" : q.provider} ${q.provider === "STORE_COURIER" ? "" : q.service}: Rp ${new Intl.NumberFormat('id-ID').format(q.fee)}`.replace(/\s+/g, ' ').trim()
       ).join("\n");
 
       return { options };
@@ -402,7 +402,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     await sendMerchantWhatsApp(
       store.id,
-      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\nKurir: ${providerUpper === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (shippingProvider || "-")}${shippingService ? ` ${shippingService}` : ""}${providerUpper === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\nKurir: ${providerUpper === "STORE_COURIER" ? "Kurir Toko" : (shippingProvider || "-")}${shippingService ? ` ${shippingService}` : ""}${providerUpper === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
       order.id
     ).catch(() => null);
 
@@ -415,7 +415,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(itemsAmount)}`,
       taxAmount > 0 ? `Pajak (${store.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}` : null,
       serviceCharge > 0 ? `Service (${store.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}` : null,
-      shippingCost > 0 ? `🚛 Ongkir (${shippingProvider}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
+      shippingCost > 0 ? `🚛 Ongkir (${providerUpper === "STORE_COURIER" ? "Kurir Toko" : (providerUpper || "-")}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
       paymentFee > 0 ? `💳 Biaya (${payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
       `--------------------------------`,
       `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
