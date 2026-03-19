@@ -134,9 +134,6 @@ export default function ApiDocumentationPage() {
           </Link>
           
           <div className="flex items-center gap-8">
-             <Link href="https://github.com/gercep-dev" target="_blank" className="text-gray-400 hover:text-white transition-colors">
-                <span className="text-xs font-bold uppercase tracking-widest">Github</span>
-             </Link>
              <Link href="mailto:api@gercep.click" className="text-gray-400 hover:text-white transition-colors">
                 <span className="text-xs font-bold uppercase tracking-widest">Support</span>
              </Link>
