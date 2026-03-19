@@ -19,3 +19,17 @@ export function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2
 
   return R * c;
 }
+
+export function formatCurrency(amount: number, currency: "USD" | "IDR" = "IDR") {
+  if (currency === "IDR") {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
