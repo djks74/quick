@@ -943,9 +943,11 @@ Once an order is created:
     });
 
     // 1. Initial Request to Gemini
+    console.log(`[AI_CHAT] Initial message: "${message}"`);
     let result = await chat.sendMessage(String(message));
     let response = result.response;
-    let calls = response.functionCalls();
+    let calls = response.functionCalls() || [];
+    console.log(`[AI_CHAT] Gemini response calls count: ${calls.length}`);
 
     // 2. Handle Function Calls (Loop until no more calls)
     const MAX_ITERATIONS = 5;
@@ -996,7 +998,7 @@ Once an order is created:
         
         result = await chat.sendMessage(parts as any);
         response = result.response;
-        calls = response.functionCalls();
+        calls = response.functionCalls() || [];
       } else {
         calls = [];
       }

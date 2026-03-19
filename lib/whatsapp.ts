@@ -165,7 +165,7 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     );
     if (!reserve.ok) {
       if (reserve.reason === "INSUFFICIENT_BALANCE") {
-        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}.`);
+        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId} to send to ${to}`);
         const alertPhone = (reserve as any).alertPhone as string | null;
         const alertLevel = (reserve as any).alertLevel as "LOW" | "CRITICAL" | null;
         const storeSlug = (reserve as any).storeSlug as string | undefined;

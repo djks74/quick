@@ -26,21 +26,21 @@ export async function getMerchantPhone(storeId: number) {
     const phones = new Set<string>();
 
     // 1. STRONGLY PRIORITIZE store.whatsapp (Store Identity)
+    console.log(`[MERCHANT_NOTIF] Raw store.whatsapp: "${store.whatsapp}"`);
     if (store.whatsapp && store.whatsapp.trim().length > 5) {
       phones.add(store.whatsapp.trim());
-      console.log(`[MERCHANT_NOTIF] Added phone from store.whatsapp: ${store.whatsapp}`);
     }
 
     // 2. Shipping Sender Phone (fallback)
+    console.log(`[MERCHANT_NOTIF] Raw shippingSenderPhone: "${store.shippingSenderPhone}"`);
     if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
       phones.add(store.shippingSenderPhone.trim());
-      console.log(`[MERCHANT_NOTIF] Added phone from shippingSenderPhone: ${store.shippingSenderPhone}`);
     }
 
     // 3. Owner's phone number
+    console.log(`[MERCHANT_NOTIF] Raw owner.phoneNumber: "${store.owner?.phoneNumber}"`);
     if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
       phones.add(store.owner.phoneNumber.trim());
-      console.log(`[MERCHANT_NOTIF] Added phone from owner.phoneNumber: ${store.owner.phoneNumber}`);
     }
 
     // 4. Staff/Cashiers (only those with phone numbers)
@@ -81,33 +81,40 @@ export async function getMerchantPhone(storeId: number) {
 }
 
 export async function sendMerchantWhatsApp(storeId: number, text: string, orderId?: number) {
-  const { store, phones } = await getMerchantPhone(storeId);
-  console.log(`[MERCHANT_ALERT] Starting alerts for store ${storeId} (${store?.name}). Recipients:`, phones);
-  
-  if (!store || phones.length === 0) {
-    console.warn(`[MERCHANT_ALERT] No recipients found for store ${storeId}`);
+  try {
+    console.log(`[MERCHANT_ALERT] Starting alerts for store ${storeId}. Order: ${orderId || "N/A"}`);
+    const { store, phones } = await getMerchantPhone(storeId);
+    
+    if (!store || phones.length === 0) {
+      console.warn(`[MERCHANT_ALERT] No recipients found for store ${storeId}`);
+      return false;
+    }
+    
+    console.log(`[MERCHANT_ALERT] Store: ${store.name}. Recipients:`, phones);
+    
+    let overallSuccess = false;
+
+    for (const phone of phones) {
+      console.log(`[MERCHANT_NOTIF] Attempting send to ${phone} for store ${store.name} (#${store.id})`);
+
+      // Use store.id so it uses store branding if available (Sovereign)
+      // sendWhatsAppMessage will fallback to platform account if store config is missing.
+      // Merchant alerts are NOT system alerts in terms of billing; they should use store credit if available.
+      let sent = await sendWhatsAppMessage(phone, text, store.id);
+
+      if (sent) {
+        overallSuccess = true;
+        console.log(`[MERCHANT_NOTIF] Successfully sent to ${phone}`);
+      } else {
+        console.error(`[MERCHANT_NOTIF] FAILED to send to ${phone} for store ${store.name}`);
+      }
+    }
+
+    return overallSuccess;
+  } catch (error) {
+    console.error(`[MERCHANT_ALERT_CRITICAL_ERROR]`, error);
     return false;
   }
-  
-  let overallSuccess = false;
-
-  for (const phone of phones) {
-    console.log(`[MERCHANT_NOTIF] Attempting send to ${phone} for store ${store.name} (#${store.id})`);
-
-    // Use store.id so it uses store branding if available (Sovereign)
-    // sendWhatsAppMessage will fallback to platform account if store config is missing.
-    // Merchant alerts are NOT system alerts in terms of billing; they should use store credit if available.
-    let sent = await sendWhatsAppMessage(phone, text, store.id);
-
-    if (sent) {
-      overallSuccess = true;
-      console.log(`[MERCHANT_NOTIF] Successfully sent to ${phone}`);
-    } else {
-      console.error(`[MERCHANT_NOTIF] FAILED to send to ${phone} for store ${store.name}`);
-    }
-  }
-
-  return overallSuccess;
 }
 
 export function resolvePaymentUrl(orderId: number, paymentUrl?: string | null) {

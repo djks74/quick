@@ -864,8 +864,9 @@ export async function POST(req: NextRequest) {
           }
         }).catch(() => null);
 
-        const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
-        await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch(() => null);
+            const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+            console.log(`[WHATSAPP_DELIVERY] Triggering merchant alert for order #${order.id}`);
+            await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch((e) => console.error("[WHATSAPP_DELIVERY_ALERT_ERROR]", e));
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1819,6 +1820,10 @@ export async function POST(req: NextRequest) {
                 totalAmount: amount
               }
             });
+
+            const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+            await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch(() => null);
+
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
             await sendWhatsAppMessage(
               from,
@@ -1921,6 +1926,11 @@ export async function POST(req: NextRequest) {
               items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
             }
           });
+
+          const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+          console.log(`[WHATSAPP_CHECKOUT] Triggering merchant alert for order #${order.id}`);
+          await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch((e) => console.error("[WHATSAPP_CHECKOUT_ALERT_ERROR]", e));
+
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
           let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
           cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
@@ -2122,6 +2132,9 @@ export async function POST(req: NextRequest) {
                      items: currentCart.map((item: any) => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
                    }
                  });
+
+                 const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+                 await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch(() => null);
 
                  const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, quickCheckoutMethod);
                  let summary = "🧾 *Order Summary*\n";
