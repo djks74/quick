@@ -35,7 +35,9 @@ async function main() {
       enableMidtrans: true,
       enableManualTransfer: true,
       subscriptionPlan: 'PRO',
-      posEnabled: true
+      posEnabled: true,
+      qrisFeePercent: 1.0,
+      manualTransferFee: 5000
     },
     create: {
       name: 'LCP Demo Store',
@@ -47,7 +49,9 @@ async function main() {
       enableManualTransfer: true,
       subscriptionPlan: 'PRO',
       themeColor: '#000000',
-      posEnabled: true
+      posEnabled: true,
+      qrisFeePercent: 1.0,
+      manualTransferFee: 5000
     }
   });
 

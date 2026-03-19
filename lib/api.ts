@@ -7,6 +7,7 @@ import { createOrderNotification, ensureOrderNotificationsSchema } from "@/lib/o
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { lookupBiteshipAreaIdFromInput } from "@/lib/shipping-biteship";
+import { triggerPartnerWebhook } from "@/lib/webhook-partner";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
@@ -456,6 +457,9 @@ export async function createPosOrder(storeId: number, data: any) {
         discountAmount: discountAmount || 0
       }
     });
+
+    // Trigger Partner Webhook
+    triggerPartnerWebhook(order.id).catch((e) => console.error("PARTNER_WEBHOOK_FAILED", e));
 
     return { success: true, orderId: order.id };
   } catch (error) {

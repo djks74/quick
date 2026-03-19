@@ -59,6 +59,8 @@ export async function POST(req: NextRequest) {
               enableWhatsApp: true,
               waBalance: initialWaCredit,
               enableManualTransfer: false,
+              qrisFeePercent: 1.0,
+              manualTransferFee: 5000,
               whatsappToken: null,
               whatsappPhoneId: null,
               paymentGatewaySecret: null,

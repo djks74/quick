@@ -91,7 +91,8 @@ export default function AdminSettings() {
     shippingSenderPhone: "",
     shippingSenderAddress: "",
     shippingSenderPostalCode: "",
-    customGeminiKey: ""
+    customGeminiKey: "",
+    webhookUrl: ""
   });
 
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -167,7 +168,8 @@ export default function AdminSettings() {
           shippingSenderPhone: data.shippingSenderPhone || "",
           shippingSenderAddress: data.shippingSenderAddress || "",
           shippingSenderPostalCode: data.shippingSenderPostalCode || "",
-          customGeminiKey: (data as any).customGeminiKey || ""
+          customGeminiKey: (data as any).customGeminiKey || "",
+          webhookUrl: (data as any).webhookUrl || ""
         });
         
         if (data.bankAccount) {
@@ -207,7 +209,8 @@ export default function AdminSettings() {
         biteshipOriginLng: settings.biteshipOriginLng ? parseFloat(settings.biteshipOriginLng.toString().replace(',', '.')) : null,
         shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount,
-        customGeminiKey: settings.customGeminiKey
+        customGeminiKey: settings.customGeminiKey,
+        webhookUrl: settings.webhookUrl
       });
 
       if (result) {
@@ -658,35 +661,40 @@ export default function AdminSettings() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">QRIS Fee (%)</label>
-                            <div className={cn("relative", !isSuperAdmin && "opacity-75 pointer-events-none")}>
-                                <input 
-                                    type="text"
-                                    inputMode="decimal"
-                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
-                                    value={settings.qrisFeePercent}
-                                    onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
-                                    readOnly={!isSuperAdmin}
-                                />
+                        {/* Payment Fees - Merchant cannot change, only super admin can see/edit */}
+                        {isSuperAdmin ? (
+                          <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 dark:text-gray-300">QRIS Fee (%) - Admin Only</label>
+                                <div className="relative">
+                                    <input 
+                                        type="text"
+                                        inputMode="decimal"
+                                        className="w-full border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-900/10 px-3 py-1.5 outline-none dark:text-white rounded" 
+                                        value={settings.qrisFeePercent}
+                                        onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
+                                    />
+                                </div>
                             </div>
-                            {!isSuperAdmin && <p className="text-[10px] text-gray-500 mt-1 italic font-bold uppercase">Super Admin Only</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Other Payment Fee (Flat)</label>
-                            <div className={cn("relative", !isSuperAdmin && "opacity-75 pointer-events-none")}>
-                                <span className="absolute left-3 top-1.5 text-gray-500 dark:text-gray-400 text-sm">Rp</span>
-                                <input 
-                                    type="text"
-                                    inputMode="decimal"
-                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
-                                    value={settings.manualTransferFee}
-                                    onChange={(e) => setSettings({ ...settings, manualTransferFee: e.target.value })}
-                                    readOnly={!isSuperAdmin}
-                                />
+                            <div>
+                                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Other Payment Fee (Flat) - Admin Only</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1.5 text-gray-500 dark:text-gray-400 text-sm">Rp</span>
+                                    <input 
+                                        type="text"
+                                        inputMode="decimal"
+                                        className="w-full border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-900/10 pl-8 pr-3 py-1.5 outline-none dark:text-white rounded" 
+                                        value={settings.manualTransferFee}
+                                        onChange={(e) => setSettings({ ...settings, manualTransferFee: e.target.value })}
+                                    />
+                                </div>
                             </div>
-                            {!isSuperAdmin && <p className="text-[10px] text-gray-500 mt-1 italic font-bold uppercase">Super Admin Only</p>}
-                        </div>
+                          </>
+                        ) : (
+                          <div className="col-span-2 p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800">
+                             <p className="text-xs text-gray-500 italic">Platform fees are managed by Gercep Administration. If you need a fee adjustment, please contact support.</p>
+                          </div>
+                        )}
                     </div>
                  </div>
               </div>
@@ -903,6 +911,18 @@ export default function AdminSettings() {
                     {isGeneratingKey ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
                     {apiKey ? "Regenerate API Key" : "Generate API Key"}
                   </button>
+                </div>
+
+                <div className="pt-6 space-y-2 border-t dark:border-gray-800">
+                  <label className="block text-sm font-medium dark:text-gray-300 uppercase tracking-wider text-[10px] font-black text-gray-400">Order Webhook URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500 transition-colors rounded" 
+                    placeholder="https://your-pos-system.com/webhook/orders"
+                    value={settings.webhookUrl}
+                    onChange={(e) => setSettings({ ...settings, webhookUrl: e.target.value })}
+                  />
+                  <p className="text-[10px] text-gray-500 italic">We will send order data to this URL whenever an order is marked as PAID.</p>
                 </div>
 
                 <div className="pt-4 mt-4 border-t dark:border-gray-800">

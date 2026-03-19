@@ -6,6 +6,7 @@ import { createBiteshipOrderForPaidOrder } from "@/lib/shipping-biteship";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
+import { triggerPartnerWebhook } from "@/lib/webhook-partner";
 
 export async function POST(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -75,6 +76,9 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
           `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n` +
           `Mohon segera diproses.`
     ).catch(() => null);
+
+    // Trigger Partner Webhook
+    triggerPartnerWebhook(order.id).catch((e) => console.error("PARTNER_WEBHOOK_FAILED", e));
 
     const providerCode = String(order.shippingProvider || "").toUpperCase();
     const isProviderBookable = providerCode === "JNE" || providerCode === "GOSEND" || providerCode === "GOJEK";

@@ -6,6 +6,7 @@ import { createOrderNotification } from '@/lib/order-notifications';
 import { acquireNotificationLock, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipOrderForPaidOrder, getBiteshipOrderStatus } from '@/lib/shipping-biteship';
+import { triggerPartnerWebhook } from '@/lib/webhook-partner';
 
 type IngredientUOM = 'gram' | 'kg' | 'pcs';
 
@@ -365,6 +366,9 @@ export async function POST(req: NextRequest) {
               tableNumber: order.tableNumber
             }
           }).catch(() => null);
+
+          // 2.6 Trigger Partner Webhook
+          triggerPartnerWebhook(order.id).catch((e) => console.error("PARTNER_WEBHOOK_FAILED", e));
 
           // 3. Update Inventory (Async / Non-blocking for notification)
           try {

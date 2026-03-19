@@ -52,27 +52,53 @@ const apiEndpoints = [
       ]
     }
   },
-  {
-    method: "POST",
-    path: "/api/partner/sync-products",
-    title: "Hapus Produk",
-    description: "Menghapus produk dari sistem Gercep. Anda dapat menghapus berdasarkan 'externalId' (ID sistem Anda) atau 'name'.",
-    request: {
-      action: "delete",
-      products: [
-        { externalId: "POS-123" },
-        { name: "Menu Lama" }
-      ]
+    {
+      method: "POST",
+      path: "/api/partner/sync-products",
+      title: "Hapus Produk",
+      description: "Menghapus produk dari sistem Gercep. Anda dapat menghapus berdasarkan 'externalId' (ID sistem Anda) atau 'name'.",
+      request: {
+        action: "delete",
+        products: [
+          { externalId: "POS-123" },
+          { name: "Menu Lama" }
+        ]
+      },
+      response: {
+        success: true,
+        results: [
+          { externalId: "POS-123", status: "deleted" },
+          { name: "Menu Lama", status: "deleted" }
+        ]
+      }
     },
-    response: {
-      success: true,
-      results: [
-        { externalId: "POS-123", status: "deleted" },
-        { name: "Menu Lama", status: "deleted" }
-      ]
+    {
+      method: "WEBHOOK",
+      path: "URL Anda (Konfigurasi di Dashboard)",
+      title: "Notifikasi Order (Paid)",
+      description: "Gercep akan mengirimkan data pesanan ke URL Webhook Anda setiap kali ada pesanan yang berhasil dibayar (Lunas).",
+      request: {
+        event: "order.paid",
+        data: {
+          id: 456,
+          storeSlug: "nama-toko",
+          customerPhone: "08123456789",
+          totalAmount: 50000,
+          paymentMethod: "qris",
+          orderType: "DELIVERY",
+          items: [
+            {
+              externalId: "POS-123",
+              name: "Nasi Goreng Spesial",
+              quantity: 2,
+              price: 25000
+            }
+          ]
+        }
+      },
+      response: "HTTP 200 OK"
     }
-  }
-];
+  ];
 
 const authGuide = [
   "Semua request API harus menyertakan header 'X-API-KEY'.",

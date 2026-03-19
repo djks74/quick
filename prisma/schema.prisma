@@ -27,6 +27,7 @@ model Store {
   name                        String
   ownerId                     Int
   apiKey                      String?             @unique
+  webhookUrl                  String?
   customGeminiKey             String?
   whatsapp                    String?
   themeColor                  String              @default("#000000")
@@ -44,10 +45,10 @@ model Store {
   createdAt                   DateTime            @default(now())
   updatedAt                   DateTime            @updatedAt
   feePaidBy                   String              @default("CUSTOMER")
-  manualTransferFee           Float               @default(0.0)
+  manualTransferFee           Float               @default(5000.0)
   posEnabled                  Boolean             @default(false)
   posGridColumns              Int                 @default(4)
-  qrisFeePercent              Float               @default(0.7)
+  qrisFeePercent              Float               @default(1.0)
   serviceChargePercent        Float               @default(0.0)
   taxPercent                  Float               @default(0.0)
   balance                     Float               @default(0.0)

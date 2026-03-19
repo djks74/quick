@@ -123,6 +123,10 @@ export async function ensureStoreSettingsSchema() {
       `);
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "webhookUrl" TEXT;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
         ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT;
       `);
       await prisma.$executeRawUnsafe(`
