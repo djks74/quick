@@ -299,10 +299,11 @@ export async function POST(req: NextRequest) {
             ? `👤 Customer: ${order.customerPhone}\n`
             : `👤 Customer: ${order.customerPhone}\n`;
           
-          msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n`;
-          msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway / Delivery' : 'Dine In'}\n`;
-          if (order.orderType === 'TAKEAWAY') {
-            msg += `🚚 Kurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\n`;
+          msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n`;
+          msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n\n`;
+          msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
+          if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
+            msg += `🚚 Kurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider || '-')}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
             msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
             msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
             msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
