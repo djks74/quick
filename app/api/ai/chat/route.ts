@@ -5,8 +5,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
 import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
+import { getDistanceMeters } from "@/lib/utils";
+
+export const runtime = "nodejs";
 
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
@@ -150,12 +154,33 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         };
       }
 
-      // Format options as a clear string list for the AI to present
       const enabledProviders: string[] = [];
       if (store.shippingEnableJne) enabledProviders.push("JNE");
       if (store.shippingEnableGosend && !store.shippingJneOnly) enabledProviders.push("GOSEND");
+      
+      // Check if near store (100m) for automatic Store Courier option
+      let isNearStore = false;
+      if (latitude && longitude && store.biteshipOriginLat && store.biteshipOriginLng) {
+        const dist = getDistanceMeters(latitude, longitude, parseFloat(String(store.biteshipOriginLat)), parseFloat(String(store.biteshipOriginLng)));
+        if (dist <= 100) {
+          isNearStore = true;
+        }
+      }
+
+      if (isNearStore || (store as any).shippingEnableStoreCourier) enabledProviders.push("STORE_COURIER");
 
       const filtered = quotes.filter((q: any) => enabledProviders.includes(q.provider));
+
+      // If near store but no quote (Biteship might fail for very short distance), inject Store Courier manually
+      if ((isNearStore || (store as any).shippingEnableStoreCourier) && !filtered.find((f: any) => f.provider === "STORE_COURIER")) {
+         filtered.unshift({
+           provider: "STORE_COURIER",
+           service: "Kurir Toko",
+           fee: Number((store as any).shippingStoreCourierFee || 0),
+           eta: "15-30 min",
+           type: "instant"
+         });
+       }
 
       if (filtered.length === 0) {
         return { 
@@ -183,20 +208,27 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     if (!store) return { error: "Store not found" };
 
     const cleanPhone = normalizePhoneNumber(customer_phone);
-    const isTakeaway = String(order_type || "").toUpperCase() === "TAKEAWAY";
+    const orderType = String(order_type || "").toUpperCase();
+    const isDelivery = orderType === "DELIVERY";
     const trimmedAddress = String(address || "").trim();
 
-    if (isTakeaway) {
+    if (isDelivery) {
       if (!trimmedAddress || trimmedAddress.length < 8) {
-        return { error: "Alamat pengiriman wajib diisi untuk order takeaway." };
+        return { error: "Alamat pengiriman wajib diisi untuk order delivery." };
       }
       const hasPostal = /\b\d{5}\b/.test(trimmedAddress);
       const hasCoordinate = typeof latitude === "number" && typeof longitude === "number";
       if (!hasPostal && !hasCoordinate) {
         return { error: "Alamat pengiriman wajib mencantumkan Kode Pos (5 digit) atau share lokasi (GPS)." };
       }
-      if (!shippingProvider || !shippingService || shippingFee === undefined || shippingFee === null) {
+      if (!shippingProvider) {
         return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };
+      }
+      const providerUpper = String(shippingProvider || "").toUpperCase();
+      if (providerUpper !== "STORE_COURIER") {
+        if (!shippingService || shippingFee === undefined || shippingFee === null) {
+          return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };
+        }
       }
 
       const senderAddress = String(store?.shippingSenderAddress || "").trim();
@@ -237,7 +269,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     const taxAmount = itemsAmount * (store.taxPercent / 100);
     const serviceCharge = itemsAmount * (store.serviceChargePercent / 100);
-    const shippingCost = Number(shippingFee) || 0;
+    const providerUpper = String(shippingProvider || "").toUpperCase();
+    const shippingCost = isDelivery
+      ? (providerUpper === "STORE_COURIER"
+          ? Number.isFinite(Number(shippingFee))
+            ? Number(shippingFee)
+            : Number((store as any)?.shippingStoreCourierFee || 0)
+          : Number(shippingFee) || 0)
+      : 0;
     
     let paymentFee = 0;
     const subtotal = itemsAmount + taxAmount + serviceCharge + shippingCost;
@@ -258,11 +297,13 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         serviceCharge,
         paymentFee,
         status: "PENDING",
-        orderType: order_type,
+        orderType: orderType || "DINE_IN",
         paymentMethod: payment_method || null,
-        shippingAddress: trimmedAddress || null,
-        shippingProvider: shippingProvider || null,
-        shippingService: shippingService || null,
+        shippingAddress: isDelivery ? (trimmedAddress || null) : null,
+        shippingProvider: isDelivery ? (providerUpper || null) : null,
+        shippingService: isDelivery
+          ? (providerUpper === "STORE_COURIER" ? "KURIR_TOKO" : (shippingService || null))
+          : null,
         shippingCost,
         notes: JSON.stringify({ source: "AI_CHAT_ASSISTANT" }),
         items: { create: orderItemsData }
@@ -270,7 +311,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
 
     // --- Biteship Draft Integration ---
-    if (isTakeaway && shippingProvider && shippingService) {
+    if (isDelivery && providerUpper !== "STORE_COURIER" && providerUpper && shippingService) {
       try {
         const biteshipItems = [];
         for (const item of orderItemsData) {
@@ -337,23 +378,11 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       };
     }
 
-    await createOrderNotification({
-      storeId: store.id,
-      orderId: order.id,
-      source: "AI_CHAT_ASSISTANT",
-      title: `Order #${order.id} menunggu pembayaran`,
-      body: `${cleanPhone} • Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}`,
-      metadata: {
-        totalAmount: finalAmount,
-        taxAmount,
-        serviceCharge,
-        paymentFee,
-        shippingCost,
-        shippingProvider: shippingProvider || null,
-        shippingService: shippingService || null,
-        shippingAddress: trimmedAddress || null
-      }
-    }).catch(() => null);
+    await sendMerchantWhatsApp(
+      store.id,
+      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\nKurir: ${providerUpper === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (shippingProvider || "-")}${shippingService ? ` ${shippingService}` : ""}${providerUpper === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+      order.id
+    ).catch(() => null);
 
     const breakdown = [
       `🛒 *${store.name} ORDER #${order.id}*`,
@@ -665,17 +694,22 @@ export async function POST(req: NextRequest) {
         parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
 
 SHIPPING & LOCATION:
-1. If it's a takeaway order, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
-2. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
-3. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options (GOSEND/JNE).
-4. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
-5. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for takeaway.
-6. IMPORTANT: When calling 'create_customer_order' for a TAKEAWAY order, you MUST pass the 'address', 'latitude', and 'longitude'.
+1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
+2. If the user is ordering from home/outside the store, you MUST offer DELIVERY (diantar) and ask for their delivery address + location.
+3. If the user is AT the store/restaurant, offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
+4. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
+5. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
+6. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
+7. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
+8. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
+9. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
+10. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
+11. For TAKEAWAY orders, no address or coordinates are needed; just tell them to pick up at the store address.
 
 PAYMENT & RE-ORDERING:
 1. You MUST ask the user for their preferred payment method ('qris' or 'bank_transfer') BEFORE calling 'create_customer_order'.
 2. If a user wants to "re-order" or "order again", use 'get_last_order_by_phone' to find their items, but you MUST still ask for:
-   - Their current location/address (if takeaway).
+   - Their current location/address (if delivery).
    - Their preferred payment method.
 3. If a product has variations (like size, flavor, etc.), you MUST pass the correct 'variationName' when calling 'create_customer_order' to ensure the correct price is used.
 4. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
@@ -784,7 +818,7 @@ Once an order is created:
                       }
                     }
                   },
-                  order_type: { type: "string", enum: ["DINE_IN", "TAKEAWAY"] },
+                  order_type: { type: "string", enum: ["DINE_IN", "TAKEAWAY", "DELIVERY"] },
                   address: { type: "string" },
                   latitude: { type: "number" },
                   longitude: { type: "number" },

@@ -205,6 +205,8 @@ export async function updateStoreSettings(storeId: number, data: any) {
           shippingEnableJne: data.shippingEnableJne ?? false,
           shippingEnableGosend: data.shippingEnableGosend ?? false,
           shippingJneOnly: data.shippingJneOnly ?? false,
+          shippingEnableStoreCourier: data.shippingEnableStoreCourier ?? false,
+          shippingStoreCourierFee: data.shippingStoreCourierFee !== undefined && data.shippingStoreCourierFee !== null && data.shippingStoreCourierFee !== "" ? Number(data.shippingStoreCourierFee) : 0,
           enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
           biteshipOriginAreaId: data.biteshipOriginAreaId || null,
           biteshipOriginLat: data.biteshipOriginLat !== undefined && data.biteshipOriginLat !== null && data.biteshipOriginLat !== "" ? Number(data.biteshipOriginLat) : null,

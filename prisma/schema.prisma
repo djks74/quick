@@ -62,6 +62,8 @@ model Store {
   shippingEnableJne           Boolean             @default(false)
   shippingEnableGosend        Boolean             @default(false)
   shippingJneOnly             Boolean             @default(false)
+  shippingEnableStoreCourier  Boolean             @default(false)
+  shippingStoreCourierFee     Float               @default(0.0)
   enableTakeawayDelivery      Boolean             @default(true)
   shippingSenderName          String?
   shippingSenderPhone         String?

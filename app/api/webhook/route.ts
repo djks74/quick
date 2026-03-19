@@ -9,6 +9,7 @@ import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { logTraffic } from '@/lib/traffic';
+import { getDistanceMeters } from '@/lib/utils';
 
 type WaLang = "id" | "en";
 
@@ -208,7 +209,7 @@ function parseTakeawayDeliveryStep(step?: string | null) {
   return { method };
 }
 
-function buildTakeawayAddressStep(provider: "JNE" | "GOSEND" | "PICKUP", method?: string) {
+function buildTakeawayAddressStep(provider: "JNE" | "GOSEND" | "PICKUP" | "STORE_COURIER", method?: string) {
   return `TAKEAWAY_ADDRESS:${provider}:${method || "none"}`;
 }
 
@@ -216,7 +217,7 @@ function parseTakeawayAddressStep(step?: string | null) {
   if (!step || !step.startsWith("TAKEAWAY_ADDRESS:")) return null;
   const parts = step.split(":");
   if (parts.length < 3) return null;
-  const provider = parts[1] as "JNE" | "GOSEND" | "PICKUP";
+  const provider = parts[1] as "JNE" | "GOSEND" | "PICKUP" | "STORE_COURIER";
   const method = parts[2] && parts[2] !== "none" ? parts[2] : undefined;
   return { provider, method };
 }
@@ -242,8 +243,22 @@ function parseTakeawayGosendLocationStep(step?: string | null) {
   return { method, address };
 }
 
+function buildDeliveryLocationStep(provider: "GOSEND" | "STORE_COURIER", method: string | undefined, address: string) {
+  return `DELIVERY_LOCATION:${provider}:${method || "none"}:${encodeStepPayload(address)}`;
+}
+
+function parseDeliveryLocationStep(step?: string | null) {
+  if (!step || !step.startsWith("DELIVERY_LOCATION:")) return null;
+  const parts = step.split(":");
+  if (parts.length < 4) return null;
+  const provider = parts[1] as "GOSEND" | "STORE_COURIER";
+  const method = parts[2] && parts[2] !== "none" ? parts[2] : undefined;
+  const address = decodeStepPayload(parts.slice(3).join(":"));
+  return { provider, method, address };
+}
+
 function isShippingConfigured(store: any) {
-  return !!(store?.enableTakeawayDelivery && (store?.shippingEnableJne || (store?.shippingEnableGosend && !store?.shippingJneOnly)));
+  return !!(store?.enableTakeawayDelivery && (store?.shippingEnableJne || (store?.shippingEnableGosend && !store?.shippingJneOnly) || store?.shippingEnableStoreCourier));
 }
 
 export async function GET(req: NextRequest) {
@@ -646,8 +661,17 @@ export async function POST(req: NextRequest) {
       let lang = await getWaLanguage(from, targetStore.id);
       const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
 
-      if (session.step && session.step.startsWith("TAKEAWAY_GOSEND_LOCATION:")) {
-        const ctx = parseTakeawayGosendLocationStep(session.step);
+      const deliveryLocationCtx =
+        session.step && session.step.startsWith("DELIVERY_LOCATION:")
+          ? parseDeliveryLocationStep(session.step)
+          : null;
+      const legacyGosendCtx =
+        !deliveryLocationCtx && session.step && session.step.startsWith("TAKEAWAY_GOSEND_LOCATION:")
+          ? { provider: "GOSEND" as const, ...parseTakeawayGosendLocationStep(session.step) }
+          : null;
+
+      if (deliveryLocationCtx || legacyGosendCtx) {
+        const ctx = (deliveryLocationCtx || legacyGosendCtx) as { provider: "GOSEND" | "STORE_COURIER"; method?: string; address: string };
         const cart = (session.cart as any[]) || [];
         if (!ctx || !ctx.address) {
           await updateSession(from, targetStore.id, { step: 'ORDERING:ALL' });
@@ -667,12 +691,26 @@ export async function POST(req: NextRequest) {
           await sendWhatsAppMessage(
             from,
             l(
-              `📍 Lokasi belum terbaca. Mohon *cek lokasi* lalu kirim lagi (Share Location) untuk GoSend.`,
-              `📍 Location not detected. Please check your location and share it again for GoSend.`
+              `📍 Lokasi belum terbaca. Mohon *cek lokasi* lalu kirim lagi (Share Location) untuk pengiriman.`,
+              `📍 Location not detected. Please check your location and share it again for delivery.`
             ),
             targetStore.id
           );
           return NextResponse.json({ success: true });
+        }
+
+        // --- Distance Check for Store Courier (100m) ---
+        let isNearStore = false;
+        if (targetStore.biteshipOriginLat && targetStore.biteshipOriginLng) {
+          const storeLat = parseFloat(String(targetStore.biteshipOriginLat));
+          const storeLng = parseFloat(String(targetStore.biteshipOriginLng));
+          if (Number.isFinite(storeLat) && Number.isFinite(storeLng)) {
+            const distance = getDistanceMeters(lat, lng, storeLat, storeLng);
+            if (distance <= 100) {
+              isNearStore = true;
+              console.log(`[WHATSAPP_DISTANCE] Customer is near store: ${distance.toFixed(1)}m`);
+            }
+          }
         }
 
         const shippingOptions = await getShippingQuoteFromBiteship({
@@ -681,14 +719,29 @@ export async function POST(req: NextRequest) {
           destinationLatitude: lat,
           destinationLongitude: lng
         });
-        const selected = shippingOptions.find((opt) => opt.provider === "GOSEND");
+
+        if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
+          shippingOptions.unshift({
+            provider: "STORE_COURIER",
+            service: "Kurir Toko",
+            fee: Number((targetStore as any).shippingStoreCourierFee || 0),
+            eta: "15-30 min",
+            type: "instant"
+          });
+        }
+
+        const selected = shippingOptions.find((opt) => opt.provider === ctx.provider);
         if (!selected) {
           await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
           let optionsMsg = l(
-            `🚫 GoSend tidak tersedia untuk lokasi ini.\n\nJika lokasi salah, mohon *cek lalu kirim ulang lokasi (Share Location)*.\nAtau pilih kurir lain:\n1. Pickup (Ambil Sendiri)`,
-            `🚫 GoSend is not available for this location.\n\nIf your location is wrong, please check it and share again.\nOr choose another option:\n1. Pickup (Self-pickup)`
+            `🚫 Opsi pengiriman tidak tersedia untuk lokasi ini.\n\nJika lokasi salah, mohon *cek lalu kirim ulang lokasi (Share Location)*.\n\nSilakan pilih kurir lain.`,
+            `🚫 Delivery option is not available for this location.\n\nIf your location is wrong, please check it and share again.\n\nPlease choose another courier.`
           );
-          let optionCount = 1;
+          let optionCount = 0;
+          if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
+          }
           if (targetStore.shippingEnableJne) {
             optionCount++;
             optionsMsg += `\n${optionCount}. JNE`;
@@ -722,10 +775,10 @@ export async function POST(req: NextRequest) {
             serviceCharge,
             paymentFee: fee,
             status: 'PENDING',
-            orderType: 'TAKEAWAY',
+            orderType: 'DELIVERY',
             shippingProvider: selected?.provider || "GOSEND",
-            shippingService: selected?.service || "-",
-            shippingStatus: 'QUOTE_READY',
+            shippingService: selected?.provider === "STORE_COURIER" ? "KURIR_TOKO" : (selected?.service || "-"),
+            shippingStatus: selected?.provider === "STORE_COURIER" ? "STORE_COURIER" : 'QUOTE_READY',
             shippingAddress: ctx.address,
             shippingCost,
             shippingEta: selected?.eta || "-",
@@ -733,52 +786,67 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        const draft = await createBiteshipDraftForPendingOrder({
-          store: targetStore,
-          order,
-          destinationCoordinate: { latitude: lat, longitude: lng },
-          items: cart.map((item) => ({
-            name: item.name,
-            quantity: item.qty,
-            price: item.price
-          }))
-        });
-
-        if (!draft?.ok) {
-          await prisma.order
-            .update({ where: { id: order.id }, data: { shippingStatus: "draft_failed" } as any })
-            .catch(() => null);
-          await sendWhatsAppMessage(
-            from,
-            l(
-              "Gagal membuat draft pengiriman. Mohon cek alamat (kode pos / share lokasi) dan coba pilih kurir ulang.",
-              "Failed to create delivery draft. Please check your address (postal code / share location) and retry."
-            ),
-            targetStore.id
-          );
-          await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
-          return NextResponse.json({ success: true });
-        }
-
-        if ((draft as any)?.draftOrderId) {
-          const pendingDraft = draft as any;
-          order = await prisma.order.update({
-            where: { id: order.id },
-            data: {
-              biteshipOrderId: pendingDraft.draftOrderId,
-              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
-            }
+        // Skip Biteship draft if Store Courier
+        if (selected?.provider !== "STORE_COURIER") {
+          const draft = await createBiteshipDraftForPendingOrder({
+            store: targetStore,
+            order,
+            destinationCoordinate: { latitude: lat, longitude: lng },
+            items: cart.map((item) => ({
+              name: item.name,
+              quantity: item.qty,
+              price: item.price
+            }))
           });
+
+          if (!draft?.ok) {
+            await prisma.order
+              .update({ where: { id: order.id }, data: { shippingStatus: "draft_failed" } as any })
+              .catch(() => null);
+            await sendWhatsAppMessage(
+              from,
+              l(
+                "Gagal membuat draft pengiriman. Mohon cek alamat (kode pos / share lokasi) dan coba pilih kurir ulang.",
+                "Failed to create delivery draft. Please check your address (postal code / share location) and retry."
+              ),
+              targetStore.id
+            );
+            await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
+            return NextResponse.json({ success: true });
+          }
+
+          if ((draft as any)?.draftOrderId) {
+            const pendingDraft = draft as any;
+            order = await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                biteshipOrderId: pendingDraft.draftOrderId,
+                shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+              }
+            });
+          }
         }
 
         await createOrderNotification({
           storeId: targetStore.id,
           orderId: order.id,
           source: "WHATSAPP",
-          title: `Order takeaway #${order.id} menunggu pembayaran`,
-          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
-          metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
+          title: `Order ${String((session.metadata as any)?.orderType || "DELIVERY").toLowerCase()} #${order.id} menunggu pembayaran`,
+          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}${selected?.provider === "STORE_COURIER" ? "\n🚀 Kirim dengan Kurir Toko" : ""}`,
+          metadata: { 
+            orderType: (session.metadata as any)?.orderType || "DELIVERY", 
+            shippingProvider: selected?.provider || null, 
+            shippingCost, 
+            shippingAddress: ctx.address,
+            isStoreCourier: selected?.provider === "STORE_COURIER"
+          }
         }).catch(() => null);
+        await sendMerchantWhatsApp(
+          targetStore.id,
+          `🛒 *Order Pending*\nOrder delivery #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${selected?.provider === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (selected?.provider || "GOSEND")}${selected?.service ? ` ${selected.service}` : ""}${selected?.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+          order.id
+        ).catch(() => null);
+
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
         cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
@@ -786,7 +854,13 @@ export async function POST(req: NextRequest) {
         if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
         if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
         if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-        summary += `${l("Ongkir", "Shipping")} (GOSEND ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
+        summary += l("Ongkir", "Shipping");
+        if (selected?.provider === "STORE_COURIER") {
+          summary += " (Kurir Toko)";
+        } else {
+          summary += ` (${selected?.provider || ctx.provider} ${selected?.service || ""})`;
+        }
+        summary += `: Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
         summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
         summary += l("\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.", "\n\n⏳ Payment links can expire. Please complete payment soon.");
@@ -840,11 +914,11 @@ export async function POST(req: NextRequest) {
                 shippingConfigured
                   ? l(
                       `👋 Selamat datang di *${targetStore.name}* meja *${tableNum}*!\n\n` +
-                        `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\n` +
+                        `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway (Ambil sendiri)\n\n` +
                         `Setelah pilih, kamu bisa lanjut pesan via WhatsApp.\n` +
                         `Ingin English? balas: EN`,
                       `👋 Welcome to *${targetStore.name}* at Table *${tableNum}*!\n\n` +
-                        `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\n` +
+                        `Choose order type first:\n1. Dine In\n2. Takeaway (Pickup)\n\n` +
                         `After selecting, continue ordering via WhatsApp.\n` +
                         `Want Indonesian again? reply: ID`
                     )
@@ -862,6 +936,7 @@ export async function POST(req: NextRequest) {
       const orderIntentMatch = textBody.match(/(?:i['’`]?d like to order|would like to order|ingin pesan|mau pesan|start order|mulai pesan|order via whatsapp)/i);
       if (orderIntentMatch) {
         const tableFromText = textBody.match(/(?:table|meja)\s*#?\s*([a-zA-Z0-9\-]+)/i)?.[1] || session.tableNumber || null;
+        const isOnSite = !!tableFromText;
         const shippingConfigured = isShippingConfigured(targetStore);
         await updateSession(from, targetStore.id, {
           tableNumber: tableFromText,
@@ -874,8 +949,12 @@ export async function POST(req: NextRequest) {
           from,
           shippingConfigured
             ? l(
-                `👋 Selamat datang di *${targetStore.name}*${tableFromText ? ` meja *${tableFromText}*` : ""}!\n\nPilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\nSetelah pilih, balas "Menu" untuk mulai pesan.`,
-                `👋 Welcome to *${targetStore.name}*${tableFromText ? ` at Table *${tableFromText}*` : ""}!\n\nChoose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\nAfter selecting, reply "Menu" to start ordering.`
+                isOnSite
+                  ? `👋 Selamat datang di *${targetStore.name}*${tableFromText ? ` meja *${tableFromText}*` : ""}!\n\nPilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway (Ambil sendiri)\n\nSetelah pilih, balas "Menu" untuk mulai pesan.`
+                  : `👋 Selamat datang di *${targetStore.name}*!\n\nPilih tipe order dulu:\n1. Takeaway (Ambil sendiri)\n2. Delivery (Diantar ke rumah)\n\nSetelah pilih, balas "Menu" untuk mulai pesan.`,
+                isOnSite
+                  ? `👋 Welcome to *${targetStore.name}*${tableFromText ? ` at Table *${tableFromText}*` : ""}!\n\nChoose order type first:\n1. Dine In\n2. Takeaway (Pickup)\n\nAfter selecting, reply "Menu" to start ordering.`
+                  : `👋 Welcome to *${targetStore.name}*!\n\nChoose order type first:\n1. Takeaway (Pickup)\n2. Delivery\n\nAfter selecting, reply "Menu" to start ordering.`
               )
             : l(
                 `👋 Selamat datang di *${targetStore.name}*${tableFromText ? ` meja *${tableFromText}*` : ""}!\n\nBalas "Menu" untuk mulai pesan.`,
@@ -1121,12 +1200,18 @@ export async function POST(req: NextRequest) {
       if (lowerText === 'menu') {
         if (session.step === 'START' && isShippingConfigured(targetStore)) {
           await updateSession(from, targetStore.id, { step: 'SERVICE_TYPE_SELECTION' });
+          const onSite = !!session.tableNumber;
           await sendWhatsAppMessage(
             from,
-            l(
-              `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway / Pengiriman\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
-              `Choose order type first:\n1. Dine In\n2. Takeaway / Delivery\n\nAfter selecting, reply "Menu" to continue.`
-            ),
+            onSite 
+              ? l(
+                  `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway (Ambil Sendiri)\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
+                  `Choose order type first:\n1. Dine In\n2. Takeaway (Pickup)\n\nAfter selecting, reply "Menu" to continue.`
+                )
+              : l(
+                  `Pilih tipe order dulu:\n1. Takeaway (Ambil Sendiri)\n2. Delivery (Pengiriman)\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
+                  `Choose order type first:\n1. Takeaway (Pickup)\n2. Delivery\n\nAfter selecting, reply "Menu" to continue.`
+                ),
             targetStore.id
           );
           return NextResponse.json({ success: true });
@@ -1306,14 +1391,29 @@ export async function POST(req: NextRequest) {
           await sendWhatsAppMessage(from, l(`Balas "Menu" untuk mulai pesan.`, `Reply "Menu" to start ordering.`), targetStore.id);
           return NextResponse.json({ success: true });
         }
-        if (textBody.trim() === "1") {
-          await updateSession(from, targetStore.id, { step: 'MENU_SELECTION' });
-          await sendWhatsAppMessage(from, l(`✅ Dine In dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Dine In selected. Reply "Menu" to start ordering.`), targetStore.id);
-        } else if (textBody.trim() === "2") {
-          await updateSession(from, targetStore.id, { tableNumber: null, step: 'MENU_SELECTION' });
-          await sendWhatsAppMessage(from, l(`✅ Takeaway/Pengiriman dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Takeaway/Delivery selected. Reply "Menu" to start ordering.`), targetStore.id);
+        const onSite = !!session.tableNumber;
+        const meta = (session.metadata as any) || {};
+        const input = textBody.trim();
+        if (onSite) {
+          if (input === "1") {
+            await updateSession(from, targetStore.id, { step: 'MENU_SELECTION', metadata: { ...meta, orderType: "DINE_IN" } });
+            await sendWhatsAppMessage(from, l(`✅ Dine In dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Dine In selected. Reply "Menu" to start ordering.`), targetStore.id);
+          } else if (input === "2") {
+            await updateSession(from, targetStore.id, { tableNumber: null, step: 'MENU_SELECTION', metadata: { ...meta, orderType: "TAKEAWAY" } });
+            await sendWhatsAppMessage(from, l(`✅ Takeaway dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Takeaway selected. Reply "Menu" to start ordering.`), targetStore.id);
+          } else {
+            await sendWhatsAppMessage(from, l(`Balas 1 untuk Dine In atau 2 untuk Takeaway.`, `Reply 1 for Dine In or 2 for Takeaway.`), targetStore.id);
+          }
         } else {
-          await sendWhatsAppMessage(from, l(`Balas 1 untuk Dine In atau 2 untuk Takeaway/Pengiriman.`, `Reply 1 for Dine In or 2 for Takeaway/Delivery.`), targetStore.id);
+          if (input === "1") {
+            await updateSession(from, targetStore.id, { step: 'MENU_SELECTION', metadata: { ...meta, orderType: "TAKEAWAY" } });
+            await sendWhatsAppMessage(from, l(`✅ Takeaway dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Takeaway selected. Reply "Menu" to start ordering.`), targetStore.id);
+          } else if (input === "2") {
+            await updateSession(from, targetStore.id, { step: 'MENU_SELECTION', metadata: { ...meta, orderType: "DELIVERY" } });
+            await sendWhatsAppMessage(from, l(`✅ Delivery dipilih. Balas "Menu" untuk mulai pesan.`, `✅ Delivery selected. Reply "Menu" to start ordering.`), targetStore.id);
+          } else {
+            await sendWhatsAppMessage(from, l(`Balas 1 untuk Takeaway atau 2 untuk Delivery.`, `Reply 1 for Takeaway or 2 for Delivery.`), targetStore.id);
+          }
         }
         return NextResponse.json({ success: true });
       }
@@ -1321,28 +1421,63 @@ export async function POST(req: NextRequest) {
       if (session.step && session.step.startsWith('TAKEAWAY_DELIVERY_SELECT:')) {
         const ctx = parseTakeawayDeliveryStep(session.step);
         const input = textBody.trim();
+        const sessionOrderType = String((session.metadata as any)?.orderType || "").toUpperCase();
+        const allowPickup = sessionOrderType !== "DELIVERY";
+        const onSite = !!session.tableNumber;
         
         let selectedProvider: string | null = null;
-        if (input === "1") {
-          selectedProvider = "PICKUP";
-        } else {
-          let currentOption = 1;
-          if (targetStore.shippingEnableJne) {
-            currentOption++;
-            if (input === String(currentOption)) selectedProvider = "JNE";
-          }
-          if (!selectedProvider && targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
-            currentOption++;
-            if (input === String(currentOption)) selectedProvider = "GOSEND";
-          }
+        let currentOption = 0;
+        
+        // --- Option 1: Pickup ---
+        if (allowPickup) {
+          currentOption++;
+          if (input === String(currentOption)) selectedProvider = "PICKUP";
+        }
+        
+        // --- Option 2: Store Courier (Distance-based or Explicitly enabled) ---
+        // If customer is within 100m, always show Store Courier
+        let isNearStore = false;
+        if ((session.metadata as any)?.latitude && (session.metadata as any)?.longitude && targetStore.biteshipOriginLat && targetStore.biteshipOriginLng) {
+          const distance = getDistanceMeters(
+            parseFloat(String((session.metadata as any).latitude)),
+            parseFloat(String((session.metadata as any).longitude)),
+            parseFloat(String(targetStore.biteshipOriginLat)),
+            parseFloat(String(targetStore.biteshipOriginLng))
+          );
+          if (distance <= 100) isNearStore = true;
+        }
+
+        if (!selectedProvider && (isNearStore || (targetStore as any).shippingEnableStoreCourier)) {
+          currentOption++;
+          if (input === String(currentOption)) selectedProvider = "STORE_COURIER";
+        }
+        
+        // --- Option 3: JNE ---
+        if (!selectedProvider && targetStore.shippingEnableJne) {
+          currentOption++;
+          if (input === String(currentOption)) selectedProvider = "JNE";
+        }
+        
+        // --- Option 4: GoSend ---
+        if (!selectedProvider && targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
+          currentOption++;
+          if (input === String(currentOption)) selectedProvider = "GOSEND";
         }
 
         if (selectedProvider === "PICKUP") {
+          const meta = (session.metadata as any) || {};
           await updateSession(from, targetStore.id, {
             step: 'ORDERING:ALL',
+            metadata: { ...meta, orderType: "TAKEAWAY" },
             cart: (session.cart as any[]) || []
           });
           await sendWhatsAppMessage(from, l(`✅ Pickup dipilih. Balas "Selesai" untuk checkout sekarang.`, `✅ Pickup selected. Reply "Done" to checkout now.`), targetStore.id);
+          return NextResponse.json({ success: true });
+        }
+
+        if (selectedProvider === "STORE_COURIER") {
+          await updateSession(from, targetStore.id, { step: buildTakeawayAddressStep("STORE_COURIER", ctx.method) });
+          await sendWhatsAppMessage(from, l(`Kirim alamat lengkap untuk pengiriman Kurir Toko.`, `Please send full delivery address for Store Courier.`), targetStore.id);
           return NextResponse.json({ success: true });
         }
 
@@ -1358,8 +1493,16 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true });
         }
 
-        let optionsMsg = l(`Pilihan tidak valid. Pilih pengiriman:\n1. Pickup (Ambil Sendiri)`, `Invalid choice. Choose shipping:\n1. Pickup (Self-pickup)`);
-        let optionCount = 1;
+        let optionsMsg = l(`Pilihan tidak valid. Pilih opsi:`, `Invalid choice. Choose an option:`);
+        let optionCount = 0;
+        if (allowPickup) {
+          optionCount++;
+          optionsMsg += `\n${optionCount}. Pickup (Ambil Sendiri)`;
+        }
+        if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
+          optionCount++;
+          optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
+        }
         if (targetStore.shippingEnableJne) {
           optionCount++;
           optionsMsg += `\n${optionCount}. JNE`;
@@ -1407,6 +1550,18 @@ export async function POST(req: NextRequest) {
           store: targetStore,
           destinationAddress: addressText
         });
+
+        // Add Store Courier manually if enabled (Biteship won't return it)
+        if ((targetStore as any).shippingEnableStoreCourier) {
+          shippingOptions.unshift({
+            provider: "STORE_COURIER",
+            service: "Kurir Toko",
+            fee: Number((targetStore as any).shippingStoreCourierFee || 0),
+            eta: "15-30 min",
+            type: "instant"
+          });
+        }
+
         const selected = shippingOptions.find((opt) => opt.provider === ctx.provider);
         if (!selected) {
           await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
@@ -1444,33 +1599,37 @@ export async function POST(req: NextRequest) {
             paymentFee: fee,
             status: 'PENDING',
             orderType: 'TAKEAWAY',
-            shippingProvider: selected?.provider || ctx.provider,
-            shippingService: selected?.service || "-",
-            shippingStatus: 'QUOTE_READY',
+            shippingProvider: ctx.provider,
+            shippingService: ctx.provider === "STORE_COURIER" ? "KURIR_TOKO" : (selected?.service || "-"),
+            shippingStatus: ctx.provider === "STORE_COURIER" ? "STORE_COURIER" : 'QUOTE_READY',
             shippingAddress: addressText,
             shippingCost,
             shippingEta: selected?.eta || "-",
             items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
           }
         });
-        const draft = await createBiteshipDraftForPendingOrder({
-          store: targetStore,
-          order,
-          items: cart.map((item) => ({
-            name: item.name,
-            quantity: item.qty,
-            price: item.price
-          }))
-        });
-        if (draft?.ok && draft?.draftOrderId) {
-          const pendingDraft = draft as any;
-          order = await prisma.order.update({
-            where: { id: order.id },
-            data: {
-              biteshipOrderId: pendingDraft.draftOrderId,
-              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
-            }
+        
+        // Skip Biteship draft if Store Courier
+        if (ctx.provider !== "STORE_COURIER") {
+          const draft = await createBiteshipDraftForPendingOrder({
+            store: targetStore,
+            order,
+            items: cart.map((item) => ({
+              name: item.name,
+              quantity: item.qty,
+              price: item.price
+            }))
           });
+          if (draft?.ok && draft?.draftOrderId) {
+            const pendingDraft = draft as any;
+            order = await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                biteshipOrderId: pendingDraft.draftOrderId,
+                shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+              }
+            });
+          }
         }
 
         await createOrderNotification({
@@ -1478,9 +1637,21 @@ export async function POST(req: NextRequest) {
           orderId: order.id,
           source: "WHATSAPP",
           title: `Order takeaway #${order.id} menunggu pembayaran`,
-          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
-          metadata: { orderType: "TAKEAWAY", shippingProvider: selected?.provider || ctx.provider, shippingCost, shippingAddress: addressText }
+          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}${ctx.provider === "STORE_COURIER" ? "\n🚀 Kirim dengan Kurir Toko" : ""}`,
+          metadata: { 
+            orderType: "TAKEAWAY", 
+            shippingProvider: ctx.provider, 
+            shippingCost, 
+            shippingAddress: addressText,
+            isStoreCourier: ctx.provider === "STORE_COURIER"
+          }
         }).catch(() => null);
+
+        await sendMerchantWhatsApp(
+          targetStore.id,
+          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${ctx.provider === "STORE_COURIER" ? "Kurir Toko (Store Courier)" : (selected?.provider || ctx.provider)}${selected?.service ? ` ${selected.service}` : ""}${ctx.provider === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
+          order.id
+        ).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1489,7 +1660,13 @@ export async function POST(req: NextRequest) {
         if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
         if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
         if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
-        summary += `${l("Ongkir", "Shipping")} (${selected?.provider || ctx.provider} ${selected?.service || ""}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
+        summary += l("Ongkir", "Shipping");
+        if (selected?.provider === "STORE_COURIER") {
+          summary += " (Kurir Toko)";
+        } else {
+          summary += ` (${selected?.provider || ctx.provider} ${selected?.service || ""})`;
+        }
+        summary += `: Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
         summary += `\n*Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}*`;
         await sendWhatsAppMessage(from, summary, targetStore.id, { buttonText: l("Bayar Sekarang", "Pay Now"), buttonUrl: paymentLink });
@@ -1652,20 +1829,22 @@ export async function POST(req: NextRequest) {
           let method = lowerText.includes('qris') ? 'qris' : lowerText.includes('bank') ? 'bank_transfer' : undefined;
 
           const shippingConfigured = isShippingConfigured(targetStore);
-          if (!session.tableNumber && shippingConfigured) {
-            let optionsMsg = l(`Pilih pengiriman:\n1. Pickup (Ambil Sendiri)`, `Choose shipping:\n1. Pickup (Self-pickup)`);
-            let optionCount = 1;
-
+          const sessionOrderType = String(((session.metadata as any)?.orderType || (session.tableNumber ? "DINE_IN" : "TAKEAWAY"))).toUpperCase();
+          if (sessionOrderType === "DELIVERY" && shippingConfigured) {
+            let optionsMsg = l(`Pilih kurir pengiriman:`, `Choose delivery courier:`);
+            let optionCount = 0;
+            if ((targetStore as any).shippingEnableStoreCourier) {
+              optionCount++;
+              optionsMsg += `\n${optionCount}. Kurir Toko`;
+            }
             if (targetStore.shippingEnableJne) {
               optionCount++;
               optionsMsg += `\n${optionCount}. JNE`;
             }
-
             if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
               optionCount++;
               optionsMsg += `\n${optionCount}. GoSend`;
             }
-
             await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(method), cart });
             await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
             return NextResponse.json({ success: true });
@@ -1691,7 +1870,7 @@ export async function POST(req: NextRequest) {
               serviceCharge: serviceCharge,
               paymentFee: fee,
               status: 'PENDING',
-              orderType: session.tableNumber ? 'DINE_IN' : 'TAKEAWAY',
+              orderType: sessionOrderType,
               tableNumber: session.tableNumber,
               items: { create: cart.map(item => ({ productId: item.productId, quantity: item.qty, price: item.price })) }
             }

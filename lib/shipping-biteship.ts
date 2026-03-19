@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 type ShippingOption = {
-  provider: "JNE" | "GOSEND";
+  provider: "JNE" | "GOSEND" | "STORE_COURIER";
   service: string;
   fee: number;
   eta: string;
@@ -92,6 +92,20 @@ function getFallbackOptions(store: any): ShippingOption[] {
     });
   }
   return options;
+}
+
+function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const toRad = (n: number) => (n * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const sin1 = Math.sin(dLat / 2);
+  const sin2 = Math.sin(dLng / 2);
+  const h = sin1 * sin1 + Math.cos(lat1) * Math.cos(lat2) * sin2 * sin2;
+  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  return R * c;
 }
 
 export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Promise<ShippingOption[]> {
@@ -217,6 +231,33 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
       });
       return [];
     }
+    const originLat = typeof store?.biteshipOriginLat === "number" ? store.biteshipOriginLat : null;
+    const originLng = typeof store?.biteshipOriginLng === "number" ? store.biteshipOriginLng : null;
+    const destLat = typeof input.destinationLatitude === "number" ? input.destinationLatitude : null;
+    const destLng = typeof input.destinationLongitude === "number" ? input.destinationLongitude : null;
+
+    if (
+      store?.shippingEnableStoreCourier &&
+      originLat !== null &&
+      originLng !== null &&
+      destLat !== null &&
+      destLng !== null
+    ) {
+      const d = distanceMeters(
+        { latitude: originLat, longitude: originLng },
+        { latitude: destLat, longitude: destLng }
+      );
+      if (Number.isFinite(d) && d <= 100) {
+        mapped.push({
+          provider: "STORE_COURIER",
+          service: "KURIR_TOKO",
+          fee: Number(store?.shippingStoreCourierFee || 0),
+          eta: "10-30 menit",
+          type: "instant"
+        });
+      }
+    }
+
     return mapped.sort((a, b) => a.fee - b.fee);
   } catch {
     return [];

@@ -74,6 +74,8 @@ export default function AdminSettings() {
     shippingEnableJne: false,
     shippingEnableGosend: false,
     shippingJneOnly: false,
+    shippingEnableStoreCourier: false,
+    shippingStoreCourierFee: "0",
     enableTakeawayDelivery: true,
     biteshipApiKey: "",
     biteshipOriginAreaId: "",
@@ -143,6 +145,8 @@ export default function AdminSettings() {
           shippingEnableJne: data.shippingEnableJne ?? false,
           shippingEnableGosend: data.shippingEnableGosend ?? false,
           shippingJneOnly: data.shippingJneOnly ?? false,
+          shippingEnableStoreCourier: (data as any).shippingEnableStoreCourier ?? false,
+          shippingStoreCourierFee: ((data as any).shippingStoreCourierFee ?? 0).toString(),
           enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
           biteshipApiKey: data.biteshipApiKey || "",
           biteshipOriginAreaId: data.biteshipOriginAreaId || "",
@@ -188,6 +192,7 @@ export default function AdminSettings() {
         posPaymentMethods: settings.posPaymentMethods,
         biteshipOriginLat: settings.biteshipOriginLat ? parseFloat(settings.biteshipOriginLat.toString().replace(',', '.')) : null,
         biteshipOriginLng: settings.biteshipOriginLng ? parseFloat(settings.biteshipOriginLng.toString().replace(',', '.')) : null,
+        shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount
       });
 
@@ -697,6 +702,28 @@ export default function AdminSettings() {
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
                   <label className="text-sm font-medium dark:text-gray-300">Enable GoSend</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.shippingEnableStoreCourier}
+                    onChange={(e) => setSettings({ ...settings, shippingEnableStoreCourier: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label className="text-sm font-medium dark:text-gray-300">Enable Store Courier (≤100m)</label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Store Courier Fee (Flat)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1.5 text-gray-500 dark:text-gray-400 text-sm">Rp</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                      value={settings.shippingStoreCourierFee}
+                      onChange={(e) => setSettings({ ...settings, shippingStoreCourierFee: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <input

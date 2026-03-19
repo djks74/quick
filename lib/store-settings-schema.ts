@@ -43,6 +43,14 @@ export async function ensureStoreSettingsSchema() {
       `);
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "shippingEnableStoreCourier" BOOLEAN NOT NULL DEFAULT false;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "shippingStoreCourierFee" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
         ADD COLUMN IF NOT EXISTS "enableTakeawayDelivery" BOOLEAN NOT NULL DEFAULT true;
       `);
       await prisma.$executeRawUnsafe(`
