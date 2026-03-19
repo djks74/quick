@@ -7,7 +7,6 @@ import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
-import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
 
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
@@ -355,21 +354,6 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         shippingAddress: trimmedAddress || null
       }
     }).catch(() => null);
-
-    await sendMerchantWhatsApp(
-      store.id,
-      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}${isTakeaway ? `\nKurir: ${shippingProvider || "-"} ${shippingService || "-"}` : ""}`
-    ).catch(() => null);
-
-    // Delay 3 seconds before customer notif to prevent Meta blocking
-    await new Promise(r => setTimeout(r, 3000));
-
-    await sendWhatsAppMessage(
-      cleanPhone,
-      `⏳ Order #${order.id} masih *menunggu pembayaran*.\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\n\n⏳ Link pembayaran bisa kedaluwarsa. Mohon selesaikan segera.`,
-      store.id,
-      { buttonText: "Bayar Sekarang", buttonUrl: paymentUrl }
-    ).catch(() => null);
 
     const breakdown = [
       `🛒 *${store.name} ORDER #${order.id}*`,

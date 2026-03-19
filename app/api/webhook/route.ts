@@ -416,9 +416,14 @@ export async function POST(req: NextRequest) {
             });
 
             // If there's a breakdown, show it before the main text
-            const responseText = data.breakdown 
+            const rawResponseText = data.breakdown
               ? `${data.breakdown}\n\n${data.text}`
               : data.text;
+            const responseText = String(rawResponseText || "")
+              .replace(/(\*?Detail Pesanan[\s\S]*)$/i, "")
+              .replace(/^.*silahkan bayar menggunakan tautan.*$/gim, "")
+              .replace(/^.*https?:\/\/\S+.*$/gim, "")
+              .trim();
 
             // If there's a payment link, add a button
             const options = data.paymentUrl 
@@ -766,14 +771,6 @@ export async function POST(req: NextRequest) {
           body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
           metadata: { orderType: "TAKEAWAY", shippingProvider: "GOSEND", shippingCost, shippingAddress: ctx.address }
         }).catch(() => null);
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: GOSEND ${selected?.service || ""}`
-        ).catch(() => null);
-
-        // Delay 3 seconds before customer notif to prevent Meta blocking
-        await new Promise(r => setTimeout(r, 3000));
-
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
         cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
@@ -1477,14 +1474,6 @@ export async function POST(req: NextRequest) {
           metadata: { orderType: "TAKEAWAY", shippingProvider: selected?.provider || ctx.provider, shippingCost, shippingAddress: addressText }
         }).catch(() => null);
 
-        await sendMerchantWhatsApp(
-           targetStore.id,
-           `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\nKurir: ${selected?.provider || ctx.provider} ${selected?.service || ""}`
-         ).catch(() => null);
-
-        // Delay 3 seconds before customer notif to prevent Meta blocking
-        await new Promise(r => setTimeout(r, 3000));
-
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
         cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });
@@ -1614,14 +1603,6 @@ export async function POST(req: NextRequest) {
                 totalAmount: amount
               }
             });
-            await sendMerchantWhatsApp(
-              targetStore.id,
-              `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(amount)}`
-            ).catch(() => null);
-
-            // Delay 3 seconds before customer notif to prevent Meta blocking
-            await new Promise(r => setTimeout(r, 3000));
-
             const paymentLink = await createPaymentLink(order.id, amount, from, targetStore.id);
             await sendWhatsAppMessage(
               from,
@@ -1722,14 +1703,6 @@ export async function POST(req: NextRequest) {
               items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
             }
           });
-          await sendMerchantWhatsApp(
-            targetStore.id,
-            `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${from}${session.tableNumber ? `\nMeja: ${session.tableNumber}` : ""}\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`
-          ).catch(() => null);
-
-          // Delay 3 seconds before customer notif to prevent Meta blocking
-          await new Promise(r => setTimeout(r, 3000));
-
           const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, method);
           let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
           cart.forEach(item => { summary += `- ${item.name} x${item.qty} = ${new Intl.NumberFormat('id-ID').format(item.price * item.qty)}\n`; });

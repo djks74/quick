@@ -5,7 +5,6 @@ import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
 
-import { sendMerchantWhatsApp } from '@/lib/merchant-alerts';
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,14 +81,6 @@ export async function POST(req: NextRequest) {
         tableNumber: customerInfo?.tableNumber || null
       }
     });
-
-    await sendMerchantWhatsApp(
-       parseInt(storeId),
-       `🛒 *Order Pending (Web)*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${customerInfo?.phone || "GUEST"}${customerInfo?.tableNumber ? `\nMeja: ${customerInfo.tableNumber}` : ""}\nTotal: Rp ${Math.round(total).toLocaleString("id-ID")}`
-     ).catch(() => null);
-
-    // Delay 3 seconds before continuing (likely leading to payment process or more notifications)
-    await new Promise(r => setTimeout(r, 3000));
 
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.
