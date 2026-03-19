@@ -498,9 +498,9 @@ export default function Home() {
                   {t.pro_badge}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black uppercase tracking-tight">PRO</h3>
+                  <h3 className="text-2xl font-black uppercase tracking-tight dark:text-white">PRO</h3>
                   <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-3xl font-black">{t.pro_price}</span>
+                    <span className="text-3xl font-black dark:text-white">{t.pro_price}</span>
                     <span className="text-gray-500 text-xs font-bold">{t.pro_period}</span>
                   </div>
                 </div>
@@ -540,7 +540,7 @@ export default function Home() {
                 <div>
                   <h3 className="text-2xl font-black uppercase tracking-tight text-blue-600">ENTERPRISE</h3>
                   <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-3xl font-black">{t.enterprise_price}</span>
+                    <span className="text-3xl font-black dark:text-white">{t.enterprise_price}</span>
                     <span className="text-gray-500 text-xs font-bold">{t.enterprise_period}</span>
                   </div>
                 </div>
@@ -573,7 +573,7 @@ export default function Home() {
                 <div>
                   <h3 className="text-2xl font-black uppercase tracking-tight text-orange-500">SOVEREIGN</h3>
                   <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-3xl font-black">{t.sovereign_price}</span>
+                    <span className="text-3xl font-black dark:text-white">{t.sovereign_price}</span>
                     <span className="text-gray-500 text-xs font-bold">{t.sovereign_period}</span>
                   </div>
                 </div>
