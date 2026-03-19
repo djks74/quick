@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 
+import { revalidatePath } from 'next/cache';
+
 let ensuredPlatformSettingsSchema: Promise<void> | null = null;
 
 async function ensurePlatformSettingsSchema() {
@@ -124,12 +126,15 @@ export async function setStoreWaBalance(storeId: number, newBalance: number, rea
 export async function updateStorePlan(storeId: number, plan: string, fee: number) {
   try {
     await requireSuperAdmin();
+    console.log(`[SUPER_ADMIN] Updating store ${storeId} to plan ${plan} with fee ${fee}`);
+    
     const store = await prisma.store.findUnique({ where: { id: storeId }, select: { slug: true } });
+    
     const updated = await prisma.store.update({
       where: { id: storeId },
       data: {
         subscriptionPlan: plan,
-        transactionFeePercent: fee,
+        transactionFeePercent: Number.isFinite(fee) ? fee : 0,
         ...(plan !== "ENTERPRISE" && plan !== "SOVEREIGN" || store?.slug === "demo"
           ? {
               whatsappToken: null,
@@ -138,7 +143,14 @@ export async function updateStorePlan(storeId: number, plan: string, fee: number
           : {})
       }
     });
-    return { success: true, data: updated };
+    
+    console.log(`[SUPER_ADMIN] Successfully updated store ${storeId} to plan ${plan}`);
+    
+    revalidatePath('/super-admin');
+    revalidatePath(`/${updated.slug}`);
+    revalidatePath('/');
+    
+    return { success: true, data: JSON.parse(JSON.stringify(updated)) };
   } catch (error) {
     console.error('Error updating store plan:', error);
     return { success: false, error: 'Failed to update plan' };

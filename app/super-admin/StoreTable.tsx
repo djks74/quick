@@ -22,7 +22,13 @@ export default function StoreTable({ stores }: { stores: any[] }) {
     const waBalanceRaw = (form.elements.namedItem('waBalance') as HTMLInputElement | null)?.value;
     const waReason = (form.elements.namedItem('waReason') as HTMLInputElement | null)?.value;
 
-    await updateStorePlan(editingStore.id, plan, fee);
+    const res = await updateStorePlan(editingStore.id, plan, fee);
+    if (!res.success) {
+      alert(res.error || "Failed to update plan");
+      setLoading(false);
+      return;
+    }
+
     if (waBalanceRaw !== undefined) {
       const next = parseFloat(String(waBalanceRaw));
       if (Number.isFinite(next) && next >= 0 && Number(next) !== Number(editingStore.waBalance || 0)) {
