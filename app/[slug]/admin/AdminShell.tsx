@@ -75,14 +75,16 @@ export default function AdminShell({
         { name: "Categories", href: `${baseUrl}/products?view=categories` },
       ]
     },
-    {
-      name: "Ingredients",
-      icon: Layers,
-      children: [
-        { name: "All Items", href: `${baseUrl}/inventory` },
-        { name: "Stock Manager", href: `${baseUrl}/inventory/scan` },
-      ]
-    },
+    ...(store.subscriptionPlan !== 'FREE' && store.subscriptionPlan !== 'PRO' ? [
+      {
+        name: "Ingredients",
+        icon: Layers,
+        children: [
+          { name: "All Items", href: `${baseUrl}/inventory` },
+          { name: "Stock Manager", href: `${baseUrl}/inventory/scan` },
+        ]
+      }
+    ] : []),
     { 
       name: "Orders", 
       href: `${baseUrl}/orders`,
@@ -98,7 +100,9 @@ export default function AdminShell({
       icon: Wallet,
       children: [
         { name: "Report", href: `${baseUrl}/finance/ledger` },
-        { name: "Analytics", href: `${baseUrl}/finance/profit` },
+        ...(store.subscriptionPlan !== 'FREE' && store.subscriptionPlan !== 'PRO' ? [
+          { name: "Analytics", href: `${baseUrl}/finance/profit` }
+        ] : []),
         { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
       ]
     },
@@ -107,11 +111,13 @@ export default function AdminShell({
       href: `${baseUrl}/settings`, 
       icon: Settings 
     },
-    { 
-      name: "Tables", 
-      href: `${baseUrl}/tables`, 
-      icon: Layers 
-    },
+    ...(store.subscriptionPlan !== 'FREE' ? [
+      { 
+        name: "Tables", 
+        href: `${baseUrl}/tables`, 
+        icon: Layers 
+      }
+    ] : []),
   ];
 
   const toggleMenu = (name: string) => {

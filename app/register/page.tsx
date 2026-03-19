@@ -115,8 +115,9 @@ export default function RegisterPage() {
             <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Choose Plan</label>
             <div className="grid grid-cols-1 gap-3">
               {[
-                { id: "FREE", name: "Free", desc: "Basic features" },
-                { id: "ENTERPRISE", name: "Enterprise", desc: "Priority support & features" },
+                { id: "FREE", name: "Free", desc: "Payments & Shipping only" },
+                { id: "PRO", name: "Pro", desc: "POS + AI Chat (No Analytics/Ingredients)" },
+                { id: "ENTERPRISE", name: "Enterprise", desc: "Full features + Analytics" },
                 { id: "SOVEREIGN", name: "Sovereign", desc: "Full whitelabel & AI control" }
               ].map((p) => (
                 <button

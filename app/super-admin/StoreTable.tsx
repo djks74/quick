@@ -161,6 +161,7 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                 >
                   <option value="SOVEREIGN">Sovereign</option>
                   <option value="ENTERPRISE">Enterprise</option>
+                  <option value="PRO">Pro</option>
                   <option value="FREE">Free</option>
                 </select>
               </div>

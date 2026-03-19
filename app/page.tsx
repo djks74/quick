@@ -18,7 +18,8 @@ import {
   ShieldCheck, 
   TrendingUp,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  X
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -93,6 +94,12 @@ const translations = {
     phase5_f2: "Add products via WhatsApp",
     phase5_f3: "Real-time AI sales insights",
     phase5_f4: "Automated customer follow-ups",
+    pro_badge: "Most Popular",
+    pro_price: "Rp 99.000",
+    pro_period: "/month",
+    enterprise_badge: "Advanced Business",
+    enterprise_price: "Rp 249.000",
+    enterprise_period: "/month",
     sovereign_badge: "Most Professional",
     sovereign_price: "Rp 499.000",
     sovereign_period: "/month",
@@ -152,6 +159,12 @@ const translations = {
     phase5_f2: "Tambah produk via WhatsApp",
     phase5_f3: "Insight penjualan AI real-time",
     phase5_f4: "Follow-up pelanggan otomatis",
+    pro_badge: "Paling Populer",
+    pro_price: "Rp 99.000",
+    pro_period: "/bulan",
+    enterprise_badge: "Bisnis Lanjutan",
+    enterprise_price: "Rp 249.000",
+    enterprise_period: "/bulan",
     sovereign_badge: "Paling Profesional",
     sovereign_price: "Rp 499.000",
     sovereign_period: "/bulan",
@@ -469,56 +482,125 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Sovereign Plan Promo */}
-      <section className="py-24 px-6 bg-gradient-to-b from-white to-orange-50 dark:from-[#0F1113] dark:to-orange-900/5 transition-colors duration-300">
-        <div className="max-w-4xl mx-auto">
-          <div className="relative group overflow-hidden bg-white dark:bg-gray-900 rounded-[40px] border-4 border-orange-500/20 shadow-2xl transition-all hover:shadow-orange-500/10">
-            <div className="absolute top-0 right-0 p-8">
-               <Sparkles className="w-12 h-12 text-orange-500/20 animate-pulse" />
+      {/* Pricing Section */}
+      <section className="py-24 px-6 bg-white dark:bg-[#0F1113]">
+        <div className="max-w-7xl mx-auto space-y-16">
+          <div className="text-center space-y-4">
+            <h2 className="text-4xl md:text-5xl font-black tracking-tighter">PRICING PLANS</h2>
+            <p className="text-gray-500 font-medium">Choose the perfect plan for your business growth.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* PRO PLAN */}
+            <div className="p-8 rounded-[40px] border-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex flex-col justify-between group hover:border-blue-500/30 transition-all">
+              <div className="space-y-6">
+                <div className="inline-flex px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest">
+                  {t.pro_badge}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight">PRO</h3>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-3xl font-black">{t.pro_price}</span>
+                    <span className="text-gray-500 text-xs font-bold">{t.pro_period}</span>
+                  </div>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    "AI Chat Assistant",
+                    "WhatsApp Checkout",
+                    "POS System",
+                    "Custom Domain",
+                    "Basic Reports"
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-400">
+                      <CheckCircle2 size={14} className="text-green-500" />
+                      {f}
+                    </li>
+                  ))}
+                  <li className="flex items-center gap-2 text-sm font-bold text-red-400/50 line-through">
+                    <X size={14} />
+                    Analytics & Ingredients
+                  </li>
+                </ul>
+              </div>
+              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center font-black uppercase tracking-widest text-xs hover:bg-gray-50 transition-colors">
+                Get Started
+              </Link>
             </div>
-            
-            <div className="p-8 md:p-16 flex flex-col md:flex-row items-center gap-12">
-              <div className="flex-1 space-y-6 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-500 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-orange-500/20">
+
+            {/* ENTERPRISE PLAN */}
+            <div className="p-8 rounded-[40px] border-4 border-blue-600 bg-white dark:bg-gray-900 flex flex-col justify-between shadow-2xl shadow-blue-500/10 scale-105 relative z-10">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest">
+                RECOMMENDED
+              </div>
+              <div className="space-y-6">
+                <div className="inline-flex px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest">
+                  {t.enterprise_badge}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-blue-600">ENTERPRISE</h3>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-3xl font-black">{t.enterprise_price}</span>
+                    <span className="text-gray-500 text-xs font-bold">{t.enterprise_period}</span>
+                  </div>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    "Everything in PRO",
+                    "Advanced Analytics",
+                    "Ingredient Tracking",
+                    "Inventory Management",
+                    "Priority Support"
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm font-bold text-gray-800 dark:text-gray-200">
+                      <CheckCircle2 size={14} className="text-blue-500" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-blue-600 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
+                Upgrade Now
+              </Link>
+            </div>
+
+            {/* SOVEREIGN PLAN */}
+            <div className="p-8 rounded-[40px] border-2 border-orange-500/30 bg-orange-50/10 dark:bg-orange-900/5 flex flex-col justify-between group hover:border-orange-500 transition-all">
+              <div className="space-y-6">
+                <div className="inline-flex px-3 py-1 rounded-full bg-orange-500/10 text-orange-500 text-[10px] font-black uppercase tracking-widest">
                   {t.sovereign_badge}
                 </div>
-                <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-gray-900 dark:text-white">
-                  SOVEREIGN <br/>
-                  <span className="text-orange-500">MEMBERSHIP</span>
-                </h2>
-                <div className="flex items-baseline justify-center md:justify-start gap-2">
-                  <span className="text-4xl font-black text-gray-900 dark:text-white">{t.sovereign_price}</span>
-                  <span className="text-gray-500 font-bold">{t.sovereign_period}</span>
-                </div>
-                <p className="text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
-                  The ultimate control for your brand. Total ownership of your data and communication channels.
-                </p>
-              </div>
-
-              <div className="flex-1 space-y-4 w-full">
-                {[t.sovereign_feature1, t.sovereign_feature2, t.sovereign_feature3, t.sovereign_feature4].map((f, i) => (
-                  <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 transition-transform hover:translate-x-2">
-                    <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-md">
-                      <CheckCircle2 size={16} />
-                    </div>
-                    <span className="font-bold text-gray-800 dark:text-gray-200">{f}</span>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-orange-500">SOVEREIGN</h3>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-3xl font-black">{t.sovereign_price}</span>
+                    <span className="text-gray-500 text-xs font-bold">{t.sovereign_period}</span>
                   </div>
-                ))}
-                
-                <div className="pt-4">
-                  <Link 
-                    href="/register" 
-                    className="flex items-center justify-center gap-3 w-full py-5 bg-black dark:bg-white text-white dark:text-black rounded-[24px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-                  >
-                    Upgrade Now
-                    <ArrowRight size={20} />
-                  </Link>
                 </div>
+                <ul className="space-y-3">
+                  {[
+                    "Everything in Enterprise",
+                    "Custom WA Number",
+                    "Own Gemini API Key",
+                    "Product Sync API",
+                    "Custom Midtrans Keys"
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300">
+                      <Sparkles size={14} className="text-orange-500" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
               </div>
+              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-orange-500 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20">
+                Go Sovereign
+              </Link>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Sovereign Plan Promo (Alternative visualization removed to avoid redundancy) */}
 
       {/* Floating QR Demo (Visible on all devices) */}
       <div className="fixed bottom-6 left-6 sm:bottom-8 sm:left-8 z-40 flex flex-col items-center gap-2 sm:gap-3 animate-fade-in">
