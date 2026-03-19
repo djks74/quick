@@ -226,7 +226,8 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
   const legacyFallbackMethods = useMemo<PosPaymentMethod[]>(() => {
     const methods: PosPaymentMethod[] = [{ id: "cash", name: "Cash", mode: "cash" }];
-    if (store.enableManualTransfer) methods.push({ id: "transfer", name: "Bank Transfer", mode: "transfer" });
+    // Manual Transfer is disabled by user request
+    // if (store.enableManualTransfer) methods.push({ id: "transfer", name: "Bank Transfer", mode: "transfer" });
     if (store.enableMidtrans) methods.push({ id: "qris", name: "QRIS / E-Wallet", mode: "qris" });
     return methods;
   }, [store.enableManualTransfer, store.enableMidtrans]);

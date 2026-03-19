@@ -133,7 +133,7 @@ export default function AdminShell({
   const pageName = pathname.split("/").pop()?.replace("-", " ") || "Dashboard";
   const pageTitle = pageName.toLowerCase() === "ledger" ? "Report" : pageName;
 
-  const showSubscriptionGate = !isSuperAdmin && store.subscriptionPlan !== 'ENTERPRISE';
+  const showSubscriptionGate = !isSuperAdmin && !['ENTERPRISE', 'SOVEREIGN', 'PRO'].includes(store.subscriptionPlan);
 
   const pushToast = (item: any) => {
     const toastId = `${item.id}-${Date.now()}`;

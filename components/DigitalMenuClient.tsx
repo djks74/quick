@@ -872,7 +872,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div className="grid grid-cols-1 gap-4">
                     <button 
                       onClick={() => handleWebCheckout('qris')}
                       disabled={!store.isOpen || isProcessing}
@@ -888,24 +888,6 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           </span>
                           {calculatePlatformFee('qris') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
-                          )}
-                       </div>
-                    </button>
-                    <button 
-                      onClick={() => handleWebCheckout('bank')}
-                      disabled={!store.isOpen || isProcessing}
-                      className="py-3 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50"
-                    >
-                       <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4" />
-                         <span className="text-xs">{isProcessing ? "Processing..." : "Bank Transfer"}</span>
-                       </div>
-                       <div className="flex flex-col items-center opacity-100">
-                          <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('transfer') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
-                          </span>
-                          {calculatePlatformFee('transfer') > 0 && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('transfer'))})</span>
                           )}
                        </div>
                     </button>

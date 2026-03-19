@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate plan
-    const validPlans = ["FREE", "ENTERPRISE", "SOVEREIGN"];
+    const validPlans = ["FREE", "PRO", "ENTERPRISE", "SOVEREIGN"];
     const targetPlan = validPlans.includes(plan) ? plan : "FREE";
 
     // Check existing email
@@ -36,25 +36,35 @@ export async function POST(req: NextRequest) {
       slug = `${slug}-${Math.floor(Math.random() * 1000)}`;
     }
 
+    // Set initial WA Credit based on plan
+    let initialWaCredit = 5000; // Default
+    if (targetPlan === "FREE") initialWaCredit = 0;
+    if (targetPlan === "PRO") initialWaCredit = 10000;
+    if (targetPlan === "ENTERPRISE") initialWaCredit = 25000;
+    if (targetPlan === "SOVEREIGN") initialWaCredit = 50000;
+
     // Transaction: Create User -> Create Store
-    const user = await prisma.user.create({
+    const result = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
         role: "MERCHANT",
         stores: {
-          create: {
-            name: storeName,
-            slug: slug,
-            subscriptionPlan: targetPlan, 
-            enableWhatsApp: true,
-            enableManualTransfer: true,
-            whatsappToken: null,
-            whatsappPhoneId: null,
-            paymentGatewaySecret: null,
-            paymentGatewayClientKey: null
-          }
+          create: [
+            {
+              name: storeName,
+              slug: slug,
+              subscriptionPlan: targetPlan, 
+              enableWhatsApp: true,
+              waBalance: initialWaCredit,
+              enableManualTransfer: false,
+              whatsappToken: null,
+              whatsappPhoneId: null,
+              paymentGatewaySecret: null,
+              paymentGatewayClientKey: null
+            }
+          ]
         }
       },
       include: {
@@ -64,8 +74,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      user: { id: user.id, email: user.email }, 
-      store: { id: user.stores[0].id, slug: user.stores[0].slug } 
+      user: { id: result.id, email: result.email }, 
+      store: { id: result.stores[0].id, slug: result.stores[0].slug } 
     });
 
   } catch (error) {

@@ -60,7 +60,6 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
       `*Pembayaran & Tagihan*\n` +
       `- Payment option\n` +
       `- Set payment midtrans on/off\n` +
-      `- Set payment transfer on/off\n` +
       `- Mau kirim tagihan (Kirim link bayar)\n\n` +
       `*Operasional*\n` +
       `- Buka toko / Tutup toko\n\n` +
@@ -252,9 +251,8 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
           `Nominal: ${formatMoney(amount)}\n\n` +
           `Pilih metode pembayaran untuk dikirim ke customer:\n` +
           `1) WA Credit (Langsung lunas)\n` +
-          `2) QRIS (Fee 1%)\n` +
-          `3) Transfer Bank (Fee Rp 5.000)\n\n` +
-          `Balas: 1 / 2 / 3`,
+          `2) QRIS (Fee 1%)\n\n` +
+          `Balas: 1 / 2`,
         store.id
       );
       return;
@@ -562,8 +560,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
             `Ongkir: ${formatMoney(shippingFee)}\n\n` +
             `Pilih pembayaran:\n` +
             `1) WA Credit\n` +
-            `2) QRIS (Midtrans)\n` +
-            `3) Transfer Bank\n\n` +
+            `2) QRIS (Midtrans)\n\n` +
             `Atau balas:\n` +
             `- *Edit* (Ubah alamat/kurir)\n` +
             `- *Batal* (Batalkan booking)`,
@@ -648,7 +645,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         }).catch(() => false);
 
         if (!ok) {
-          await sendWhatsAppMessage(from, `❌ Saldo WA tidak cukup. Total: ${formatMoney(amount)}\nBalas 2 untuk QRIS atau 3 untuk Transfer.`, store.id);
+          await sendWhatsAppMessage(from, `❌ Saldo WA tidak cukup. Total: ${formatMoney(amount)}\nBalas 2 untuk QRIS.`, store.id);
           return;
         }
 
@@ -728,32 +725,7 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
         return;
       }
 
-      if (choice === "3" || choice === "bank" || choice === "transfer") {
-        const fee = 5000;
-        const finalAmount = amount + fee;
-        const paymentUrl = await createPaymentLink(order.id, finalAmount, from, store.id, "bank_transfer");
-
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { totalAmount: finalAmount, paymentFee: fee }
-        });
-
-        await prisma.whatsAppSession.update({
-          where: { id: merchantSession.id },
-          data: { step: "MERCHANT_MODE", cart: [] }
-        });
-
-        const msg = `🏦 *Pembayaran Transfer Bank*\nOrder #${order.id}\nTotal: ${formatMoney(finalAmount)}\n(Termasuk fee admin: ${formatMoney(fee)})\n\nSilakan bayar melalui link di bawah.`;
-
-        await sendWhatsAppMessage(from, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
-
-        if (info.isInvoice) {
-          await sendWhatsAppMessage(order.customerPhone, msg, store.id, { buttonText: "Bayar Transfer", buttonUrl: paymentUrl });
-        }
-        return;
-      }
-
-      await sendWhatsAppMessage(from, "❌ Pilihan tidak valid. Balas 1 / 2 / 3.", store.id);
+      await sendWhatsAppMessage(from, "❌ Pilihan tidak valid. Balas 1 / 2.", store.id);
       return;
     }
   }

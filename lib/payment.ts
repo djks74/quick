@@ -35,50 +35,12 @@ export async function processPayment(orderId: number, amount: number, customerPh
   // BUT we will rely on UI logic to prevent PRO users from editing them.
   // This ensures that if keys were copied (like we just implemented), they are used.
 
-  // 1. Manual Transfer
+  // 1. Manual Transfer - DISABLED by user request
+  /*
   if (method === 'manual') {
-    let bankDetails = {
-      bankName: platform?.bankName || 'BCA', 
-      accountNumber: platform?.bankAccountNumber || process.env.PLATFORM_BANK_NUMBER || '888888888', 
-      accountName: platform?.bankAccountName || process.env.PLATFORM_BANK_NAME || 'LCP Platform'
-    };
-
-    // Override if Enterprise
-    if (canOverridePlatformConfig && settings.bankAccount) {
-      const storeBank = settings.bankAccount as any;
-      if (storeBank.bankName && storeBank.accountNumber) {
-        bankDetails = {
-           bankName: storeBank.bankName,
-           accountNumber: storeBank.accountNumber,
-           accountName: storeBank.accountName || settings.name
-        };
-      }
-    }
-
-    const uniqueCode = generateUniqueCode();
-    const finalAmount = amount + uniqueCode;
-    
-    // Update order with unique code
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { 
-        uniqueCode: uniqueCode,
-        totalAmount: finalAmount, // Update total to include unique code
-        paymentMethod: 'manual',
-        status: 'PENDING'
-      }
-    });
-
-    return {
-      success: true,
-      type: 'manual',
-      amount: finalAmount,
-      uniqueCode: uniqueCode,
-      bankName: bankDetails.bankName,
-      accountNumber: bankDetails.accountNumber,
-      accountName: bankDetails.accountName
-    };
+    // ... logic removed ...
   }
+  */
 
   if (method === 'midtrans') {
     const hasPlatformKeys = Boolean(platform?.midtransServerKey && platform?.midtransClientKey);

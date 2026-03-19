@@ -96,21 +96,6 @@ export async function POST(req: NextRequest) {
        result = await processPayment(order.id, total, customerInfo?.phone || '08123456789', method, parseInt(storeId), specificType);
     }
 
-    if (result.type === 'manual') {
-       return NextResponse.json({ 
-         success: true, 
-         isManual: true, 
-         orderId: order.id,
-         amount: result.amount,
-         uniqueCode: result.uniqueCode,
-         bankInfo: {
-            bankName: result.bankName,
-            accountNumber: result.accountNumber,
-            accountName: result.accountName
-         }
-       });
-    }
-
     return NextResponse.json({ success: true, paymentUrl: result.paymentUrl, orderId: order.id });
   } catch (error: any) {
     console.error('Checkout Error:', error);

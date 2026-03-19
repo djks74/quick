@@ -229,6 +229,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
+    // Default to qris as manual transfer is disabled
+    payment_method = payment_method === 'bank_transfer' ? 'qris' : (payment_method || 'qris');
+
     const cleanPhone = normalizePhoneNumber(customer_phone);
     const orderType = String(order_type || "").toUpperCase();
     const isDelivery = orderType === "DELIVERY";

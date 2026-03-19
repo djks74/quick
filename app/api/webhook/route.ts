@@ -1831,10 +1831,10 @@ export async function POST(req: NextRequest) {
         const currentCategory = orderingContext.category;
         const searchIds = orderingContext.searchIds;
 
-        if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'done bank' || lowerText === 'selesai' || lowerText === 'selesai qris' || lowerText === 'selesai bank') {
+        if (lowerText === 'done' || lowerText === 'checkout' || lowerText === 'done qris' || lowerText === 'selesai' || lowerText === 'selesai qris') {
           const cart = (session.cart as any[]) || [];
           if (cart.length === 0) {
-            await sendWhatsAppMessage(from, l(`Keranjang kamu masih kosong. Balas 'Menu' untuk lihat item.`, `Your cart is empty. Reply 'Menu' to see items.`), targetStore.id);
+            await sendWhatsAppMessage(from, l(`Keranjang kamu masih kosong. Balas 'Menu' untuk lihat item.`, `Your cart empty. Reply 'Menu' to see items.`), targetStore.id);
             return NextResponse.json({ success: true });
           }
           const stockCheck = await validateCartStock(targetStore.id, cart);
@@ -1844,7 +1844,7 @@ export async function POST(req: NextRequest) {
           }
 
           const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-          let method = lowerText.includes('qris') ? 'qris' : lowerText.includes('bank') ? 'bank_transfer' : undefined;
+          let method = 'qris'; // Always QRIS as manual transfer is removed
 
           const shippingConfigured = isShippingConfigured(targetStore);
           const sessionOrderType = String(((session.metadata as any)?.orderType || (session.tableNumber ? "DINE_IN" : "TAKEAWAY"))).toUpperCase();

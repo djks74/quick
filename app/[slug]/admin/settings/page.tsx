@@ -484,75 +484,16 @@ export default function AdminSettings() {
         {activeTab === "Payments" && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-              <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Payment Methods</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable multiple payment options.</p>
-              </div>
-              <div className="md:col-span-2 space-y-6">
-                
-                {/* Manual Transfer */}
-                <div className="border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 space-y-4 transition-colors">
-                    <div className="flex items-center justify-between">
-                         <div className="flex items-center space-x-2">
-                            <input 
-                                type="checkbox" 
-                                checked={settings.enableManualTransfer}
-                                onChange={(e) => setSettings({ ...settings, enableManualTransfer: e.target.checked })}
-                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                            />
-                            <label className="text-sm font-medium dark:text-gray-300">Enable Manual Transfer</label>
-                        </div>
-                    </div>
-                    
-                    {settings.enableManualTransfer && (
-                        <div className="pl-6 pt-2 border-t dark:border-gray-700 mt-2">
-                             {!isEnterprise && (
-                                <div className="bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 p-2 text-xs mb-3 rounded border dark:border-gray-800">
-                                    Funds will be transferred to Platform Account (BCA 888888888). Upgrade to Enterprise to use your own bank account.
-                                </div>
-                             )}
-                             {isDemoStore && (
-                                <div className="bg-gray-100 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 p-2 text-xs mb-3 rounded border dark:border-gray-800">
-                                    Demo store always uses Platform bank account.
-                                </div>
-                             )}
-                             <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Bank Name</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
-                                        value={bankAccount.bankName}
-                                        onChange={(e) => setBankAccount({ ...bankAccount, bankName: e.target.value })}
-                                        placeholder="BCA"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Account Number</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
-                                        value={bankAccount.accountNumber}
-                                        onChange={(e) => setBankAccount({ ...bankAccount, accountNumber: e.target.value })}
-                                        placeholder="1234567890"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 uppercase">Account Name</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm dark:text-white outline-none focus:border-[#2271b1]" 
-                                        value={bankAccount.accountName}
-                                        onChange={(e) => setBankAccount({ ...bankAccount, accountName: e.target.value })}
-                                        placeholder="Store Name"
-                                    />
-                                </div>
-                             </div>
-                        </div>
-                    )}
+                {/* Payments Tab Title Section */}
+                <div>
+                  <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Payment Gateways</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure automated payment processing.</p>
                 </div>
+                <div className="md:col-span-2 space-y-6">
+                  
+                  {/* Manual Transfer - REMOVED */}
 
-                {/* Midtrans */}
+                  {/* Midtrans */}
                 <div className="border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 space-y-4 transition-colors">
                    <div className="flex items-center space-x-2">
                     <input 
@@ -719,27 +660,32 @@ export default function AdminSettings() {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-1 dark:text-gray-300">QRIS Fee (%)</label>
-                            <input 
-                                type="text"
-                                inputMode="decimal"
-                                className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
-                                value={settings.qrisFeePercent}
-                                onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
-                            />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default is 0.7%</p>
+                            <div className={cn("relative", !isSuperAdmin && "opacity-75 pointer-events-none")}>
+                                <input 
+                                    type="text"
+                                    inputMode="decimal"
+                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
+                                    value={settings.qrisFeePercent}
+                                    onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
+                                    readOnly={!isSuperAdmin}
+                                />
+                            </div>
+                            {!isSuperAdmin && <p className="text-[10px] text-gray-500 mt-1 italic font-bold uppercase">Super Admin Only</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Bank Transfer Fee (Flat)</label>
-                            <div className="relative">
+                            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Other Payment Fee (Flat)</label>
+                            <div className={cn("relative", !isSuperAdmin && "opacity-75 pointer-events-none")}>
                                 <span className="absolute left-3 top-1.5 text-gray-500 dark:text-gray-400 text-sm">Rp</span>
                                 <input 
                                     type="text"
                                     inputMode="decimal"
-                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
+                                    className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 pl-8 pr-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
                                     value={settings.manualTransferFee}
                                     onChange={(e) => setSettings({ ...settings, manualTransferFee: e.target.value })}
+                                    readOnly={!isSuperAdmin}
                                 />
                             </div>
+                            {!isSuperAdmin && <p className="text-[10px] text-gray-500 mt-1 italic font-bold uppercase">Super Admin Only</p>}
                         </div>
                     </div>
                  </div>

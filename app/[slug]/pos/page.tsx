@@ -47,8 +47,8 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
 
   const isCashier = dbUser?.role === "CASHIER" && dbUser?.workedAtId === store.id;
 
-  // Check Subscription - Only Enterprise can access POS
-  if (store.subscriptionPlan !== 'ENTERPRISE' && !isSuperAdmin) {
+  // Check Subscription - PRO, ENTERPRISE, and SOVEREIGN can access POS. FREE cannot.
+  if (store.subscriptionPlan === 'FREE' && !isSuperAdmin) {
     redirect(`/${slug}/admin`);
   }
 
