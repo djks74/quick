@@ -17,7 +17,7 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
   const [isOpen, setIsOpen] = useState(false);
   
   // Hide on POS pages
-  if (pathname?.includes("/pos")) return null;
+  const isPosPage = pathname?.includes("/pos");
 
   useEffect(() => {
     if (forceOpen) {
@@ -143,6 +143,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
       setIsLoading(false);
     }
   };
+
+  if (isPosPage) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
