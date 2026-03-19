@@ -224,7 +224,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
   },
 
-  async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method }: any) {
+  async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method, isMerchant }: any) {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
@@ -406,6 +406,16 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
     await sendMerchantWhatsApp(store.id, merchantMsg, order.id).catch(() => null);
 
+    if (isMerchant) {
+      return {
+        success: true,
+        orderId: order.id,
+        totalAmount: finalAmount,
+        breakdown: merchantMsg,
+        paymentUrl
+      };
+    }
+
     const breakdown = [
       `🛒 *${store.name} ORDER #${order.id}*`,
       `--------------------------------`,
@@ -430,7 +440,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
-  async send_order_to_whatsapp({ orderId, phoneNumber }: { orderId: number; phoneNumber: string }) {
+  async send_order_to_whatsapp({ orderId, phoneNumber, isMerchant }: { orderId: number; phoneNumber: string; isMerchant?: boolean }) {
     const cleanPhone = normalizePhoneNumber(phoneNumber);
     const order = await prisma.order.findUnique({
       where: { id: Number(orderId) },
@@ -438,6 +448,12 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
 
     if (!order) return { error: "Order not found" };
+
+    if (isMerchant) {
+      const merchantMsg = await buildOrderMerchantSummary(order.id, "Summary Order");
+      await sendWhatsAppMessage(cleanPhone, merchantMsg, order.id);
+      return { success: true, message: "Order summary sent to merchant WhatsApp." };
+    }
 
     const details = order.items.map(item =>
       `${item.product.name} x${item.quantity}: Rp ${new Intl.NumberFormat('id-ID').format(item.price * item.quantity)}`
@@ -499,19 +515,30 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { success: true, message: "Order details sent to WhatsApp." };
   },
 
-  async get_last_order_by_phone({ phoneNumber }: { phoneNumber: string }) {
+  async get_last_order_by_phone({ phoneNumber, isMerchant }: { phoneNumber: string; isMerchant?: boolean }) {
     await ensureStoreSettingsSchema();
     const cleanPhone = normalizePhoneNumber(phoneNumber);
     const order = await prisma.order.findFirst({
       where: { customerPhone: cleanPhone },
       orderBy: { createdAt: "desc" },
       include: { 
-        store: { select: { name: true, slug: true } },
+        store: { select: { name: true, slug: true, taxPercent: true, serviceChargePercent: true } },
         items: { include: { product: { select: { name: true } } } }
       }
     });
 
     if (!order) return { error: "No orders found for this phone number." };
+
+    if (isMerchant) {
+      const merchantMsg = await buildOrderMerchantSummary(order.id, "Detail Order Terakhir");
+      return { 
+        success: true, 
+        orderId: order.id, 
+        breakdown: merchantMsg, 
+        paymentUrl: order.paymentUrl,
+        status: order.status
+      };
+    }
 
     let resolvedPaymentUrl = order.paymentUrl || null;
     const isInternalCheckoutLink = Boolean(resolvedPaymentUrl && resolvedPaymentUrl.includes("/checkout/pay/"));
@@ -651,21 +678,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       };
     }
 
-    const breakdown = [
-      `🛒 *${store.name} TAGIHAN MANUAL #${order.id}*`,
-      `--------------------------------`,
-      `🏷️ Deskripsi: Tagihan Manual`,
-      `💰 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
-      `💳 Biaya (${payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}`,
-      `--------------------------------`,
-      `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
-    ].join("\n");
+    const merchantMsg = await buildOrderMerchantSummary(order.id, "Tagihan Baru");
+    await sendMerchantWhatsApp(store.id, merchantMsg, order.id).catch(() => null);
 
     return {
       success: true,
       orderId: order.id,
       totalAmount: finalAmount,
-      breakdown,
+      breakdown: merchantMsg,
       paymentUrl
     };
   }
@@ -740,6 +760,7 @@ export async function POST(req: NextRequest) {
 
     // Determine if the user is a Merchant for the system instruction
     let userContextInfo = "";
+    let isMerchantUser = false;
     if (context?.phoneNumber) {
       const cleanPhone = context.phoneNumber.replace(/\D/g, "");
       const user = await prisma.user.findFirst({
@@ -747,6 +768,7 @@ export async function POST(req: NextRequest) {
         include: { stores: true }
       });
       if (user && user.role === "MERCHANT" && user.stores.length > 0) {
+        isMerchantUser = true;
         userContextInfo = ` The user is a MERCHANT of the store '${user.stores[0].name}' (slug: ${user.stores[0].slug}). They can use merchant tools like 'get_store_stats' and 'create_merchant_invoice'. If they ask to 'tambah produk' or 'update harga', use the tools to help them.`;
       }
     }
@@ -786,7 +808,8 @@ Once an order is created:
 1. Show the user the 'breakdown' of the order.
 2. Tell them they can pay directly here or have the payment link sent to their WhatsApp.
 3. If they want to pay on WhatsApp, ask for their WhatsApp number and call 'send_order_to_whatsapp'.
-4. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+4. If the user is a MERCHANT and asks to send order details or summary to their WhatsApp (or any number), you MUST set 'isMerchant=true' in 'send_order_to_whatsapp' to ensure they receive the merchant summary format.
+5. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -894,7 +917,8 @@ Once an order is created:
                   shippingProvider: { type: "string" },
                   shippingService: { type: "string" },
                   shippingFee: { type: "number" },
-                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] }
+                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] },
+                  isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
                 },
                 required: ["slug", "customer_phone", "items", "order_type", "payment_method"]
               }
@@ -915,12 +939,13 @@ Once an order is created:
             },
             {
               name: "send_order_to_whatsapp",
-              description: "Send order details and payment link to the user's WhatsApp number.",
+              description: "Send order details to a WhatsApp number. If sending to the merchant themselves, set isMerchant=true.",
               parameters: {
                 type: "object",
                 properties: {
                   orderId: { type: "integer" },
-                  phoneNumber: { type: "string", description: "The WhatsApp number to send the order to." }
+                  phoneNumber: { type: "string", description: "The WhatsApp number to send the order to." },
+                  isMerchant: { type: "boolean", description: "Set to true if sending to the store owner/merchant." }
                 },
                 required: ["orderId", "phoneNumber"]
               }
@@ -931,7 +956,8 @@ Once an order is created:
               parameters: {
                 type: "object",
                 properties: {
-                  phoneNumber: { type: "string", description: "The customer's WhatsApp number." }
+                  phoneNumber: { type: "string", description: "The customer's WhatsApp number." },
+                  isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
                 },
                 required: ["phoneNumber"]
               }
@@ -961,8 +987,14 @@ Once an order is created:
       for (const call of calls) {
         const toolFn = tools[call.name];
         if (toolFn) {
-          console.log(`[AI_CHAT] Calling tool: ${call.name}`, call.args);
-          const data = await toolFn(call.args) || { success: false, error: "Tool returned no data" };
+          // Auto-inject isMerchant flag if the user is identified as a merchant
+          const args = { ...call.args } as any;
+          if (isMerchantUser && ["send_order_to_whatsapp", "create_customer_order", "get_last_order_by_phone"].includes(call.name)) {
+            args.isMerchant = true;
+          }
+
+          console.log(`[AI_CHAT] Calling tool: ${call.name}`, args);
+          const data = await toolFn(args) || { success: false, error: "Tool returned no data" };
           toolResponses.push({
             functionResponse: {
               name: call.name,

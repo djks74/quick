@@ -4,6 +4,7 @@ import { processPayment } from '@/lib/payment';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
+import { sendMerchantWhatsApp, buildOrderMerchantSummary } from '@/lib/merchant-alerts';
 
 
 export async function POST(req: NextRequest) {
@@ -81,6 +82,10 @@ export async function POST(req: NextRequest) {
         tableNumber: customerInfo?.tableNumber || null
       }
     });
+
+    // Notify Merchant
+    const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)");
+    await sendMerchantWhatsApp(parseInt(storeId), merchantMsg, order.id).catch(() => null);
 
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.
