@@ -140,10 +140,10 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
+    <div className="fixed bottom-6 left-6 z-[9999] flex flex-col items-start gap-4">
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed inset-0 sm:inset-auto sm:bottom-24 sm:right-0 w-full sm:w-[400px] h-full sm:h-[550px] bg-white dark:bg-gray-900 sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed inset-0 sm:inset-auto sm:bottom-24 sm:left-0 w-full sm:w-[400px] h-full sm:h-[550px] bg-white dark:bg-gray-900 sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
           {/* Header */}
           <div className="p-4 bg-primary text-white flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-3">

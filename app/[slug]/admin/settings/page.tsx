@@ -725,15 +725,6 @@ export default function AdminSettings() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={settings.shippingJneOnly}
-                    onChange={(e) => setSettings({ ...settings, shippingJneOnly: e.target.checked })}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                  <label className="text-sm font-medium dark:text-gray-300">JNE only mode (non-instant)</label>
-                </div>
               </div>
             </div>
 
