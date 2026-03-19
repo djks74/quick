@@ -115,7 +115,7 @@ async function dispatchWhatsAppTemplateMessage(
   return { ok: true as const, messageId };
 }
 
-export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string }) {
+export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string, isSystemAlert?: boolean }) {
   // Sanitize Phone Number (Indonesia Default)
   let formattedTo = to.replace(/\D/g, ''); 
   if (formattedTo.startsWith('0')) {
@@ -149,7 +149,8 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     options 
   });
 
-  const isBillable = storeId > 0 && !resolved.useEnterpriseConfig;
+  // System alerts (like order notifications to merchants) are NOT billable to the store.
+  const isBillable = storeId > 0 && !resolved.useEnterpriseConfig && !options?.isSystemAlert;
   const externalRef = `WA-${storeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let usageLogId: number | null = null;
   let lowCreditAlertPhone: string | null = null;

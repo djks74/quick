@@ -12,58 +12,72 @@ export async function acquireNotificationLock(key: string) {
 }
 
 export async function getMerchantPhone(storeId: number) {
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    include: { owner: true }
-  });
-  
-  if (!store) {
-    console.error(`[MERCHANT_ALERT_ERROR] Store with ID ${storeId} not found`);
-    return { store: null, phones: [] as string[] };
-  }
-  
-  console.log(`[MERCHANT_ALERT_DEBUG] Store ${storeId} found: "${store.name}". Slug: "${store.slug}". WhatsApp in Identity: "${store.whatsapp}"`);
+  try {
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      include: { owner: true }
+    });
 
-  const phones = new Set<string>();
-  
-  // 1. STRONGLY PRIORITIZE store.whatsapp (Store Identity from screenshot)
-  if (store.whatsapp && store.whatsapp.trim().length > 5) {
-    phones.add(store.whatsapp.trim());
-    console.log(`[MERCHANT_ALERT_DEBUG] Added Store Identity Phone: ${store.whatsapp}`);
-  }
-  
-  // 2. Add Owner's Phone
-  if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
-    phones.add(store.owner.phoneNumber.trim());
-  }
-  
-  // 3. Add Shipping Sender Phone
-  if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
-    phones.add(store.shippingSenderPhone.trim());
-  }
-  
-  // 4. Add Staff Phones
-  const staff = await prisma.user.findMany({
-    where: { workedAtId: store.id },
-    select: { phoneNumber: true }
-  });
-  staff.forEach(u => {
-    if (u.phoneNumber && u.phoneNumber.trim().length > 5) {
-      phones.add(u.phoneNumber.trim());
+    if (!store) {
+      console.error(`[MERCHANT_NOTIF] Store not found: ${storeId}`);
+      return { store: null, phones: [] as string[] };
     }
-  });
-  
-  const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
-    let clean = String(p).trim().replace(/\D/g, "");
-    if (clean.startsWith("0")) clean = "62" + clean.slice(1);
-    else if (clean.startsWith("8")) clean = "62" + clean;
-    // Special case: if already starts with 62, don't re-add
-    return clean;
-  });
 
-  const finalPhones = Array.from(new Set(uniquePhones));
-  console.log(`[MERCHANT_NOTIF] Final recipient phones for store ${store.name}:`, finalPhones);
-  return { store, phones: finalPhones };
+    const phones = new Set<string>();
+
+    // 1. STRONGLY PRIORITIZE store.whatsapp (Store Identity)
+    if (store.whatsapp && store.whatsapp.trim().length > 5) {
+      phones.add(store.whatsapp.trim());
+      console.log(`[MERCHANT_NOTIF] Added phone from store.whatsapp: ${store.whatsapp}`);
+    }
+
+    // 2. Shipping Sender Phone (fallback)
+    if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
+      phones.add(store.shippingSenderPhone.trim());
+      console.log(`[MERCHANT_NOTIF] Added phone from shippingSenderPhone: ${store.shippingSenderPhone}`);
+    }
+
+    // 3. Owner's phone number
+    if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
+      phones.add(store.owner.phoneNumber.trim());
+      console.log(`[MERCHANT_NOTIF] Added phone from owner.phoneNumber: ${store.owner.phoneNumber}`);
+    }
+
+    // 4. Staff/Cashiers (only those with phone numbers)
+    const staff = await prisma.user.findMany({
+      where: { 
+        workedAtId: store.id,
+        phoneNumber: { not: null }
+      },
+      select: { phoneNumber: true }
+    });
+
+    staff.forEach(s => {
+      if (s.phoneNumber && s.phoneNumber.trim().length > 5) {
+        phones.add(s.phoneNumber.trim());
+        console.log(`[MERCHANT_NOTIF] Added phone from staff: ${s.phoneNumber}`);
+      }
+    });
+
+    const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
+      let clean = String(p).trim().replace(/\D/g, "");
+      if (clean.startsWith("0")) clean = "62" + clean.slice(1);
+      else if (clean.startsWith("8")) clean = "62" + clean;
+      return clean;
+    });
+
+    const finalPhones = Array.from(new Set(uniquePhones));
+    console.log(`[MERCHANT_NOTIF] Final recipient phones for store ${store.name}:`, finalPhones);
+    
+    if (finalPhones.length === 0) {
+      console.warn(`[MERCHANT_NOTIF] NO PHONES FOUND for store ${store.name} (#${storeId}). Store WhatsApp: ${store.whatsapp}, Owner Phone: ${store.owner?.phoneNumber}`);
+    }
+
+    return { store, phones: finalPhones };
+  } catch (error) {
+    console.error(`[MERCHANT_NOTIF] Error fetching merchant phones for store ${storeId}:`, error);
+    return { store: null, phones: [] };
+  }
 }
 
 export async function sendMerchantWhatsApp(storeId: number, text: string, orderId?: number) {
@@ -78,15 +92,18 @@ export async function sendMerchantWhatsApp(storeId: number, text: string, orderI
   let overallSuccess = false;
 
   for (const phone of phones) {
-    console.log(`[MERCHANT_ALERT] Attempting send to ${phone} using store account ${storeId}`);
+    console.log(`[MERCHANT_NOTIF] Attempting send to ${phone} for store ${store.name} (#${store.id})`);
 
-    let sent = await sendWhatsAppMessage(phone, text, store.id);
+    // Use store.id so it uses store branding if available (Sovereign)
+    // sendWhatsAppMessage will fallback to platform account if store config is missing.
+    // isSystemAlert: true ensures the merchant is not charged for receiving notifications.
+    let sent = await sendWhatsAppMessage(phone, text, store.id, { isSystemAlert: true });
 
     if (sent) {
       overallSuccess = true;
-      console.log(`[MERCHANT_ALERT] Successfully sent to ${phone}`);
+      console.log(`[MERCHANT_NOTIF] Successfully sent to ${phone}`);
     } else {
-      console.error(`[MERCHANT_ALERT] FAILED to send to ${phone} using store account ${storeId}`);
+      console.error(`[MERCHANT_NOTIF] FAILED to send to ${phone} for store ${store.name}`);
     }
   }
 
@@ -100,53 +117,71 @@ export function resolvePaymentUrl(orderId: number, paymentUrl?: string | null) {
 }
 
 export async function buildOrderMerchantSummary(orderId: number, title: string) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { 
-      store: true, 
-      items: { include: { product: true } } 
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { 
+        store: true, 
+        items: { include: { product: true } } 
+      }
+    });
+
+    if (!order) return `Order #${orderId} not found`;
+
+    const { store, items } = order;
+    
+    // Simple currency formatter that won't throw
+    const formatIDR = (num: number) => {
+      try {
+        return new Intl.NumberFormat('id-ID').format(num);
+      } catch (e) {
+        return num.toLocaleString();
+      }
+    };
+
+    let itemsMsg = "";
+    if (items && items.length > 0) {
+      items.forEach(it => {
+        const pName = it.product?.name || "Product";
+        itemsMsg += `- ${pName} x${it.quantity} = Rp ${formatIDR(it.price * it.quantity)}\n`;
+      });
+    } else {
+      itemsMsg = "- No items found\n";
     }
-  });
 
-  if (!order) return "Order not found";
+    const subtotal = items?.reduce((sum, it) => sum + (it.price * it.quantity), 0) || 0;
+    
+    let msg = `🛒 *${title} #${order.id}*\n`;
+    if (order.tableNumber) msg += `📍 Meja: *${order.tableNumber}*\n`;
+    msg += `👤 Customer: ${order.customerPhone}\n`;
+    msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
+    msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n`;
+    
+    if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
+      const pName = order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'));
+      msg += `🚚 Kurir: ${pName}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
+      msg += `📦 Ongkir: Rp ${formatIDR(order.shippingCost || 0)}\n`;
+      if (order.shippingAddress) msg += `📍 Alamat: ${order.shippingAddress}\n`;
+    }
 
-  const { store, items } = order;
-  const currency = new Intl.NumberFormat('id-ID');
+    msg += `\n📦 *Item:*\n${itemsMsg}\n`;
+    msg += `------------------\n`;
+    msg += `Subtotal: Rp ${formatIDR(subtotal)}\n`;
+    if (order.taxAmount > 0) msg += `Pajak (${store.taxPercent}%): Rp ${formatIDR(order.taxAmount)}\n`;
+    if (order.serviceCharge > 0) msg += `Service (${store.serviceChargePercent}%): Rp ${formatIDR(order.serviceCharge)}\n`;
+    if (order.paymentFee > 0) msg += `Fee: Rp ${formatIDR(order.paymentFee)}\n`;
+    msg += `*TOTAL: Rp ${formatIDR(order.totalAmount)}*\n`;
 
-  let itemsMsg = "";
-  items.forEach(it => {
-    itemsMsg += `- ${it.product.name} x${it.quantity} = Rp ${currency.format(it.price * it.quantity)}\n`;
-  });
+    if (order.status === 'PAID') {
+      msg += `\n✅ *STATUS: SUDAH DIBAYAR*`;
+      msg += `\n⚠️ Mohon segera proses pesanan ini!`;
+    } else {
+      msg += `\n⏳ *STATUS: MENUNGGU PEMBAYARAN*`;
+    }
 
-  const subtotal = items.reduce((sum, it) => sum + (it.price * it.quantity), 0);
-  
-  let msg = `🛒 *${title} #${order.id}*\n`;
-  if (order.tableNumber) msg += `📍 Meja: *${order.tableNumber}*\n`;
-  msg += `👤 Customer: ${order.customerPhone}\n`;
-  msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
-  msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n`;
-  
-  if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
-    const pName = order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'));
-    msg += `🚚 Kurir: ${pName}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
-    msg += `📦 Ongkir: Rp ${currency.format(order.shippingCost || 0)}\n`;
-    if (order.shippingAddress) msg += `📍 Alamat: ${order.shippingAddress}\n`;
+    return msg;
+  } catch (error) {
+    console.error(`[MERCHANT_ALERT] Error building summary for order #${orderId}:`, error);
+    return `Order #${orderId} (Summary Error)`;
   }
-
-  msg += `\n📦 *Item:*\n${itemsMsg}\n`;
-  msg += `------------------\n`;
-  msg += `Subtotal: Rp ${currency.format(subtotal)}\n`;
-  if (order.taxAmount > 0) msg += `Pajak (${store.taxPercent}%): Rp ${currency.format(order.taxAmount)}\n`;
-  if (order.serviceCharge > 0) msg += `Service (${store.serviceChargePercent}%): Rp ${currency.format(order.serviceCharge)}\n`;
-  if (order.paymentFee > 0) msg += `Fee: Rp ${currency.format(order.paymentFee)}\n`;
-  msg += `*TOTAL: Rp ${currency.format(order.totalAmount)}*\n`;
-
-  if (order.status === 'PAID') {
-    msg += `\n✅ *STATUS: SUDAH DIBAYAR*`;
-    msg += `\n⚠️ Mohon segera proses pesanan ini!`;
-  } else {
-    msg += `\n⏳ *STATUS: MENUNGGU PEMBAYARAN*`;
-  }
-
-  return msg;
 }
