@@ -2,39 +2,74 @@ import Link from "next/link";
 
 const apiEndpoints = [
   {
+    method: "GET",
+    path: "/api/partner/sync-products",
+    title: "Ambil Daftar Produk",
+    description: "Mengambil semua daftar produk yang saat ini terdaftar di Gercep untuk toko Anda. Berguna untuk memverifikasi hasil sinkronisasi.",
+    request: null,
+    response: {
+      success: true,
+      store: "Nama Toko Anda",
+      products: [
+        {
+          id: 123,
+          externalId: "POS-123",
+          name: "Nasi Goreng",
+          price: 25000,
+          stock: 100
+        }
+      ]
+    }
+  },
+  {
     method: "POST",
     path: "/api/partner/sync-products",
-    title: "Sinkronisasi Produk (Upsert)",
-    description: "Menambah atau memperbarui daftar produk restoran Anda secara massal (bulk).",
+    title: "Tambah / Edit Produk (Upsert)",
+    description: "Endpoint tunggal untuk menambah produk baru ATAU memperbarui yang sudah ada. Jika 'externalId' sudah ada, sistem akan memperbarui data. Jika belum, sistem akan membuat produk baru.",
     request: {
       action: "upsert",
       products: [
         {
+          externalId: "POS-123",
           name: "Nasi Goreng Spesial",
           price: 25000,
           category: "Makanan Utama",
           description: "Nasi goreng dengan telur dan ayam",
+          image: "https://example.com/image.jpg",
           stock: 100
         }
       ]
     },
     response: {
       success: true,
-      results: [{ name: "Nasi Goreng Spesial", status: "success", id: 123 }]
+      results: [
+        {
+          name: "Nasi Goreng Spesial",
+          status: "success",
+          id: 123,
+          externalId: "POS-123"
+        }
+      ]
     }
   },
   {
     method: "POST",
     path: "/api/partner/sync-products",
     title: "Hapus Produk",
-    description: "Menghapus produk dari sistem Gercep berdasarkan nama.",
+    description: "Menghapus produk dari sistem Gercep. Anda dapat menghapus berdasarkan 'externalId' (ID sistem Anda) atau 'name'.",
     request: {
       action: "delete",
-      products: [{ name: "Menu Lama" }]
+      products: [
+        { externalId: "POS-123" },
+        { name: "Menu Lama" }
+      ]
     },
     response: {
       success: true,
-      results: [{ name: "Menu Lama", status: "deleted" }]
+      results: [
+        { externalId: "POS-123", status: "deleted" },
+        { name: "Menu Lama", status: "deleted" }
+      ]
     }
   }
 ];

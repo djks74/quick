@@ -115,11 +115,13 @@ model Product {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   barcode          String?
+  externalId       String?             @unique
   orderItems       OrderItem[]
   store            Store               @relation(fields: [storeId], references: [id])
   ingredients      ProductIngredient[]
 
   @@unique([storeId, name])
+  @@index([externalId])
 }
 
 model ProductIngredient {
