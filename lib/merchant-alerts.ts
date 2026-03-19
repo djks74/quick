@@ -96,8 +96,8 @@ export async function sendMerchantWhatsApp(storeId: number, text: string, orderI
 
     // Use store.id so it uses store branding if available (Sovereign)
     // sendWhatsAppMessage will fallback to platform account if store config is missing.
-    // isSystemAlert: true ensures the merchant is not charged for receiving notifications.
-    let sent = await sendWhatsAppMessage(phone, text, store.id, { isSystemAlert: true });
+    // Merchant alerts are NOT system alerts in terms of billing; they should use store credit if available.
+    let sent = await sendWhatsAppMessage(phone, text, store.id);
 
     if (sent) {
       overallSuccess = true;
