@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
 import { processPayment } from "@/lib/payment";
@@ -27,6 +28,7 @@ const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
   async search_stores({ query }: { query: string }) {
+    await ensureStoreSettingsSchema();
     const stores = await prisma.store.findMany({
       where: {
         OR: [
@@ -57,6 +59,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async get_store_stats({ slug }: { slug: string }) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({
       where: { slug },
       include: {
@@ -74,6 +77,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async get_store_products({ slug }: { slug: string }) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({
       where: { slug },
       include: {
@@ -92,6 +96,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async update_product_price({ slug, productName, newPrice, variationName }: any) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
     
@@ -118,6 +123,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async add_new_product({ slug, name, price, category }: any) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
     
@@ -135,6 +141,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
     
@@ -204,6 +211,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method }: any) {
+    await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
 
@@ -476,6 +484,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   },
 
   async get_last_order_by_phone({ phoneNumber }: { phoneNumber: string }) {
+    await ensureStoreSettingsSchema();
     const cleanPhone = normalizePhoneNumber(phoneNumber);
     const order = await prisma.order.findFirst({
       where: { customerPhone: cleanPhone },
