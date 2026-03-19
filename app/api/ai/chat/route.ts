@@ -683,18 +683,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Ensure history is a valid array of the correct format for Gemini SDK
-    const validatedHistory = Array.isArray(history) ? history.map((h: any) => ({
-      role: h.role === "model" ? "model" : "user",
-      parts: Array.isArray(h.parts) 
-        ? h.parts.map((p: any) => {
-            if (typeof p === "string") return { text: p };
-            if (p.text) return { text: String(p.text) };
-            if (p.functionCall) return { functionCall: p.functionCall };
-            if (p.functionResponse) return { functionResponse: p.functionResponse };
-            return { text: JSON.stringify(p) };
-          })
-        : [{ text: String(h.text || h.parts || "") }]
-    })) : [];
+    const validatedHistory = Array.isArray(history) ? history.map((h: any) => {
+      // Role must be 'user', 'model', or 'function'
+      let role = h.role;
+      if (role !== "model" && role !== "function") {
+        role = "user";
+      }
+      
+      return {
+        role,
+        parts: Array.isArray(h.parts) 
+          ? h.parts.map((p: any) => {
+              if (typeof p === "string") return { text: p };
+              if (p.text) return { text: String(p.text) };
+              if (p.functionCall) return { functionCall: p.functionCall };
+              if (p.functionResponse) return { functionResponse: p.functionResponse };
+              return { text: JSON.stringify(p) };
+            })
+          : [{ text: String(h.text || h.parts || "") }]
+      };
+    }) : [];
 
     // If not public, require session
     if (!isPublic) {
