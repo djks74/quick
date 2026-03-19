@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrderNotification } from "@/lib/order-notifications";
-import { acquireNotificationLock, resolvePaymentUrl, sendMerchantWhatsApp } from "@/lib/merchant-alerts";
+import { acquireNotificationLock, resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 function authorize(req: NextRequest) {
@@ -42,10 +42,8 @@ async function processPendingPaymentReminders() {
 
     const merchantLock = await acquireNotificationLock(`PENDING_2MIN_MERCHANT_${order.id}`);
     if (merchantLock) {
-      await sendMerchantWhatsApp(
-        order.storeId,
-        `⚠️ *Risiko Order Belum Dibayar*\nOrder #${order.id} masih pending pembayaran (>2 menit).\nCustomer: ${order.customerPhone}\nJumlah: Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}`
-      );
+      const merchantMsg = await buildOrderMerchantSummary(order.id, "Reminder Order Pending");
+      await sendMerchantWhatsApp(order.storeId, merchantMsg, order.id);
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,

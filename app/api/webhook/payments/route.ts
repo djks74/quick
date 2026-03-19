@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { applyWaTopup, grantBundleCredit } from '@/lib/wa-credit';
 import { createOrderNotification } from '@/lib/order-notifications';
-import { acquireNotificationLock, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+import { acquireNotificationLock, sendMerchantWhatsApp, buildOrderMerchantSummary } from '@/lib/merchant-alerts';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipOrderForPaidOrder, getBiteshipOrderStatus } from '@/lib/shipping-biteship';
 import { triggerPartnerWebhook } from '@/lib/webhook-partner';
@@ -123,6 +123,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (status === 'PENDING') {
+      // Manual Transfer is removed, so we don't need this pending alert from gateway anymore
+      // as the initial checkout alert already notified the merchant.
+      /*
       const shouldNotifyMerchant = await acquireNotificationLock(`PAYMENT_PENDING_${order.id}_${normalizedStatus || "pending"}`);
       if (shouldNotifyMerchant) {
         await sendMerchantWhatsApp(
@@ -130,6 +133,7 @@ export async function POST(req: NextRequest) {
           `🕒 *Pembayaran Pending*\nOrder #${order.id} masih menunggu pembayaran.\nCustomer: ${order.customerPhone}\nStatus Gateway: ${normalizedStatus || "pending"}\n\nSilakan monitor pembayaran di dashboard.`
         ).catch(() => null);
       }
+      */
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
@@ -298,60 +302,8 @@ export async function POST(req: NextRequest) {
 
       // 2. Notify Merchant (IMMEDIATELY)
       if (store) {
-          const items = await prisma.orderItem.findMany({
-              where: { orderId: order.id },
-              include: { product: true }
-          });
-
-          let msg = isShipment
-            ? `🚚 *Pengiriman Baru #${order.id} (Sudah Dibayar)*\n`
-            : isInvoice
-              ? `💳 *Tagihan Lunas #${order.id}*\n`
-              : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n`;
-          
-          if (order.tableNumber) msg += `📍 Table: *${order.tableNumber}*\n`;
-          msg += (isShipment || isInvoice)
-            ? `👤 Customer: ${order.customerPhone}\n`
-            : `👤 Customer: ${order.customerPhone}\n`;
-          
-          msg += `💵 Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n`;
-          msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n\n`;
-          msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
-          if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
-            msg += `🚚 Kurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
-            msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
-            msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
-            msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
-            if (order.biteshipOrderId) {
-              msg += `🆔 Biteship: ${order.biteshipOrderId}\n`;
-            }
-            if (order.shippingTrackingNo) {
-              msg += `🔎 Resi: ${order.shippingTrackingNo}\n`;
-            }
-            if (order.shippingStatus) {
-              msg += `📮 Status: ${order.shippingStatus}\n`;
-            }
-            if (bookedDetails?.driverName || bookedDetails?.driverPhone || bookedDetails?.vehicleNumber) {
-              msg += `👨‍✈️ Driver: ${bookedDetails?.driverName || "-"}\n`;
-              if (bookedDetails?.driverPhone) msg += `📱 Driver: ${bookedDetails.driverPhone}\n`;
-              if (bookedDetails?.vehicleNumber) msg += `🚗 Plat: ${bookedDetails.vehicleNumber}\n`;
-            }
-            msg += `\n`;
-          }
-          msg += `*Item:*\n`;
-          if (isShipment) {
-            msg += `1x ${orderMeta?.itemName || "Barang"}\n`;
-          } else if (isInvoice) {
-            msg += `1x Tagihan Manual\n`;
-          } else {
-            items.forEach(item => {
-                msg += `${item.quantity}x ${item.product.name}\n`;
-            });
-          }
-          msg += `\n⚠️ Mohon segera proses pesanan ini!`;
-
-          // Send notification and don't wait for inventory logic
-          sendMerchantWhatsApp(order.storeId, msg).catch((e) => console.error("MERCHANT_NOTIF_FAILED", e));
+          const merchantMsg = await buildOrderMerchantSummary(order.id, isShipment ? "Pengiriman" : (isInvoice ? "Tagihan Lunas" : "Order Baru"));
+          sendMerchantWhatsApp(order.storeId, merchantMsg, order.id).catch((e) => console.error("MERCHANT_NOTIF_FAILED", e));
 
           // 2.5 Notify Admin Dashboard & POS
           await createOrderNotification({

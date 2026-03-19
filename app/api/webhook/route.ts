@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { refundWaUsageByMessageId } from '@/lib/wa-credit';
-import { resolvePaymentUrl, sendMerchantWhatsApp } from '@/lib/merchant-alerts';
+import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from '@/lib/merchant-alerts';
 import { createBiteshipDraftForPendingOrder, getBiteshipOrderStatus, getShippingQuoteFromBiteship, normalizeBiteshipStatus, trackShipmentWithBiteship } from '@/lib/shipping-biteship';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { logTraffic } from '@/lib/traffic';
@@ -864,11 +864,8 @@ export async function POST(req: NextRequest) {
           }
         }).catch(() => null);
 
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `🛒 *Order Pending*\nOrder delivery #${order.id} menunggu pembayaran.\n\n👤 Customer: ${from}\n💵 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n💳 Bayar: ${ctx.method === 'qris' ? 'QRIS' : 'Bank Transfer'}\n🚚 Kurir: ${selected?.provider === "STORE_COURIER" ? "Kurir Toko" : (selected?.provider || "GOSEND")}${selected?.service ? ` ${selected.service}` : ""}\n\n📦 *Item:*\n${itemsMsg}${selected?.provider === "STORE_COURIER" ? "\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
-          order.id
-        ).catch(() => null);
+        const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+        await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");
@@ -1683,11 +1680,8 @@ export async function POST(req: NextRequest) {
           }
         }).catch(() => null);
 
-        await sendMerchantWhatsApp(
-          targetStore.id,
-          `🛒 *Order Pending*\nOrder takeaway #${order.id} menunggu pembayaran.\n\n👤 Customer: ${from}\n💵 Total: Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}\n💳 Bayar: ${ctx.method === 'qris' ? 'QRIS' : 'Bank Transfer'}\n🚚 Kurir: ${ctx.provider === "STORE_COURIER" ? "Kurir Toko" : (selected?.provider || ctx.provider)}${selected?.service ? ` ${selected.service}` : ""}\n\n📦 *Item:*\n${itemsMsg}${ctx.provider === "STORE_COURIER" ? "\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
-          order.id
-        ).catch(() => null);
+        const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+        await sendMerchantWhatsApp(targetStore.id, merchantMsg, order.id).catch(() => null);
 
         const paymentLink = await createPaymentLink(order.id, finalTotal, from, targetStore.id, ctx.method as any);
         let summary = l("🧾 *Ringkasan Order*\n", "🧾 *Order Summary*\n");

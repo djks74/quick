@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
+import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
 import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
@@ -403,11 +403,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       };
     }
 
-    await sendMerchantWhatsApp(
-      store.id,
-      `🛒 *Order Pending*\nOrder #${order.id} menunggu pembayaran.\nCustomer: ${cleanPhone}\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(finalAmount)}\nKurir: ${providerUpper === "STORE_COURIER" ? "Kurir Toko" : (shippingProvider || "-")}${shippingService ? ` ${shippingService}` : ""}${providerUpper === "STORE_COURIER" ? "\n\n🚀 *NOTE: Kirim dengan Kurir Toko*" : ""}`,
-      order.id
-    ).catch(() => null);
+    const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
+    await sendMerchantWhatsApp(store.id, merchantMsg, order.id).catch(() => null);
 
     const breakdown = [
       `🛒 *${store.name} ORDER #${order.id}*`,

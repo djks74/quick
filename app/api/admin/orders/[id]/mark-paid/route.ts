@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createBiteshipOrderForPaidOrder } from "@/lib/shipping-biteship";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { sendMerchantWhatsApp } from "@/lib/merchant-alerts";
+import { sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
 import { triggerPartnerWebhook } from "@/lib/webhook-partner";
 
 export async function POST(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -62,20 +62,11 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
       order.storeId
     ).catch(() => null);
 
-    // Notify Merchant
-    await sendMerchantWhatsApp(
-      order.storeId,
-      shipmentMeta
-        ? `🚚 *Pengiriman Baru #${order.id} (Sudah Dibayar)*\n` +
-          `Penerima: ${shipmentMeta?.recipientName || "-"} (${order.customerPhone})\n` +
-          `Kurir: ${order.shippingProvider || "-"} ${order.shippingService || ""}\n` +
-          `Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || order.totalAmount || 0)}\n` +
-          `Alamat: ${order.shippingAddress || "-"}\n`
-        : `🆕 *Order Baru #${order.id} (Sudah Dibayar)*\n` +
-          `Customer: ${order.customerPhone}\n` +
-          `Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n\n` +
-          `Mohon segera diproses.`
-    ).catch(() => null);
+    // 2. Notify Merchant
+    const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Dibayar (Manual)");
+    await sendMerchantWhatsApp(order.storeId, merchantMsg, order.id).catch(() => null);
+
+    // 2.5 Notify Admin Dashboard & POS (internal)
 
     // Trigger Partner Webhook
     triggerPartnerWebhook(order.id).catch((e) => console.error("PARTNER_WEBHOOK_FAILED", e));
