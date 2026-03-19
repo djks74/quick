@@ -1199,21 +1199,30 @@ export async function POST(req: NextRequest) {
 
       if (lowerText === 'menu') {
         if (session.step === 'START' && isShippingConfigured(targetStore)) {
-          await updateSession(from, targetStore.id, { step: 'SERVICE_TYPE_SELECTION' });
           const onSite = !!session.tableNumber;
-          await sendWhatsAppMessage(
-            from,
-            onSite 
-              ? l(
-                  `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway (Ambil Sendiri)\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
-                  `Choose order type first:\n1. Dine In\n2. Takeaway (Pickup)\n\nAfter selecting, reply "Menu" to continue.`
-                )
-              : l(
-                  `Pilih tipe order dulu:\n1. Takeaway (Ambil Sendiri)\n2. Delivery (Pengiriman)\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
-                  `Choose order type first:\n1. Takeaway (Pickup)\n2. Delivery\n\nAfter selecting, reply "Menu" to continue.`
-                ),
-            targetStore.id
-          );
+          if (onSite) {
+            await updateSession(from, targetStore.id, { step: 'SERVICE_TYPE_SELECTION' });
+            await sendWhatsAppMessage(
+              from,
+              l(
+                `Pilih tipe order dulu:\n1. Dine In (Makan di tempat)\n2. Takeaway (Ambil Sendiri)\n\nSetelah pilih, balas "Menu" untuk lanjut.`,
+                `Choose order type first:\n1. Dine In\n2. Takeaway (Pickup)\n\nAfter selecting, reply "Menu" to continue.`
+              ),
+              targetStore.id
+            );
+          } else {
+            // OFF-SITE: Force DELIVERY, no choice needed
+            const meta = (session.metadata as any) || {};
+            await updateSession(from, targetStore.id, { step: 'MENU_SELECTION', metadata: { ...meta, orderType: "DELIVERY" } });
+            await sendWhatsAppMessage(
+              from,
+              l(
+                `✅ Mode Pengiriman (Delivery) aktif karena Anda memesan dari luar lokasi.\n\nBalas "Menu" untuk mulai pesan.`,
+                `✅ Delivery mode active (you are ordering from off-site).\n\nReply "Menu" to start ordering.`
+              ),
+              targetStore.id
+            );
+          }
           return NextResponse.json({ success: true });
         }
         try {

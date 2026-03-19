@@ -695,8 +695,8 @@ export async function POST(req: NextRequest) {
 
 SHIPPING & LOCATION:
 1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
-2. If the user is ordering from home/outside the store, you MUST offer DELIVERY (diantar) and ask for their delivery address + location.
-3. If the user is AT the store/restaurant, offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
+2. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
+3. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
 4. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
 5. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
 6. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
@@ -704,7 +704,7 @@ SHIPPING & LOCATION:
 8. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
 9. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
 10. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
-11. For TAKEAWAY orders, no address or coordinates are needed; just tell them to pick up at the store address.
+11. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
 
 PAYMENT & RE-ORDERING:
 1. You MUST ask the user for their preferred payment method ('qris' or 'bank_transfer') BEFORE calling 'create_customer_order'.
