@@ -347,6 +347,17 @@ export async function POST(req: NextRequest) {
     const textBody = message.text?.body?.trim();
     const lowerText = textBody?.toLowerCase();
 
+    // Get language early for localization
+    // We use a dummy storeId 0 if we don't know the store yet, or try to guess from metadata
+    let lang: WaLang = "id";
+    try {
+      const storeIdGuess = phoneNumberId 
+        ? (await prisma.store.findFirst({ where: { whatsappPhoneId: String(phoneNumberId) }, select: { id: true } }))?.id || 0
+        : 0;
+      lang = await getWaLanguage(from, storeIdGuess);
+    } catch (e) {}
+    const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
+
     // Log WhatsApp Traffic
       await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
 
@@ -399,7 +410,17 @@ export async function POST(req: NextRequest) {
 
         // Fetch history from session metadata
         const history = ((aiSession as any)?.metadata as any)?.chatHistory || [];
-        const finalPrompt = textBody;
+        let finalPrompt = textBody;
+
+        // If it's a location message, provide a default prompt for the AI
+        if (!finalPrompt && (message as any).location) {
+          finalPrompt = l(`Saya telah membagikan lokasi saya 📍`, `I have shared my location 📍`);
+        }
+
+        if (!finalPrompt) {
+          console.warn("[AI_WEBHOOK] No prompt found in message, skipping AI chat.");
+          return NextResponse.json({ success: true });
+        }
 
         try {
           const aiStore = phoneNumberId
@@ -658,8 +679,6 @@ export async function POST(req: NextRequest) {
 
       console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}, STORE: ${targetStore.name}`);
       const session = await getSession(from, targetStore.id);
-      let lang = await getWaLanguage(from, targetStore.id);
-      const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
 
       const deliveryLocationCtx =
         session.step && session.step.startsWith("DELIVERY_LOCATION:")

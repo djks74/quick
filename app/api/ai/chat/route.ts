@@ -678,6 +678,24 @@ export async function POST(req: NextRequest) {
   try {
     const { message, history, isPublic, context } = await req.json();
 
+    if (!message) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    // Ensure history is a valid array of the correct format for Gemini SDK
+    const validatedHistory = Array.isArray(history) ? history.map((h: any) => ({
+      role: h.role === "model" ? "model" : "user",
+      parts: Array.isArray(h.parts) 
+        ? h.parts.map((p: any) => {
+            if (typeof p === "string") return { text: p };
+            if (p.text) return { text: String(p.text) };
+            if (p.functionCall) return { functionCall: p.functionCall };
+            if (p.functionResponse) return { functionResponse: p.functionResponse };
+            return { text: JSON.stringify(p) };
+          })
+        : [{ text: String(h.text || h.parts || "") }]
+    })) : [];
+
     // If not public, require session
     if (!isPublic) {
       const session = await getServerSession(authOptions);
@@ -732,7 +750,7 @@ export async function POST(req: NextRequest) {
       : "";
 
     const chat = model.startChat({
-      history: history || [],
+      history: validatedHistory,
       systemInstruction: {
         parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
 
@@ -919,7 +937,7 @@ Once an order is created:
     });
 
     // 1. Initial Request to Gemini
-    let result = await chat.sendMessage(message);
+    let result = await chat.sendMessage(String(message));
     let response = result.response;
     let calls = response.functionCalls();
 
@@ -936,11 +954,11 @@ Once an order is created:
         const toolFn = tools[call.name];
         if (toolFn) {
           console.log(`[AI_CHAT] Calling tool: ${call.name}`, call.args);
-          const data = await toolFn(call.args);
+          const data = await toolFn(call.args) || { success: false, error: "Tool returned no data" };
           toolResponses.push({
             functionResponse: {
               name: call.name,
-              response: { content: data }
+              response: data
             }
           });
           
@@ -961,9 +979,21 @@ Once an order is created:
       }
 
       // Send the tool results back to Gemini
-      result = await chat.sendMessage(toolResponses);
-      response = result.response;
-      calls = response.functionCalls();
+      if (toolResponses.length > 0) {
+        // Explicitly format as Parts array for sendMessage
+        const parts = toolResponses.map(tr => ({
+          functionResponse: {
+            name: tr.functionResponse.name,
+            response: typeof tr.functionResponse.response === "object" ? tr.functionResponse.response : { content: tr.functionResponse.response }
+          }
+        }));
+        
+        result = await chat.sendMessage(parts as any);
+        response = result.response;
+        calls = response.functionCalls();
+      } else {
+        calls = [];
+      }
       iterations++;
     }
 
@@ -976,6 +1006,10 @@ Once an order is created:
 
   } catch (error: any) {
     console.error("[GEMINI_CHAT_ERROR]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Log more details if it's a TypeError related to iterables
+    if (error instanceof TypeError && error.message.includes("iterable")) {
+      console.error("[GEMINI_CHAT_ERROR_DETAIL] Likely invalid history or message parts format.");
+    }
+    return NextResponse.json({ error: error.message || "An unexpected error occurred during chat." }, { status: 500 });
   }
 }
