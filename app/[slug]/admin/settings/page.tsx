@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
-import { Check, Copy, Loader2, Lock, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
 
@@ -165,7 +166,7 @@ export default function AdminSettings() {
           shippingSenderName: data.shippingSenderName || "",
           shippingSenderPhone: data.shippingSenderPhone || "",
           shippingSenderAddress: data.shippingSenderAddress || "",
-          whatsappSenderPostalCode: data.whatsappSenderPostalCode || "",
+          shippingSenderPostalCode: data.shippingSenderPostalCode || "",
           customGeminiKey: (data as any).customGeminiKey || ""
         });
         

@@ -118,6 +118,8 @@ model Product {
   orderItems       OrderItem[]
   store            Store               @relation(fields: [storeId], references: [id])
   ingredients      ProductIngredient[]
+
+  @@unique([storeId, name])
 }
 
 model ProductIngredient {

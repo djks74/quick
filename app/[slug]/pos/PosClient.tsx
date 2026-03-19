@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Search, 
   ShoppingCart, 
@@ -137,7 +137,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
 
-  const refreshNotifications = async (silent = false) => {
+  const refreshNotifications = useCallback(async (silent = false) => {
     const rows = await getOrderNotifications(store.id, 25);
     const newestCreatedAt = rows?.[0]?.createdAt || null;
     if (!silent && lastSeenCreatedAt && newestCreatedAt) {
@@ -147,13 +147,13 @@ export default function PosClient({ store, products, categories, user }: PosClie
     if (!lastSeenCreatedAt && newestCreatedAt) setLastSeenCreatedAt(newestCreatedAt);
     if (lastSeenCreatedAt && newestCreatedAt) setLastSeenCreatedAt(newestCreatedAt);
     setNotifications(rows as any);
-  };
+  }, [store.id, lastSeenCreatedAt]);
 
   useEffect(() => {
     refreshNotifications(true);
     const t = setInterval(() => refreshNotifications(false), 10000);
     return () => clearInterval(t);
-  }, [store.id, lastSeenCreatedAt, refreshNotifications]);
+  }, [refreshNotifications]);
 
   const markNotifRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);
