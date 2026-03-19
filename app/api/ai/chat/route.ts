@@ -415,8 +415,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(itemsAmount)}`,
       taxAmount > 0 ? `Pajak (${store.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}` : null,
       serviceCharge > 0 ? `Service (${store.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}` : null,
-      shippingCost > 0 ? `🚛 Ongkir (${providerUpper === "STORE_COURIER" ? "Kurir Toko" : (providerUpper || "-")}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
-      paymentFee > 0 ? `💳 Biaya (${payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
+      shippingCost > 0 ? `🚛 Ongkir (${providerUpper === "STORE_COURIER" ? "Kurir Toko" : `${providerUpper || "-"}${shippingService ? ` ${shippingService}` : ""}`}): Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}` : null,
+      paymentFee > 0 ? `💳 Biaya (${payment_method === "bank_transfer" ? "Bank Transfer" : payment_method.toUpperCase()}): Rp ${new Intl.NumberFormat('id-ID').format(paymentFee)}` : null,
       `--------------------------------`,
       `💰 *TOTAL: Rp ${new Intl.NumberFormat('id-ID').format(finalAmount)}*`
     ].filter(Boolean).join("\n");
@@ -445,14 +445,16 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     const breakdown = [
       `🛒 *${order.store.name} ORDER #${order.id}*`,
+      `------------------`,
       ...details,
       `------------------`,
       `Subtotal: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount - order.taxAmount - order.serviceCharge - order.paymentFee - order.shippingCost)}`,
       order.taxAmount > 0 ? `Pajak: Rp ${new Intl.NumberFormat('id-ID').format(order.taxAmount)}` : null,
       order.serviceCharge > 0 ? `Service: Rp ${new Intl.NumberFormat('id-ID').format(order.serviceCharge)}` : null,
-      order.shippingCost > 0 ? `Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost)}` : null,
-      order.paymentFee > 0 ? `Biaya: Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
-      `*Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`
+      order.shippingCost > 0 ? `🚛 Ongkir (${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}): Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost)}` : null,
+      order.paymentFee > 0 ? `💳 Biaya (${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}): Rp ${new Intl.NumberFormat('id-ID').format(order.paymentFee)}` : null,
+      `------------------`,
+      `💰 *Total: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}*`
     ].filter(Boolean).join("\n");
 
     let resolvedPaymentUrl = order.paymentUrl || null;

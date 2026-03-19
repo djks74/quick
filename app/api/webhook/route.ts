@@ -857,12 +857,13 @@ export async function POST(req: NextRequest) {
         summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
         if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
         if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-        if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+        summary += `${l("Biaya", "Fee")} (${ctx.method === 'qris' ? 'QRIS' : 'Bank Transfer'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
         summary += l("Ongkir", "Shipping");
         if (selected?.provider === "STORE_COURIER") {
           summary += " (Kurir Toko)";
         } else {
-          summary += ` (${selected?.provider || ctx.provider} ${selected?.service || ""})`;
+          const pName = (selected?.provider || ctx.provider) === 'GOSEND' ? 'Gosend' : (selected?.provider || ctx.provider);
+          summary += ` (${pName}${selected?.service ? ` ${selected.service}` : ""})`;
         }
         summary += `: Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;
@@ -1675,12 +1676,13 @@ export async function POST(req: NextRequest) {
         summary += `\n------------------\nSubtotal: Rp ${new Intl.NumberFormat('id-ID').format(total)}\n`;
         if (taxAmount > 0) summary += `Tax (${targetStore.taxPercent}%): Rp ${new Intl.NumberFormat('id-ID').format(taxAmount)}\n`;
         if (serviceCharge > 0) summary += `Service (${targetStore.serviceChargePercent}%): Rp ${new Intl.NumberFormat('id-ID').format(serviceCharge)}\n`;
-        if (fee > 0) summary += `Fee (${ctx.method === 'qris' ? 'QRIS' : 'Bank'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
+        summary += `${l("Biaya", "Fee")} (${ctx.method === 'qris' ? 'QRIS' : 'Bank Transfer'}): Rp ${new Intl.NumberFormat('id-ID').format(fee)}\n`;
         summary += l("Ongkir", "Shipping");
         if (selected?.provider === "STORE_COURIER") {
           summary += " (Kurir Toko)";
         } else {
-          summary += ` (${selected?.provider || ctx.provider} ${selected?.service || ""})`;
+          const pName = (selected?.provider || ctx.provider) === 'GOSEND' ? 'Gosend' : (selected?.provider || ctx.provider);
+          summary += ` (${pName}${selected?.service ? ` ${selected.service}` : ""})`;
         }
         summary += `: Rp ${new Intl.NumberFormat('id-ID').format(shippingCost)}\n`;
         summary += `${l("Estimasi", "ETA")}: ${selected?.eta || "-"}\n`;

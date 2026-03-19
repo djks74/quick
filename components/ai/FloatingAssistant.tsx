@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Send, Bot, User, Loader2, Sparkles, X, MessageCircle, MapPin, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +13,11 @@ interface Message {
 }
 
 export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOpen?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Hide on POS pages
+  if (pathname?.includes("/pos")) return null;
 
   useEffect(() => {
     if (forceOpen) {

@@ -270,10 +270,24 @@ export async function POST(req: NextRequest) {
           order.storeId
         );
       } else {
+        const orderItems = await prisma.orderItem.findMany({
+          where: { orderId: order.id },
+          include: { product: true }
+        });
+        let itemsList = "";
+        orderItems.forEach(it => {
+          itemsList += `- ${it.product.name} x${it.quantity}\n`;
+        });
+
         await sendWhatsAppMessage(
           order.customerPhone,
-          `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\nJumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n` +
-            `${order.orderType === 'TAKEAWAY' ? `\nTipe: Takeaway / Delivery\nKurir: ${order.shippingProvider || '-'} ${order.shippingService || ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` : `\nTipe: Dine In`}` +
+          `✅ Pembayaran Diterima! \n\nOrder #${order.id} sudah berhasil dibayar.\n` +
+            `Jumlah: Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}\n` +
+            `Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n\n` +
+            `*Pesanan:*\n${itemsList}\n` +
+            `${order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY' 
+              ? `Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}\nKurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` 
+              : `Tipe: Dine In`}` +
             `${order.biteshipOrderId ? `\nBiteship ID: ${order.biteshipOrderId}` : ``}` +
             `${order.shippingTrackingNo ? `\nResi: ${order.shippingTrackingNo}` : ``}` +
             `\n\nTerima kasih! Pesanan sedang kami siapkan.`,
@@ -303,7 +317,7 @@ export async function POST(req: NextRequest) {
           msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n\n`;
           msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
           if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
-            msg += `🚚 Kurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider || '-')}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
+            msg += `🚚 Kurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
             msg += `📦 Ongkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\n`;
             msg += `⏱️ ETA: ${order.shippingEta || '-'}\n`;
             msg += `📍 Alamat: ${order.shippingAddress || '-'}\n`;
