@@ -13,7 +13,8 @@ export default function RegisterPage() {
     name: "",
     email: "",
     password: "",
-    storeName: ""
+    storeName: "",
+    plan: "FREE"
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,6 +108,32 @@ export default function RegisterPage() {
             <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 font-bold uppercase tracking-tight">
               Your store URL will be: gercep.click/{formData.storeName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'your-store'}
             </p>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Choose Plan</label>
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { id: "FREE", name: "Free", desc: "Basic features" },
+                { id: "ENTERPRISE", name: "Enterprise", desc: "Priority support & features" },
+                { id: "SOVEREIGN", name: "Sovereign", desc: "Full whitelabel & AI control" }
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, plan: p.id })}
+                  className={cn(
+                    "flex flex-col p-4 rounded-xl border-2 transition-all text-left",
+                    formData.plan === p.id 
+                      ? "border-blue-600 bg-blue-50/50 dark:bg-blue-900/20" 
+                      : "border-gray-100 dark:border-gray-800 bg-transparent hover:border-blue-200 dark:hover:border-blue-900/40"
+                  )}
+                >
+                  <span className="font-black text-sm uppercase tracking-tight dark:text-white">{p.name}</span>
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{p.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <button

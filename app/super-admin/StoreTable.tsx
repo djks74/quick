@@ -153,6 +153,7 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                   className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
                   defaultValue={editingStore.subscriptionPlan}
                 >
+                  <option value="SOVEREIGN">Sovereign</option>
                   <option value="ENTERPRISE">Enterprise</option>
                   <option value="FREE">Free</option>
                 </select>

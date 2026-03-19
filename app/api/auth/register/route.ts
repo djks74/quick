@@ -6,11 +6,15 @@ import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
-    const { name, email, password, storeName } = await req.json();
+    const { name, email, password, storeName, plan } = await req.json();
 
     if (!name || !email || !password || !storeName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // Validate plan
+    const validPlans = ["FREE", "ENTERPRISE", "SOVEREIGN"];
+    const targetPlan = validPlans.includes(plan) ? plan : "FREE";
 
     // Check existing email
     const existingUser = await prisma.user.findUnique({
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
           create: {
             name: storeName,
             slug: slug,
-            subscriptionPlan: "FREE", // Start with FREE, must pay to upgrade
+            subscriptionPlan: targetPlan, 
             enableWhatsApp: true,
             enableManualTransfer: true,
             whatsappToken: null,
