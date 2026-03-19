@@ -107,10 +107,15 @@ export default function DocumentationPage() {
           </div>
         </section>
 
-        <div className="pt-8 text-center border-t dark:border-white/10">
-          <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-black hover:gap-3 transition-all">
-            <span>Kembali ke Beranda</span>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+        <div className="pt-12 flex flex-col md:flex-row items-center justify-between gap-6 border-t dark:border-white/10">
+          <Link href="/" className="group flex items-center gap-3 text-gray-500 hover:text-blue-500 transition-colors font-bold uppercase tracking-widest text-sm">
+            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M7 16l-4-4m0 0l4-4m-4 4h18"></path></svg>
+            Kembali ke Beranda
+          </Link>
+          
+          <Link href="/documentation/api" className="group flex items-center gap-4 px-10 py-5 rounded-[30px] bg-blue-600 text-white font-black hover:bg-blue-700 transition-all hover:scale-105 shadow-xl hover:shadow-blue-500/20 active:scale-95 uppercase tracking-tighter text-lg">
+            <span>DOKUMENTASI API</span>
+            <svg className="w-6 h-6 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
           </Link>
         </div>
       </div>
