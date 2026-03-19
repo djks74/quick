@@ -676,6 +676,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureStoreSettingsSchema();
     const { message, history, isPublic, context } = await req.json();
 
     if (!message) {

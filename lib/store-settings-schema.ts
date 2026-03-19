@@ -136,6 +136,13 @@ export async function ensureStoreSettingsSchema() {
       await prisma.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "Store_apiKey_key" ON "Store"("apiKey");
       `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Product"
+        ADD COLUMN IF NOT EXISTS "externalId" TEXT;
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "Product_externalId_key" ON "Product"("externalId");
+      `);
     })().catch((error) => {
       console.error("ensureStoreSettingsSchema error:", error);
     });
