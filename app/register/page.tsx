@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function RegisterPage() {
   const router = useRouter();
