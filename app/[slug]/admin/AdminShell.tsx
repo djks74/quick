@@ -524,7 +524,7 @@ export default function AdminShell({
         ))}
       </div>
 
-      <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[120]">
+      <div className="fixed bottom-24 right-4 md:bottom-28 md:right-6 z-[120]">
         <button
           type="button"
           onClick={() => setIsFloatingNotificationsOpen((v) => !v)}
