@@ -137,6 +137,7 @@ export async function getStoreSettings(storeId: number | string) {
 }
 
 import { revalidatePath } from 'next/cache';
+import crypto from 'crypto';
 
 export async function updateStoreSettings(storeId: number, data: any) {
   try {
@@ -276,6 +277,21 @@ export async function getPosCashierUsername(storeId: number) {
   } catch (error) {
     console.error('Error fetching POS cashier:', error);
     return "";
+  }
+}
+
+export async function generateApiKey(storeId: number) {
+  try {
+    await ensureStoreSettingsSchema();
+    const key = `gc_live_${crypto.randomBytes(24).toString('hex')}`;
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { apiKey: key }
+    });
+    return updated.apiKey;
+  } catch (error) {
+    console.error('Error generating API Key:', error);
+    return null;
   }
 }
 

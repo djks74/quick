@@ -121,6 +121,17 @@ export async function ensureStoreSettingsSchema() {
         ALTER TABLE "Order"
         ADD COLUMN IF NOT EXISTS "notes" TEXT;
       `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT;
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "apiKey" TEXT;
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "Store_apiKey_key" ON "Store"("apiKey");
+      `);
     })().catch((error) => {
       console.error("ensureStoreSettingsSchema error:", error);
     });

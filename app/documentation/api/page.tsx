@@ -3,43 +3,38 @@ import Link from "next/link";
 const apiEndpoints = [
   {
     method: "POST",
-    path: "/api/ai/search-stores",
-    title: "Cari Restoran atau Toko",
-    description: "Mencari restoran berdasarkan nama, kategori makanan, atau nama produk.",
+    path: "/api/partner/sync-products",
+    title: "Sinkronisasi Produk (Upsert)",
+    description: "Menambah atau memperbarui daftar produk restoran Anda secara massal (bulk).",
     request: {
-      query: "string (Wajib) - Kata kunci pencarian."
+      action: "upsert",
+      products: [
+        {
+          name: "Nasi Goreng Spesial",
+          price: 25000,
+          category: "Makanan Utama",
+          description: "Nasi goreng dengan telur dan ayam",
+          stock: 100
+        }
+      ]
     },
     response: {
-      stores: "Array of Store Objects"
+      success: true,
+      results: [{ name: "Nasi Goreng Spesial", status: "success", id: 123 }]
     }
   },
   {
     method: "POST",
-    path: "/api/ai/store-products",
-    title: "Ambil Menu Produk",
-    description: "Mengambil daftar produk/menu untuk slug toko tertentu.",
+    path: "/api/partner/sync-products",
+    title: "Hapus Produk",
+    description: "Menghapus produk dari sistem Gercep berdasarkan nama.",
     request: {
-      slug: "string (Wajib) - Slug unik toko."
-    },
-    response: "Array of Product Objects"
-  },
-  {
-    method: "POST",
-    path: "/api/ai/create-order",
-    title: "Buat Pesanan Pelanggan",
-    description: "Membuat pesanan baru untuk pelanggan. Membutuhkan slug toko, nomor HP, dan daftar item.",
-    request: {
-      slug: "string (Wajib)",
-      customer_phone: "string (Wajib) - Nomor WhatsApp pelanggan.",
-      items: "Array<{ productId: number, quantity: number }>",
-      order_type: "DINE_IN | TAKEAWAY | DELIVERY",
-      payment_method: "qris | bank_transfer",
-      address: "string (Opsional) - Alamat pengiriman."
+      action: "delete",
+      products: [{ name: "Menu Lama" }]
     },
     response: {
-      success: "boolean",
-      orderId: "number",
-      paymentUrl: "string"
+      success: true,
+      results: [{ name: "Menu Lama", status: "deleted" }]
     }
   }
 ];

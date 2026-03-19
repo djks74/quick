@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
-import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername } from "@/lib/api";
-import { Check, Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
+import { Check, Copy, Loader2, Lock, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
 
@@ -47,6 +47,11 @@ export default function AdminSettings() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [storeId, setStoreId] = useState<number | null>(null);
   const [subscriptionPlan, setSubscriptionPlan] = useState("FREE");
+  const isSovereign = subscriptionPlan === "SOVEREIGN";
+  const isEnterprise = subscriptionPlan === "ENTERPRISE";
+  const isDemoStore = slugValue === "demo";
+  const canOverridePlatformConfig = (isEnterprise || isSovereign) && !isDemoStore;
+  const canOverrideWaAndGemini = isSovereign && !isDemoStore;
   const [newPosMethodName, setNewPosMethodName] = useState("");
   const [newPosMethodMode, setNewPosMethodMode] = useState<PosPaymentMethod["mode"]>("card");
   
@@ -84,8 +89,13 @@ export default function AdminSettings() {
     shippingSenderName: "",
     shippingSenderPhone: "",
     shippingSenderAddress: "",
-    shippingSenderPostalCode: ""
+    shippingSenderPostalCode: "",
+    customGeminiKey: ""
   });
+
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
   const [bankAccount, setBankAccount] = useState({
     bankName: "BCA",
@@ -155,7 +165,8 @@ export default function AdminSettings() {
           shippingSenderName: data.shippingSenderName || "",
           shippingSenderPhone: data.shippingSenderPhone || "",
           shippingSenderAddress: data.shippingSenderAddress || "",
-          shippingSenderPostalCode: data.shippingSenderPostalCode || ""
+          whatsappSenderPostalCode: data.whatsappSenderPostalCode || "",
+          customGeminiKey: (data as any).customGeminiKey || ""
         });
         
         if (data.bankAccount) {
@@ -169,6 +180,7 @@ export default function AdminSettings() {
 
         if (data.name) setSiteName(data.name);
         setSubscriptionPlan(data.subscriptionPlan || "FREE");
+        setApiKey(data.apiKey || null);
       }
 
       const posUsername = await getPosCashierUsername(storeId);
@@ -193,7 +205,8 @@ export default function AdminSettings() {
         biteshipOriginLat: settings.biteshipOriginLat ? parseFloat(settings.biteshipOriginLat.toString().replace(',', '.')) : null,
         biteshipOriginLng: settings.biteshipOriginLng ? parseFloat(settings.biteshipOriginLng.toString().replace(',', '.')) : null,
         shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
-        bankAccount: bankAccount
+        bankAccount: bankAccount,
+        customGeminiKey: settings.customGeminiKey
       });
 
       if (result) {
@@ -221,10 +234,6 @@ export default function AdminSettings() {
     }
   };
 
-  const isEnterprise = subscriptionPlan === 'ENTERPRISE';
-  const isDemoStore = slug === "demo";
-  const canOverridePlatformConfig = isEnterprise && !isDemoStore;
-
   const addPosPaymentMethod = () => {
     const name = newPosMethodName.trim();
     if (!name) return;
@@ -247,6 +256,24 @@ export default function AdminSettings() {
       posPaymentMethods: prev.posPaymentMethods.filter((method) => method.id !== id)
     }));
   };
+
+  const handleGenerateApiKey = async () => {
+    if (!storeId) return;
+    if (!confirm("Are you sure? Any existing integration using the old key will stop working.")) return;
+    
+    setIsGeneratingKey(true);
+    try {
+      const newKey = await generateApiKey(storeId);
+      if (newKey) {
+        setApiKey(newKey);
+        setShowApiKey(true);
+      }
+    } catch (error) {
+      console.error("Failed to generate API Key:", error);
+    } finally {
+      setIsGeneratingKey(false);
+    }
+  };
   
   // Early return ONLY after hooks are defined
   if (status === "loading" || isDataLoading) {
@@ -257,7 +284,7 @@ export default function AdminSettings() {
   return (
     <div className="space-y-6">
       <div className="flex border-b border-[#ccd0d4] mb-6 overflow-x-auto">
-        {["General", "Payments", "Shipping", "Tax & Fees", "Appearance"].map((tab) => (
+        {["General", "Payments", "Shipping", "Tax & Fees", "Appearance", "Developer"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -548,24 +575,24 @@ export default function AdminSettings() {
                               Demo store always uses Platform Midtrans keys.
                           </div>
                        )}
-                       <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-75 pointer-events-none")}>
-                            <input 
-                                type="password" 
-                                className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
-                                placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Server Key"}
-                                value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewaySecret}
-                                onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
-                                readOnly={!isEnterprise}
-                            />
-                            <input 
-                                type="text" 
-                                className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
-                                placeholder={!isEnterprise ? "•••••••••••••••• (Platform Key)" : "Client Key"}
-                                value={!isEnterprise ? "••••••••••••••••" : settings.paymentGatewayClientKey}
-                                onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
-                                readOnly={!isEnterprise}
-                            />
-                       </div>
+                      <div className={cn("space-y-3", !canOverridePlatformConfig && "opacity-75 pointer-events-none")}>
+                           <input 
+                               type="password" 
+                               className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
+                               placeholder={!canOverridePlatformConfig ? "•••••••••••••••• (Platform Key)" : "Server Key"}
+                               value={!canOverridePlatformConfig ? "••••••••••••••••" : settings.paymentGatewaySecret}
+                               onChange={(e) => setSettings({ ...settings, paymentGatewaySecret: e.target.value })}
+                               readOnly={!canOverridePlatformConfig}
+                           />
+                           <input 
+                               type="text" 
+                               className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm dark:text-white outline-none" 
+                               placeholder={!canOverridePlatformConfig ? "•••••••••••••••• (Platform Key)" : "Client Key"}
+                               value={!canOverridePlatformConfig ? "••••••••••••••••" : settings.paymentGatewayClientKey}
+                               onChange={(e) => setSettings({ ...settings, paymentGatewayClientKey: e.target.value })}
+                               readOnly={!canOverridePlatformConfig}
+                           />
+                      </div>
                      </div>
                    )}
                 </div>
@@ -580,6 +607,57 @@ export default function AdminSettings() {
                   />
                   <label className="text-sm font-medium dark:text-gray-300">Enable Checkout via WhatsApp</label>
                 </div>
+
+                {isSovereign && (
+                  <div className="border border-[#ccd0d4] dark:border-gray-800 p-6 rounded-lg bg-white dark:bg-gray-800 space-y-6 transition-colors shadow-sm">
+                    <div className="flex items-center gap-3 border-b dark:border-gray-700 pb-4">
+                      <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500">
+                        <Sparkles size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">Sovereign Configurations</h3>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Token</label>
+                          <input 
+                            type="password" 
+                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                            placeholder="EAAG..."
+                            value={settings.whatsappToken}
+                            onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Phone ID</label>
+                          <input 
+                            type="text" 
+                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                            placeholder="123456789..."
+                            value={settings.whatsappPhoneId}
+                            onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
+                        <input 
+                          type="password" 
+                          className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                          placeholder="AIzaSy..."
+                          value={settings.customGeminiKey}
+                          onChange={(e) => setSettings({ ...settings, customGeminiKey: e.target.value })}
+                        />
+                        <p className="text-[10px] text-gray-500 italic">Your own Google Gemini Pro key for AI chat.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -802,6 +880,93 @@ export default function AdminSettings() {
                       onChange={(e) => setSettings({ ...settings, shippingSenderPostalCode: e.target.value })}
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "Developer" && (
+          <div className="space-y-6">
+            {!isSovereign && (
+              <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-[20px] space-y-3">
+                <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                  <Lock size={18} />
+                  <h4 className="font-bold uppercase tracking-tight text-sm">Sovereign Feature Only</h4>
+                </div>
+                <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
+                  Developer access and Product Sync API are exclusive to <strong>Sovereign</strong> members. 
+                  Upgrade your plan to start integrating with your internal systems.
+                </p>
+              </div>
+            )}
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !isSovereign && "opacity-50 pointer-events-none")}>
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">API Access</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use this key to sync products from your internal systems.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                  <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed font-medium">
+                    ⚠️ <strong>Security Notice:</strong> Keep your API Key secret. Do not share it or commit it to public repositories. 
+                    This key allows full management of your store products via the API.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium dark:text-gray-300 uppercase tracking-wider text-[10px] font-black text-gray-400">Secret API Key</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input 
+                        type={showApiKey ? "text" : "password"} 
+                        readOnly
+                        className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-2 font-mono text-sm dark:text-white outline-none rounded shadow-inner" 
+                        value={apiKey || "Click generate to create your first key"}
+                      />
+                      {apiKey && (
+                        <button 
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase"
+                        >
+                          {showApiKey ? "Hide" : "Show"}
+                        </button>
+                      )}
+                    </div>
+                    {apiKey && (
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(apiKey);
+                          alert("API Key copied to clipboard");
+                        }}
+                        className="p-2 border border-[#ccd0d4] dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        <Copy size={18} className="text-gray-600 dark:text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={handleGenerateApiKey}
+                    disabled={isGeneratingKey}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-[#ccd0d4] dark:border-gray-700 rounded text-xs font-bold uppercase tracking-widest text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+                  >
+                    {isGeneratingKey ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+                    {apiKey ? "Regenerate API Key" : "Generate API Key"}
+                  </button>
+                </div>
+
+                <div className="pt-4 mt-4 border-t dark:border-gray-800">
+                  <Link 
+                    href="/documentation/api" 
+                    target="_blank"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-blue-600 hover:underline"
+                  >
+                    Read API Documentation
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                  </Link>
                 </div>
               </div>
             </div>

@@ -26,6 +26,8 @@ model Store {
   slug                        String              @unique
   name                        String
   ownerId                     Int
+  apiKey                      String?             @unique
+  customGeminiKey             String?
   whatsapp                    String?
   themeColor                  String              @default("#000000")
   whatsappToken               String?

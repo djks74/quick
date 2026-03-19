@@ -92,7 +92,14 @@ const translations = {
     phase5_f1: "Update prices by talking to AI",
     phase5_f2: "Add products via WhatsApp",
     phase5_f3: "Real-time AI sales insights",
-    phase5_f4: "Automated customer follow-ups"
+    phase5_f4: "Automated customer follow-ups",
+    sovereign_badge: "Most Professional",
+    sovereign_price: "Rp 499.000",
+    sovereign_period: "/month",
+    sovereign_feature1: "Custom WhatsApp Number",
+    sovereign_feature2: "Your Own Gemini API Key",
+    sovereign_feature3: "Product Sync API Access",
+    sovereign_feature4: "Custom Midtrans Keys"
   },
   id: {
     login: "Masuk",
@@ -144,7 +151,14 @@ const translations = {
     phase5_f1: "Update harga cukup via chat",
     phase5_f2: "Tambah produk via WhatsApp",
     phase5_f3: "Insight penjualan AI real-time",
-    phase5_f4: "Follow-up pelanggan otomatis"
+    phase5_f4: "Follow-up pelanggan otomatis",
+    sovereign_badge: "Paling Profesional",
+    sovereign_price: "Rp 499.000",
+    sovereign_period: "/bulan",
+    sovereign_feature1: "Nomor WhatsApp Sendiri",
+    sovereign_feature2: "Gemini API Key Milik Anda",
+    sovereign_feature3: "Akses API Sinkronisasi Produk",
+    sovereign_feature4: "Kunci Midtrans Sendiri"
   }
 };
 
@@ -452,6 +466,57 @@ export default function Home() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Sovereign Plan Promo */}
+      <section className="py-24 px-6 bg-gradient-to-b from-white to-orange-50 dark:from-[#0F1113] dark:to-orange-900/5 transition-colors duration-300">
+        <div className="max-w-4xl mx-auto">
+          <div className="relative group overflow-hidden bg-white dark:bg-gray-900 rounded-[40px] border-4 border-orange-500/20 shadow-2xl transition-all hover:shadow-orange-500/10">
+            <div className="absolute top-0 right-0 p-8">
+               <Sparkles className="w-12 h-12 text-orange-500/20 animate-pulse" />
+            </div>
+            
+            <div className="p-8 md:p-16 flex flex-col md:flex-row items-center gap-12">
+              <div className="flex-1 space-y-6 text-center md:text-left">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-500 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-orange-500/20">
+                  {t.sovereign_badge}
+                </div>
+                <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-gray-900 dark:text-white">
+                  SOVEREIGN <br/>
+                  <span className="text-orange-500">MEMBERSHIP</span>
+                </h2>
+                <div className="flex items-baseline justify-center md:justify-start gap-2">
+                  <span className="text-4xl font-black text-gray-900 dark:text-white">{t.sovereign_price}</span>
+                  <span className="text-gray-500 font-bold">{t.sovereign_period}</span>
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                  The ultimate control for your brand. Total ownership of your data and communication channels.
+                </p>
+              </div>
+
+              <div className="flex-1 space-y-4 w-full">
+                {[t.sovereign_feature1, t.sovereign_feature2, t.sovereign_feature3, t.sovereign_feature4].map((f, i) => (
+                  <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-orange-50/50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 transition-transform hover:translate-x-2">
+                    <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-md">
+                      <CheckCircle2 size={16} />
+                    </div>
+                    <span className="font-bold text-gray-800 dark:text-gray-200">{f}</span>
+                  </div>
+                ))}
+                
+                <div className="pt-4">
+                  <Link 
+                    href="/register" 
+                    className="flex items-center justify-center gap-3 w-full py-5 bg-black dark:bg-white text-white dark:text-black rounded-[24px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+                  >
+                    Upgrade Now
+                    <ArrowRight size={20} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -683,12 +683,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get Gemini Key from PlatformSettings
-    const settings = await prisma.platformSettings.findUnique({ where: { key: "default" } }) as any;
-    const geminiKey = settings?.geminiApiKey;
+    // Get Gemini Key: Prefer custom store key if Sovereign, otherwise platform default
+    let geminiKey = null;
+    const storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
+    
+    if (storeSlug) {
+      const store = await prisma.store.findUnique({ 
+        where: { slug: storeSlug }
+      }) as any;
+      if (store?.subscriptionPlan === "SOVEREIGN" && store?.customGeminiKey) {
+        geminiKey = store.customGeminiKey;
+        console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
+      }
+    }
 
     if (!geminiKey) {
-      return NextResponse.json({ error: "Gemini API Key not configured in Super Admin settings." }, { status: 400 });
+      const settings = await prisma.platformSettings.findUnique({ where: { key: "default" } }) as any;
+      geminiKey = settings?.geminiApiKey;
+    }
+
+    if (!geminiKey) {
+      return NextResponse.json({ error: "Gemini API Key not configured." }, { status: 400 });
     }
 
     const genAI = new GoogleGenerativeAI(geminiKey);
