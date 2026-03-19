@@ -27,23 +27,37 @@ const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
-  async search_stores({ query }: { query: string }) {
+  async search_stores({ query, location_context }: { query: string, location_context?: string }) {
     await ensureStoreSettingsSchema();
+    const where: any = {
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        { slug: { contains: query, mode: "insensitive" } },
+        { categories: { some: { name: { contains: query, mode: "insensitive" } } } },
+        { products: { some: { name: { contains: query, mode: "insensitive" } } } }
+      ]
+    };
+
+    if (location_context) {
+      where.AND = [
+        {
+          OR: [
+            { shippingSenderAddress: { contains: location_context, mode: "insensitive" } },
+            { shippingSenderPostalCode: { contains: location_context, mode: "insensitive" } }
+          ]
+        }
+      ];
+    }
+
     const stores = await prisma.store.findMany({
-      where: {
-        OR: [
-          { name: { contains: query, mode: "insensitive" } },
-          { slug: { contains: query, mode: "insensitive" } },
-          { categories: { some: { name: { contains: query, mode: "insensitive" } } } },
-          { products: { some: { name: { contains: query, mode: "insensitive" } } } }
-        ]
-      },
+      where,
       select: { 
         name: true, 
         slug: true,
         whatsapp: true,
         shippingSenderAddress: true,
         shippingSenderName: true,
+        shippingSenderPostalCode: true,
         biteshipOriginLat: true,
         biteshipOriginLng: true,
         categories: { select: { name: true }, take: 2 },
@@ -704,16 +718,17 @@ export async function POST(req: NextRequest) {
 
 SHIPPING & LOCATION:
 1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
-2. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
-3. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
-4. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
-5. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
-6. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
-7. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
-8. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
-9. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
-10. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
-11. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
+2. If the user is looking for a restaurant or food "near them", "in their area", or "nearby", you MUST ask them to share their location (use the 📍 button) or at least provide their area, city, or postal code BEFORE searching. Do not just list all available restaurants globally if they asked for something nearby.
+3. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
+4. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
+5. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
+6. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
+7. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
+8. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
+9. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
+10. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
+11. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
+12. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
 
 PAYMENT & RE-ORDERING:
 1. You MUST ask the user for their preferred payment method ('qris' or 'bank_transfer') BEFORE calling 'create_customer_order'.
@@ -734,11 +749,12 @@ Once an order is created:
           functionDeclarations: [
             {
               name: "search_stores",
-              description: "Find restaurants or stores by name or food category.",
+              description: "Find restaurants or stores by name or food category. Use location_context if the user specifies an area, city, or postal code.",
               parameters: {
                 type: "object",
                 properties: {
-                  query: { type: "string", description: "Search keyword." }
+                  query: { type: "string", description: "Search keyword." },
+                  location_context: { type: "string", description: "Area, city, or postal code to filter results." }
                 },
                 required: ["query"]
               }
