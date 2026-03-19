@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import SuperAdminNav from "../SuperAdminNav";
+import { getPlatformWaUsageSummary } from "@/lib/wa-credit";
 import { 
   TrendingUp, 
   Users, 
@@ -26,7 +27,8 @@ export default async function AnalyticsPage() {
     recentTrafficCount,
     allOrders,
     enterpriseStoreCount,
-    totalWaMessages
+    totalWaMessages,
+    platformWaUsage
   ] = await Promise.all([
     prisma.store.count(),
     prisma.user.count(),
@@ -50,7 +52,8 @@ export default async function AnalyticsPage() {
     }),
     prisma.waUsageLog.count({
       where: { type: "MESSAGE" }
-    })
+    }),
+    getPlatformWaUsageSummary(30)
   ]);
 
   const formatMoney = (val: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Math.round(val || 0))}`;
@@ -58,13 +61,15 @@ export default async function AnalyticsPage() {
   const paymentProfit = orderStats._sum.transactionFee || 0;
   const enterpriseProfit = enterpriseStoreCount * 249000;
   const waProfit = totalWaMessages * 200; // 350 charge - 150 cost
-  const totalPlatformProfit = paymentProfit + enterpriseProfit + waProfit;
+  const platformWaCost = platformWaUsage.cost || 0;
+  const totalPlatformProfit = paymentProfit + enterpriseProfit + waProfit - platformWaCost;
 
   const stats = [
     { label: "Total Revenue (Paid)", value: formatMoney(orderStats._sum.totalAmount || 0), icon: DollarSign, color: "text-green-600 bg-green-100 dark:bg-green-900/20" },
     { label: "Platform Profit", value: formatMoney(totalPlatformProfit), icon: TrendingUp, color: "text-blue-600 bg-blue-100 dark:bg-blue-900/20" },
+    { label: "Platform WA (30d)", value: `${platformWaUsage.count} msg`, icon: Activity, color: "text-indigo-600 bg-indigo-100 dark:bg-indigo-900/20" },
     { label: "Total Orders", value: totalOrders.toString(), icon: ShoppingBag, color: "text-orange-600 bg-orange-100 dark:bg-orange-900/20" },
-    { label: "24h Traffic", value: recentTrafficCount.toString(), icon: Activity, color: "text-purple-600 bg-blue-100 dark:bg-purple-900/20" },
+    { label: "24h Traffic", value: recentTrafficCount.toString(), icon: Users, color: "text-purple-600 bg-blue-100 dark:bg-purple-900/20" },
   ];
 
   return (
@@ -149,6 +154,10 @@ export default async function AnalyticsPage() {
                    <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">WA Profit (Rp 200/msg)</span>
                       <span className="font-bold text-purple-600">{formatMoney(waProfit)}</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Platform WA Cost ({platformWaUsage.days}d)</span>
+                      <span className="font-bold text-red-600">- {formatMoney(platformWaCost)}</span>
                    </div>
                    <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
                       <span className="text-sm font-bold dark:text-white">Total Platform Profit</span>

@@ -4,6 +4,7 @@ export const WA_LOW_CREDIT_THRESHOLD = 10000;
 export const WA_BUNDLE_PLATFORM_FEE = 150000;
 export const WA_DEFAULT_WELCOME_CREDIT = 50000;
 export const WA_BUNDLE_INCLUDED_CREDIT = WA_DEFAULT_WELCOME_CREDIT;
+export const WA_PLATFORM_COST_PER_MESSAGE = 150;
 
 let ensuredWaCreditSchema: Promise<void> | null = null;
 
@@ -57,6 +58,26 @@ export async function ensureWaCreditSchema() {
       await prisma.$executeRawUnsafe(`
         CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx"
         ON "WaUsageLog" ("messageId");
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "PlatformWaUsageLog" (
+          "id" SERIAL PRIMARY KEY,
+          "type" TEXT NOT NULL,
+          "toPhone" TEXT NOT NULL,
+          "relatedStoreId" INTEGER,
+          "description" TEXT NOT NULL,
+          "estimatedCost" DOUBLE PRECISION NOT NULL DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE},
+          "metadata" JSONB,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_createdAt_idx"
+        ON "PlatformWaUsageLog" ("createdAt");
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_relatedStoreId_idx"
+        ON "PlatformWaUsageLog" ("relatedStoreId");
       `);
 
       const eligibleStores = await prisma.store.findMany({
@@ -122,7 +143,24 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
       data: { waBalance: { decrement: cost } }
     });
     if (!changed.count) {
-      return { ok: false as const, reason: "INSUFFICIENT_BALANCE", balance: store.waBalance, cost };
+      const criticalLastAlert = store.waCriticalCreditAlertSentAt;
+      const shouldCriticalAlert = !criticalLastAlert || now.getTime() - new Date(criticalLastAlert).getTime() > 2 * 60 * 60 * 1000;
+      if (shouldCriticalAlert) {
+        await tx.store.update({
+          where: { id: storeId },
+          data: { waCriticalCreditAlertSentAt: now }
+        });
+      }
+      return {
+        ok: false as const,
+        reason: "INSUFFICIENT_BALANCE",
+        balance: store.waBalance,
+        cost,
+        shouldAlert: shouldCriticalAlert,
+        alertLevel: "CRITICAL" as const,
+        alertPhone: store.whatsapp || store.owner?.phoneNumber || null,
+        storeSlug: store.slug
+      };
     }
 
     const updated = await tx.store.findUnique({
@@ -180,6 +218,42 @@ export async function finalizeWaMessageLog(logId: number, messageId: string | nu
       messageStatus: status
     }
   }).catch(() => null);
+}
+
+export async function logPlatformWaUsage(input: {
+  type: string;
+  toPhone: string;
+  description: string;
+  relatedStoreId?: number | null;
+  estimatedCost?: number;
+  metadata?: any;
+}) {
+  await ensureWaCreditSchema();
+  const normalizedTo = String(input.toPhone || "").replace(/\D/g, "");
+  if (!normalizedTo) return;
+  const payload = input.metadata ? JSON.stringify(input.metadata) : null;
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "PlatformWaUsageLog" ("type","toPhone","relatedStoreId","description","estimatedCost","metadata") VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+    input.type,
+    normalizedTo,
+    input.relatedStoreId ?? null,
+    input.description,
+    Number(input.estimatedCost ?? WA_PLATFORM_COST_PER_MESSAGE),
+    payload
+  ).catch(() => null);
+}
+
+export async function getPlatformWaUsageSummary(days: number = 30) {
+  await ensureWaCreditSchema();
+  const safeDays = Math.max(1, Math.floor(days || 30));
+  const rows = await prisma.$queryRawUnsafe<Array<{ count: number; cost: number }>>(
+    `SELECT COUNT(*)::int AS count, COALESCE(SUM("estimatedCost"), 0)::float AS cost
+     FROM "PlatformWaUsageLog"
+     WHERE "createdAt" >= NOW() - ($1::int * INTERVAL '1 day')`,
+    safeDays
+  ).catch(() => []);
+  const row = rows?.[0] || { count: 0, cost: 0 };
+  return { count: Number(row.count || 0), cost: Number(row.cost || 0), days: safeDays };
 }
 
 export async function refundWaUsageByMessageId(messageId: string, status: string) {

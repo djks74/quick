@@ -87,16 +87,11 @@ export async function sendMerchantWhatsApp(storeId: number, text: string, orderI
 
     let sent = await sendWhatsAppMessage(phone, text, store.id);
 
-    if (!sent) {
-      console.log(`[MERCHANT_ALERT] Store account send failed for ${phone}, trying platform fallback (storeId 0)`);
-      sent = await sendWhatsAppMessage(phone, text, 0);
-    }
-
     if (sent) {
       overallSuccess = true;
       console.log(`[MERCHANT_ALERT] Successfully sent to ${phone}`);
     } else {
-      console.error(`[MERCHANT_ALERT] FAILED to send to ${phone} from both store and platform accounts`);
+      console.error(`[MERCHANT_ALERT] FAILED to send to ${phone} using store account ${storeId}`);
     }
   }
 

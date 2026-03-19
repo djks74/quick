@@ -387,6 +387,13 @@ export async function POST(req: NextRequest) {
         const finalPrompt = textBody;
 
         try {
+          const aiStore = phoneNumberId
+            ? await prisma.store.findFirst({
+                where: { whatsappPhoneId: String(phoneNumberId) },
+                select: { id: true }
+              })
+            : null;
+          const aiStoreId = Number(aiStore?.id || 0);
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
           const res = await fetch(`${baseUrl}/api/ai/chat`, {
             method: "POST",
@@ -398,6 +405,7 @@ export async function POST(req: NextRequest) {
               context: {
                 phoneNumber: from,
                 channel: "WHATSAPP",
+                storeId: aiStoreId || undefined,
                 location: (message as any).location // Pass location if available
               }
             })
@@ -430,9 +438,9 @@ export async function POST(req: NextRequest) {
               ? { buttonText: "Pay Now", buttonUrl: data.paymentUrl }
               : undefined;
 
-            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, 0, options);
+            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options);
           } else {
-            await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", 0);
+            await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", aiStoreId);
           }
         } catch (e) {
           console.error("[WA_AI_ERROR]", e);

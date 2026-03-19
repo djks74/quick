@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { finalizeWaMessageLog, reserveWaCreditForMessage } from "@/lib/wa-credit";
+import { finalizeWaMessageLog, logPlatformWaUsage, reserveWaCreditForMessage } from "@/lib/wa-credit";
 
 type WaResolvedConfig = {
   token: string | null;
@@ -130,14 +130,11 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   if (!token || !phoneNumberId) {
     const errorMsg = `[WHATSAPP_CONFIG_ERROR] Missing ${!token ? 'Token' : ''} ${!phoneNumberId ? 'PhoneID' : ''} for store ${storeId}`;
     console.error(errorMsg);
-    // If it's a store-specific config failure, we should definitely fallback to platform if possible
-    if (storeId > 0) {
-      console.log(`[WHATSAPP_FALLBACK] Falling back to platform because store ${storeId} config is incomplete`);
-      return await sendWhatsAppMessage(to, message, 0, options);
+    if (storeId === 0) {
+      console.log(`[WHATSAPP_MOCK] Sending to ${to}: ${message}`);
+      return true;
     }
-    // If even platform config is missing, we can't do anything but mock
-    console.log(`[WHATSAPP_MOCK] Sending to ${to}: ${message}`);
-    return true;
+    return false;
   }
 
   const maskedToken = token.length > 10 ? `${token.substring(0, 5)}...${token.substring(token.length - 5)}` : "SHORT_TOKEN";
@@ -166,12 +163,27 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     );
     if (!reserve.ok) {
       if (reserve.reason === "INSUFFICIENT_BALANCE") {
-        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}. Falling back to platform account.`);
-        // FALLBACK: If store has no credit, try sending from platform (storeId 0)
-        return await sendWhatsAppMessage(to, message, 0, options);
+        console.warn(`[WHATSAPP_CREDIT] Insufficient balance for store ${storeId}.`);
+        const alertPhone = (reserve as any).alertPhone as string | null;
+        const alertLevel = (reserve as any).alertLevel as "LOW" | "CRITICAL" | null;
+        const storeSlug = (reserve as any).storeSlug as string | undefined;
+        const shouldAlert = Boolean((reserve as any).shouldAlert);
+        if (shouldAlert && alertPhone) {
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
+          const lowCreditAlertUrl = storeSlug && baseUrl ? `${baseUrl.replace(/\/$/, "")}/${storeSlug}/admin/finance/ledger` : "";
+          const alertText = alertLevel === "CRITICAL"
+            ? (lowCreditAlertUrl
+                ? `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi order tidak terhenti: ${lowCreditAlertUrl}`
+                : `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi order tidak terhenti.`)
+            : (lowCreditAlertUrl
+                ? `⚠️ Saldo WA toko menipis. Top up sekarang: ${lowCreditAlertUrl}`
+                : `⚠️ Saldo WA toko menipis. Top up sekarang.`);
+          await sendWhatsAppMessage(alertPhone, alertText, 0);
+        }
+        return false;
       } else {
-        console.warn(`[WHATSAPP_CREDIT] Failed reserving credit for store ${storeId}. Falling back to platform.`);
-        return await sendWhatsAppMessage(to, message, 0, options);
+        console.warn(`[WHATSAPP_CREDIT] Failed reserving credit for store ${storeId}.`);
+        return false;
       }
     }
     usageLogId = reserve.logId;
@@ -195,12 +207,6 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
       if (result.usedInteractive && options?.buttonUrl) {
         console.log("[WHATSAPP] CTA Button failed, falling back to text...");
         return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
-      }
-
-      // FALLBACK 2: If store-specific sending failed (and it's not already platform), try platform
-      if (storeId > 0) {
-        console.warn(`[WHATSAPP] Store ${storeId} sending failed, falling back to platform...`);
-        return await sendWhatsAppMessage(to, message, 0, options);
       }
 
       return false;
@@ -227,6 +233,14 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
         token,
         phoneNumberId
       );
+    }
+    if (storeId === 0) {
+      await logPlatformWaUsage({
+        type: "PLATFORM_SEND",
+        toPhone: formattedTo,
+        description: "Platform WhatsApp message send",
+        metadata: { interactive: Boolean(options?.buttonUrl), length: String(message || "").length }
+      });
     }
     return true;
   } catch (error) {
@@ -268,8 +282,8 @@ export async function sendWhatsAppTemplateMessage(
       externalRef
     );
     if (!reserve.ok) {
-      console.warn(`[WHATSAPP_CREDIT] Credit reservation failed for template. Falling back to platform.`);
-      return await sendWhatsAppTemplateMessage(to, 0, templateName, languageCode);
+      console.warn(`[WHATSAPP_CREDIT] Credit reservation failed for template for store ${storeId}.`);
+      return false;
     }
     usageLogId = reserve.logId;
   }
@@ -291,6 +305,14 @@ export async function sendWhatsAppTemplateMessage(
     }
     if (usageLogId) {
       await finalizeWaMessageLog(usageLogId, result.messageId, "sent");
+    }
+    if (storeId === 0) {
+      await logPlatformWaUsage({
+        type: "PLATFORM_TEMPLATE_SEND",
+        toPhone: formattedTo,
+        description: `Platform template send: ${templateName}`,
+        metadata: { templateName, languageCode }
+      });
     }
     return true;
   } catch (error) {
