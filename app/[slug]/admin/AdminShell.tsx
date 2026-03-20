@@ -127,11 +127,6 @@ export default function AdminShell({
       icon: Settings 
     },
     {
-      name: "Integrations",
-      href: `${baseUrl}/settings?tab=Integrations`,
-      icon: Puzzle
-    },
-    {
       name: "Billing",
       icon: Zap,
       onClick: () => setShowSubscriptionGate(true)

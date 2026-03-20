@@ -217,6 +217,8 @@ export async function updateStoreSettings(storeId: number, data: any) {
           shippingSenderPhone: data.shippingSenderPhone || null,
           shippingSenderAddress: data.shippingSenderAddress || null,
           shippingSenderPostalCode: data.shippingSenderPostalCode || null,
+          webhookUrl: data.webhookUrl || null,
+          customGeminiKey: data.customGeminiKey || null,
           ...(canUseOwnIntegrationConfig
             ? {
                 whatsappToken: data.whatsappToken,
