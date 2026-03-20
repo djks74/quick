@@ -79,14 +79,16 @@ export default function AdminShell({
 
   const sidebarItems: SidebarItem[] = [
     { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
-    { 
-      name: "Products", 
-      icon: Package,
-      children: [
-        { name: "All Products", href: `${baseUrl}/products` },
-        { name: "Categories", href: `${baseUrl}/products?view=categories` },
-      ]
-    },
+    ...(store.subscriptionPlan !== 'FREE' ? [
+      { 
+        name: "Products", 
+        icon: Package,
+        children: [
+          { name: "All Products", href: `${baseUrl}/products` },
+          { name: "Categories", href: `${baseUrl}/products?view=categories` },
+        ]
+      }
+    ] : []),
     ...(store.subscriptionPlan !== 'FREE' && store.subscriptionPlan !== 'PRO' ? [
       {
         name: "Ingredients",
@@ -258,7 +260,9 @@ export default function AdminShell({
                   isModern || isMinimal ? "bg-white dark:bg-[#1A1D21] border-gray-200 dark:border-gray-800" : "bg-[#2c3338] dark:bg-[#1A1D21] border-[#3c434a] dark:border-gray-800"
                 )}
               >
-                <Link href={`${baseUrl}/products?action=new`} className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300" : "hover:text-[#72aee6] dark:hover:text-blue-400")}>Product</Link>
+                {store.subscriptionPlan !== 'FREE' && (
+                  <Link href={`${baseUrl}/products?action=new`} className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300" : "hover:text-[#72aee6] dark:hover:text-blue-400")}>Product</Link>
+                )}
                 <Link href={`${baseUrl}/orders?action=new`} className={cn("block px-4 py-1.5", isModern || isMinimal ? "hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300" : "hover:text-[#72aee6] dark:hover:text-blue-400")}>Order</Link>
               </div>
             )}
