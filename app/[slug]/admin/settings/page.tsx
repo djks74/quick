@@ -763,7 +763,7 @@ export default function AdminSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Biteship Integration</h3>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Shipping Configuration</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure shipping origin for GoSend and JNE.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
