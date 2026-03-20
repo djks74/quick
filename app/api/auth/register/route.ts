@@ -37,8 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Set initial WA Credit based on plan
-    let initialWaCredit = 5000; // Default
-    if (targetPlan === "FREE") initialWaCredit = 0;
+    let initialWaCredit = 0;
     if (targetPlan === "PRO") initialWaCredit = 10000;
     if (targetPlan === "ENTERPRISE") initialWaCredit = 25000;
     if (targetPlan === "SOVEREIGN") initialWaCredit = 50000;

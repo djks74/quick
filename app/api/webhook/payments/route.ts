@@ -60,12 +60,13 @@ export async function POST(req: NextRequest) {
     if (type === 'SUB') {
         // Handle Subscription Upgrade
         if (status === 'PAID') {
+            const plan = orderIdParts[2] || 'ENTERPRISE'; // SUB-storeId-PLAN-timestamp
             await prisma.store.update({
                 where: { id },
-                data: { subscriptionPlan: 'ENTERPRISE' }
+                data: { subscriptionPlan: plan.toUpperCase() }
             });
-            await grantBundleCredit(id, orderRef);
-            console.log(`[SUBSCRIPTION] Store ${id} upgraded to ENTERPRISE`);
+            await grantBundleCredit(id, orderRef, plan);
+            console.log(`[SUBSCRIPTION] Store ${id} upgraded to ${plan}`);
         }
         return NextResponse.json({ success: true });
     }

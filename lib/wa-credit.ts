@@ -2,8 +2,6 @@ import { prisma } from "@/lib/prisma";
 
 export const WA_LOW_CREDIT_THRESHOLD = 10000;
 export const WA_BUNDLE_PLATFORM_FEE = 150000;
-export const WA_DEFAULT_WELCOME_CREDIT = 50000;
-export const WA_BUNDLE_INCLUDED_CREDIT = WA_DEFAULT_WELCOME_CREDIT;
 export const WA_PLATFORM_COST_PER_MESSAGE = 150;
 
 let ensuredWaCreditSchema: Promise<void> | null = null;
@@ -88,15 +86,24 @@ export async function ensureWaCreditSchema() {
           }
         },
         select: {
-          id: true
+          id: true,
+          subscriptionPlan: true
         }
       }).catch(() => []);
 
       for (const store of eligibleStores) {
         await prisma.$transaction(async (tx) => {
+          let welcomeCredit = 0;
+          const plan = store.subscriptionPlan;
+          if (plan === 'PRO') welcomeCredit = 10000;
+          else if (plan === 'ENTERPRISE') welcomeCredit = 25000;
+          else if (plan === 'SOVEREIGN') welcomeCredit = 50000;
+
+          if (welcomeCredit <= 0) return;
+
           const updated = await tx.store.update({
             where: { id: store.id },
-            data: { waBalance: WA_DEFAULT_WELCOME_CREDIT },
+            data: { waBalance: welcomeCredit },
             select: { waBalance: true }
           });
 
@@ -104,7 +111,7 @@ export async function ensureWaCreditSchema() {
             data: {
               storeId: store.id,
               type: "WELCOME_CREDIT",
-              amount: WA_DEFAULT_WELCOME_CREDIT,
+              amount: welcomeCredit,
               description: "Default WhatsApp credit",
               balanceAfter: Number((updated.waBalance || 0).toFixed(2)),
               externalRef: `WELCOME-${store.id}`
@@ -327,8 +334,14 @@ export async function applyWaTopup(storeId: number, amount: number, externalRef:
   });
 }
 
-export async function grantBundleCredit(storeId: number, externalRef: string) {
+export const grantBundleCredit = async (storeId: number, externalRef: string, plan?: string) => {
   await ensureWaCreditSchema();
+  const targetPlan = (plan || 'ENTERPRISE').toUpperCase();
+  
+  let creditAmount = 25000; // Default ENTERPRISE
+  if (targetPlan === 'PRO') creditAmount = 10000;
+  if (targetPlan === 'SOVEREIGN') creditAmount = 50000;
+
   return prisma.$transaction(async (tx) => {
     const already = await tx.waUsageLog.findFirst({
       where: { externalRef, type: "BUNDLE_CREDIT" }
@@ -338,7 +351,7 @@ export async function grantBundleCredit(storeId: number, externalRef: string) {
     const updated = await tx.store.update({
       where: { id: storeId },
       data: {
-        waBalance: { increment: WA_BUNDLE_INCLUDED_CREDIT },
+        waBalance: { increment: creditAmount },
         waPricePerMessage: 350
       },
       select: { waBalance: true }
@@ -347,20 +360,9 @@ export async function grantBundleCredit(storeId: number, externalRef: string) {
     await tx.waUsageLog.create({
       data: {
         storeId,
-        type: "BUNDLE_PLATFORM_FEE",
-        amount: -WA_BUNDLE_PLATFORM_FEE,
-        description: "SME Bundle platform fee",
-        balanceAfter: Number((updated.waBalance || 0).toFixed(2)),
-        externalRef
-      }
-    });
-
-    await tx.waUsageLog.create({
-      data: {
-        storeId,
         type: "BUNDLE_CREDIT",
-        amount: WA_BUNDLE_INCLUDED_CREDIT,
-        description: "SME Bundle included WhatsApp credit",
+        amount: creditAmount,
+        description: `${targetPlan} Plan included WhatsApp credit`,
         balanceAfter: Number((updated.waBalance || 0).toFixed(2)),
         externalRef
       }
@@ -389,7 +391,6 @@ export async function getWaUsageDashboard(storeId: number) {
     balance,
     pricePerMessage,
     remainingMessages,
-    defaultIncludedCredit: WA_DEFAULT_WELCOME_CREDIT,
     lowCreditThreshold: WA_LOW_CREDIT_THRESHOLD,
     recentLogs
   };
