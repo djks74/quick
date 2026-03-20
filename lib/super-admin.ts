@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
+import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
 
@@ -161,13 +162,57 @@ export async function getAllUsers(limit: number = 200) {
   try {
     await requireSuperAdmin();
     return await prisma.user.findMany({
-      include: { stores: true },
+      include: { 
+        stores: true,
+        workedAt: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' },
       take: limit > 0 ? limit : undefined
     });
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];
+  }
+}
+
+export async function updateUser(userId: number, data: { name?: string, email?: string, role?: string, workedAtId?: number | null }) {
+  try {
+    await requireSuperAdmin();
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        email: data.email,
+        role: data.role as any,
+        workedAtId: data.workedAtId
+      }
+    });
+    revalidatePath('/super-admin/users');
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return { success: false, error: 'Failed to update user' };
+  }
+}
+
+export async function resetUserPassword(userId: number, newPassword: string) {
+  try {
+    await requireSuperAdmin();
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return { success: false, error: 'Failed to reset password' };
   }
 }
 

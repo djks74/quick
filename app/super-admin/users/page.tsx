@@ -14,7 +14,7 @@ export default async function SuperAdminUsersPage() {
   }
 
   const users = await getAllUsers(200);
-  const stores = await getAllStores(200); // Just for the counter in Nav
+  const stores = await getAllStores(200);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8 transition-colors duration-300">
@@ -28,7 +28,7 @@ export default async function SuperAdminUsersPage() {
         </header>
 
         <div className="bg-white dark:bg-[#1A1D21] rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden transition-colors">
-          <UserTable users={users} />
+          <UserTable users={users} allStores={stores} />
         </div>
       </div>
     </div>
