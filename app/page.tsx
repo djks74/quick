@@ -523,7 +523,7 @@ export default function Home() {
                   </li>
                 </ul>
               </div>
-              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center font-black uppercase tracking-widest text-xs hover:bg-gray-50 transition-colors">
+              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center font-black uppercase tracking-widest text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors dark:text-white">
                 Get Started
               </Link>
             </div>
