@@ -820,34 +820,48 @@ export async function updateProduct(id: number, data: any) {
             }
           },
           include: {
-            ingredients: {
-              include: {
-                inventoryItem: true
+            store: {
+              select: {
+                apiKey: true,
+                webhookUrl: true,
+                slug: true
               }
             }
           }
         });
+
+        // Trigger Reverse Sync if externalId and webhookUrl exist
+        if ((product as any).externalId && product.store.webhookUrl) {
+          console.log(`[SYNC] Triggering reverse sync for product ${id} to ${product.store.webhookUrl}`);
+          
+          // Construct the reverse sync URL (assuming it's a WordPress site using our plugin)
+          const wpWebhookUrl = product.store.webhookUrl.replace(/\/$/, '') + '/wp-json/gercep/v1/sync-back';
+          
+          // Fire and forget (don't block the main update)
+          fetch(wpWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': product.store.apiKey || ''
+            },
+            body: JSON.stringify({
+              externalId: (product as any).externalId,
+              price: product.price,
+              stock: product.stock
+            })
+          }).catch(err => console.error(`[SYNC_ERROR] Failed to notify WordPress: ${err.message}`));
+        }
+
         return product;
       });
-    } catch (error: any) {
-      const code = error?.code;
-      if (code === 'P2021') {
-        result = await prisma.product.update({
-          where: { id },
-          data: updateData
-        });
-      } else if (code === 'P2022') {
-        const { barcode, ...withoutBarcode } = updateData;
-        result = await prisma.product.update({
-          where: { id },
-          data: withoutBarcode
-        });
-      } else {
-        throw error;
-      }
+    } catch (dbError: any) {
+      console.error("DB Update Error:", dbError);
+      throw dbError;
     }
 
-    console.log("SERVER: Product updated", result.id);
+    if (result && result.store?.slug) {
+      revalidatePath(`/${result.store.slug}`);
+    }
     return result;
   } catch (error) {
     console.error('SERVER: Error updating product:', error);
