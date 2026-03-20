@@ -39,6 +39,7 @@ interface SidebarItem {
   icon: any;
   children?: { name: string; href: string }[];
   isNotifications?: boolean;
+  onClick?: () => void;
 }
 
 export default function AdminShell({
@@ -126,7 +127,7 @@ export default function AdminShell({
       name: "Billing",
       icon: Zap,
       onClick: () => setShowSubscriptionGate(true)
-    } as any,
+    },
     ...(store.subscriptionPlan !== 'FREE' ? [
       { 
         name: "Tables", 
