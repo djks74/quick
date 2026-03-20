@@ -470,7 +470,7 @@ export default function AdminShell({
                     <button
                       onClick={() => {
                         setIsMobileSidebarOpen(false);
-                        item.onClick();
+                        item.onClick?.();
                       }}
                       className={cn(
                         "w-full flex items-center px-3 py-2 transition-colors duration-100",
