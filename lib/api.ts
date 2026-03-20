@@ -737,6 +737,12 @@ export async function createProduct(storeId: number, data: any) {
       }
     }
     console.log("SERVER: Product created", product.id);
+
+    if (product) {
+      // Trigger Reverse Sync for the new product
+      triggerReverseSync(product.id, 'create').catch(err => console.error("[SYNC_ERROR] Async create trigger failed:", err));
+    }
+
     return product;
   } catch (error) {
     console.error('SERVER: Error creating product:', error);
@@ -744,7 +750,7 @@ export async function createProduct(storeId: number, data: any) {
   }
 }
 
-export async function triggerReverseSync(productId: number) {
+export async function triggerReverseSync(productId: number, action: 'upsert' | 'delete' | 'create' = 'upsert') {
   try {
     const product = await prisma.product.findUnique({
       where: { id: productId },
@@ -758,9 +764,13 @@ export async function triggerReverseSync(productId: number) {
       }
     });
 
-    if (!product || !product.externalId || !product.store.webhookUrl) return;
+    if (!product || !product.store.webhookUrl) return;
+    
+    // For upsert/delete, we definitely need externalId if it's a synced product
+    // For create, we might not have it yet, but we want to tell WordPress to create it
+    if (action !== 'create' && !product.externalId) return;
 
-    console.log(`[SYNC] Triggering reverse sync for product "${product.name}" (ID: ${productId}, ExternalID: ${product.externalId}) to ${product.store.webhookUrl}`);
+    console.log(`[SYNC] Triggering reverse sync (${action}) for product "${product.name}" (ID: ${productId}, ExternalID: ${product.externalId}) to ${product.store.webhookUrl}`);
     
     let wpWebhookUrl = product.store.webhookUrl.trim();
     if (!wpWebhookUrl.startsWith('http')) {
@@ -784,16 +794,35 @@ export async function triggerReverseSync(productId: number) {
         'x-api-key': product.store.apiKey || ''
       },
       body: JSON.stringify({
+        action,
         externalId: product.externalId,
+        name: product.name,
         price: product.price,
-        stock: product.stock
+        stock: product.stock,
+        category: product.category,
+        description: product.description,
+        image: product.image
       })
     });
 
     const body = await res.text();
-    console.log(`[SYNC_RESPONSE] Status: ${res.status}, Body: ${body}`);
+    console.log(`[SYNC_RESPONSE] Action: ${action}, Status: ${res.status}, Body: ${body}`);
+    
+    // If it was a create action and WordPress returned an ID, we should save it
+    if (action === 'create' && res.ok) {
+      try {
+        const json = JSON.parse(body);
+        if (json.externalId) {
+          await prisma.product.update({
+            where: { id: productId },
+            data: { externalId: String(json.externalId) }
+          });
+          console.log(`[SYNC] Updated product ${productId} with new WordPress ExternalID: ${json.externalId}`);
+        }
+      } catch (e) {}
+    }
   } catch (err: any) {
-    console.error(`[SYNC_ERROR] Failed to notify WordPress: ${err.message}`);
+    console.error(`[SYNC_ERROR] Failed to notify WordPress (${action}): ${err.message}`);
   }
 }
 
@@ -873,6 +902,9 @@ export async function updateProduct(id: number, data: any) {
 
 export async function deleteProduct(id: number) {
   try {
+    // Trigger Reverse Sync before deletion to ensure we have the externalId
+    await triggerReverseSync(id, 'delete').catch(err => console.error("[SYNC_ERROR] Async delete trigger failed:", err));
+
     // Delete ingredients first due to foreign key constraints
     await prisma.productIngredient.deleteMany({
       where: { productId: id }

@@ -391,12 +391,15 @@ add_action('rest_api_init', function () {
 
 function gercep_handle_reverse_sync($request) {
     $params = $request->get_json_params();
+    $action = $params['action'] ?? 'upsert';
     $external_id = $params['externalId'] ?? '';
+    $name = $params['name'] ?? '';
     $price = $params['price'] ?? null;
     $stock = $params['stock'] ?? null;
+    $category = $params['category'] ?? 'General';
+    $description = $params['description'] ?? '';
+    $image_url = $params['image'] ?? null;
     $api_key = $request->get_header('x-api-key');
-
-    if (empty($external_id)) return new WP_Error('no_id', 'Product ID missing', ['status' => 400]);
 
     // Verify vendor by API Key for security
     global $wpdb;
@@ -404,21 +407,92 @@ function gercep_handle_reverse_sync($request) {
 
     if (!$vendor_id) return new WP_Error('unauthorized', 'Invalid API Key', ['status' => 401]);
 
+    // Handle Deletion
+    if ($action === 'delete') {
+        if (empty($external_id)) return new WP_Error('no_id', 'Product ID missing', ['status' => 400]);
+        wp_delete_post($external_id, true);
+        return ['success' => true, 'message' => 'Product deleted from WordPress'];
+    }
+
+    // Handle Creation
+    if ($action === 'create' || (empty($external_id) && $action === 'upsert')) {
+        $post_id = wp_insert_post([
+            'post_title'   => $name,
+            'post_content' => $description,
+            'post_status'  => 'publish',
+            'post_type'    => 'product',
+            'post_author'  => $vendor_id
+        ]);
+
+        if (is_wp_error($post_id)) return $post_id;
+
+        $product = wc_get_product($post_id);
+        if ($price !== null) $product->set_regular_price($price);
+        if ($stock !== null) {
+            $product->set_manage_stock(true);
+            $product->set_stock_quantity($stock);
+        }
+        
+        // Set category
+        if (!empty($category)) {
+            wp_set_object_terms($post_id, $category, 'product_cat');
+        }
+
+        // Handle Image
+        if (!empty($image_url)) {
+            $image_id = gercep_upload_image_from_url($image_url, $post_id);
+            if ($image_id) $product->set_image_id($image_id);
+        }
+
+        $product->save();
+        
+        // Return the new ID so Gercep can save it as externalId
+        return ['success' => true, 'message' => 'Product created in WordPress', 'externalId' => (string)$post_id];
+    }
+
+    // Handle Upsert (Update)
+    if (empty($external_id)) return new WP_Error('no_id', 'Product ID missing', ['status' => 400]);
+
     $product = wc_get_product($external_id);
     if (!$product) return new WP_Error('not_found', 'Product not found in WordPress', ['status' => 404]);
 
-    // Update Price if provided
-    if ($price !== null) {
-        $product->set_regular_price($price);
-    }
-
-    // Update Stock if provided
+    if (!empty($name)) $product->set_name($name);
+    if ($price !== null) $product->set_regular_price($price);
     if ($stock !== null) {
         $product->set_manage_stock(true);
         $product->set_stock_quantity($stock);
+    }
+    if (!empty($description)) {
+        wp_update_post(['ID' => $external_id, 'post_content' => $description]);
     }
 
     $product->save();
 
     return ['success' => true, 'message' => 'Product updated from Gercep'];
+}
+
+/**
+ * Helper to upload image from URL to WordPress media library
+ */
+function gercep_upload_image_from_url($url, $post_id) {
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+    $tmp = download_url($url);
+    if (is_wp_error($tmp)) return false;
+
+    $file_array = [
+        'name'     => basename($url),
+        'tmp_name' => $tmp
+    ];
+
+    $id = media_handle_sideload($file_array, $post_id);
+    
+    if (is_wp_error($id)) {
+        @unlink($file_array['tmp_name']);
+        return false;
+    }
+
+    return $id;
 }
