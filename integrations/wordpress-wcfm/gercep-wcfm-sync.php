@@ -18,29 +18,47 @@ function gercep_log($message) {
 }
 
 // 1. Add Gercep AI Menu to WCFM Sidebar
-add_filter('wcfm_menus', function($menus) {
-    if (function_exists('get_wcfm_url')) {
-        $menus['gercep_ai_sync'] = [
-            'label'    => 'Gercep AI Assistant',
-            'link'     => get_wcfm_url() . 'settings/', 
-            'icon'     => 'rocket',
-            'priority' => 10 // Move it higher up
-        ];
-    }
+add_filter('wcfm_menus', 'gercep_wcfm_menus', 999);
+add_filter('wcfm_vendor_menus', 'gercep_wcfm_menus', 999); // Specifically for vendors
+
+function gercep_wcfm_menus($menus) {
+    $base_url = function_exists('get_wcfm_url') ? get_wcfm_url() : admin_url('admin.php?page=wcfm-settings');
+    $menus['gercep_ai_sync'] = [
+        'label'    => 'Gercep AI Assistant',
+        'link'     => $base_url . 'settings/?tab=gercep_ai_settings', 
+        'icon'     => 'wcfmfa fa-rocket', 
+        'priority' => 1
+    ];
     return $menus;
-}, 999);
+}
 
 // 2. Add a dedicated "Gercep AI" Tab in Settings
 add_filter('wcfm_marketplace_settings_menus', function($menus) {
     $menus['gercep_ai_settings'] = [
         'label'    => 'Gercep AI',
         'icon'     => 'rocket',
-        'priority' => 100
+        'priority' => 5 // Higher priority to show it earlier
     ];
     return $menus;
 }, 999);
 
-// 3. Content for the Gercep AI Settings Tab
+// 3. Add to General Settings as fallback
+add_filter('wcfm_marketplace_settings_fields_general', function($settings_fields, $vendor_id) {
+    $gercep_api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
+    
+    $settings_fields['gercep_api_key'] = [
+        'label'       => __('Gercep API Key', 'wc-frontend-manager'),
+        'type'        => 'text',
+        'class'       => 'wcfm-text wcfm_ele',
+        'label_class' => 'wcfm_title',
+        'value'       => $gercep_api_key,
+        'desc'        => __('Get your API key from Gercep Dashboard > Integrations.', 'wc-frontend-manager')
+    ];
+    
+    return $settings_fields;
+}, 10, 2);
+
+// 4. Content for the Gercep AI Settings Tab
 add_action('wcfm_marketplace_settings_fields_gercep_ai_settings', function($vendor_id) {
     $gercep_api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
     ?>
