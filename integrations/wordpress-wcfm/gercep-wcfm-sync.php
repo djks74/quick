@@ -59,6 +59,79 @@ add_filter('wcfm_marketplace_settings_fields_general', function($settings_fields
         'placeholder' => 'Enter your Sovereign API Key',
         'desc'        => __('Get your API key from Gercep Dashboard > Integrations.', 'wc-frontend-manager')
     ];
+
+    if (!empty($gercep_api_key)) {
+        $settings_fields['gercep_bulk_sync'] = [
+            'label'       => __('Bulk Sync Products', 'wc-frontend-manager'),
+            'type'        => 'html',
+            'value'       => '
+                <div style="margin-top:10px;">
+                    <button type="button" id="gercep_sync_btn" class="wcfm_submit_button" style="background:#2271b1; border:none; color:#fff; padding:10px 20px; border-radius:4px; cursor:pointer;">
+                        Sync All Products to Gercep
+                    </button>
+                    <div id="gercep_sync_status" style="margin-top:10px; font-size:12px; color:#666;"></div>
+                    <div id="gercep_sync_progress" style="display:none; width:100%; background:#eee; height:10px; border-radius:5px; margin-top:10px; overflow:hidden;">
+                        <div id="gercep_sync_bar" style="width:0%; background:#2271b1; height:100%; transition:width 0.3s;"></div>
+                    </div>
+                </div>
+                <script>
+                jQuery(document).ready(function($) {
+                    $("#gercep_sync_btn").on("click", function() {
+                        if (!confirm("This will sync all your products to Gercep. Continue?")) return;
+                        
+                        const btn = $(this);
+                        const status = $("#gercep_sync_status");
+                        const progress = $("#gercep_sync_progress");
+                        const bar = $("#gercep_sync_bar");
+                        
+                        btn.prop("disabled", true).css("opacity", 0.5).text("Syncing...");
+                        progress.show();
+                        status.text("Initializing sync...");
+                        
+                        function syncBatch(offset = 0) {
+                            $.ajax({
+                                url: wcfm_params.ajax_url,
+                                type: "POST",
+                                data: {
+                                    action: "gercep_bulk_sync",
+                                    offset: offset,
+                                    nonce: "' . wp_create_nonce('gercep_sync_nonce') . '"
+                                },
+                                success: function(response) {
+                                    if (response.success) {
+                                        const data = response.data;
+                                        const percent = Math.round((data.processed / data.total) * 100);
+                                        bar.css("width", percent + "%");
+                                        status.text("Processed " + data.processed + " of " + data.total + " products...");
+                                        
+                                        if (data.next_offset !== null) {
+                                            syncBatch(data.next_offset);
+                                        } else {
+                                            status.text("Sync completed successfully! " + data.total + " products processed.");
+                                            btn.prop("disabled", false).css("opacity", 1).text("Sync All Products to Gercep");
+                                            setTimeout(() => progress.fadeOut(), 3000);
+                                        }
+                                    } else {
+                                        status.text("Error: " + (response.data || "Unknown error"));
+                                        btn.prop("disabled", false).css("opacity", 1).text("Retry Sync");
+                                    }
+                                },
+                                error: function() {
+                                    status.text("Network error occurred. Please try again.");
+                                    btn.prop("disabled", false).css("opacity", 1).text("Retry Sync");
+                                }
+                            });
+                        }
+                        
+                        syncBatch(0);
+                    });
+                });
+                </script>
+            ',
+            'class'       => 'wcfm-text wcfm_ele',
+            'label_class' => 'wcfm_title'
+        ];
+    }
     
     return $settings_fields;
 }, 50, 2);
@@ -73,6 +146,85 @@ add_action('wcfm_vendor_settings_update', function($vendor_id, $wcfm_settings_fo
     }
 }, 10, 2);
 
+// 4.1 AJAX Bulk Sync Handler
+add_action('wp_ajax_gercep_bulk_sync', function() {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'gercep_sync_nonce')) {
+        wp_send_json_error('Security check failed');
+    }
+
+    $vendor_id = function_exists('wcfm_get_vendor_id_by_post') ? apply_filters('wcfm_current_vendor_id', get_current_user_id()) : 0;
+    if (!$vendor_id) {
+        wp_send_json_error('Unauthorized');
+    }
+
+    $api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
+    if (empty($api_key)) {
+        wp_send_json_error('API Key missing');
+    }
+
+    $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+    $batch_size = 50;
+
+    $args = [
+        'post_type'      => 'product',
+        'post_status'    => 'publish',
+        'posts_per_page' => $batch_size,
+        'offset'         => $offset,
+        'author'         => $vendor_id, // WCFM vendors are authors of their products
+    ];
+
+    $query = new WP_Query($args);
+    $products = $query->posts;
+    $total = $query->found_posts;
+
+    if (empty($products)) {
+        wp_send_json_success([
+            'total'       => $total,
+            'processed'   => $total,
+            'next_offset' => null
+        ]);
+    }
+
+    $sync_payload = [];
+    foreach ($products as $post) {
+        $product = wc_get_product($post->ID);
+        if (!$product) continue;
+
+        $categories = wp_get_post_terms($post->ID, 'product_cat', ['fields' => 'names']);
+        $category = !empty($categories) ? end($categories) : 'General';
+
+        $sync_payload[] = [
+            'externalId'  => (string)$post->ID,
+            'name'        => $product->get_name(),
+            'price'       => (float)$product->get_price(),
+            'category'    => $category,
+            'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+            'stock'       => $product->get_stock_quantity() !== null ? (int)$product->get_stock_quantity() : 999999,
+            'image'       => wp_get_attachment_url($product->get_image_id()) ?: null
+        ];
+    }
+
+    if (!empty($sync_payload)) {
+        $res = gercep_sync_to_api($api_key, [
+            'action'   => 'upsert',
+            'products' => $sync_payload
+        ]);
+
+        if (!$res) {
+            wp_send_json_error('Failed to sync batch to Gercep API');
+        }
+    }
+
+    $processed = $offset + count($products);
+    $next_offset = ($processed < $total) ? $processed : null;
+
+    wp_send_json_success([
+        'total'       => $total,
+        'processed'   => $processed,
+        'next_offset' => $next_offset
+    ]);
+});
+
 /**
  * Helper to send data to Gercep
  */
@@ -85,14 +237,23 @@ function gercep_sync_to_api($api_key, $payload) {
             'x-api-key'    => $api_key
         ],
         'body'    => json_encode($payload),
-        'timeout' => 30,
+        'timeout' => 60,
     ]);
 
     if (is_wp_error($response)) {
-        error_log('Gercep Sync Error: ' . $response->get_error_message());
+        error_log('Gercep Sync Error (WP Error): ' . $response->get_error_message());
         return false;
     }
 
+    $code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($code < 200 || $code >= 300) {
+        error_log("Gercep Sync Error (HTTP $code): " . $body);
+        return false;
+    }
+
+    gercep_log("Successfully synced " . count($payload['products']) . " products to Gercep. Response: " . $body);
     return true;
 }
 
