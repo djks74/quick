@@ -5,11 +5,21 @@ import midtransClient from "midtrans-client";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { storeId, email } = body;
+    const { storeId, email, plan = 'ENTERPRISE' } = body;
 
     if (!storeId) {
       return NextResponse.json({ error: 'Store ID is required' }, { status: 400 });
     }
+
+    const plans: Record<string, { amount: number, name: string }> = {
+      'PRO': { amount: 99000, name: 'QuickMenu Pro Monthly Subscription' },
+      'ENTERPRISE': { amount: 299000, name: 'QuickMenu Enterprise Monthly Subscription' },
+      'SOVEREIGN': { amount: 999000, name: 'QuickMenu Sovereign Monthly Subscription' },
+    };
+
+    const selectedPlan = plans[plan.toUpperCase()] || plans['ENTERPRISE'];
+    const amount = selectedPlan.amount;
+    const planName = selectedPlan.name;
 
     const store = await prisma.store.findUnique({
       where: { id: parseInt(storeId) },
@@ -31,7 +41,7 @@ export async function POST(req: NextRequest) {
     const serverKey = platform?.subscriptionServerKey || process.env.SUBSCRIPTION_SERVER_KEY;
     const clientKey = platform?.subscriptionClientKey || process.env.SUBSCRIPTION_CLIENT_KEY;
 
-    console.log(`[Subscription] Store: ${storeId}, Keys Found: Server=${!!serverKey}, Client=${!!clientKey}`);
+    console.log(`[Subscription] Store: ${storeId}, Plan: ${plan}, Keys Found: Server=${!!serverKey}, Client=${!!clientKey}`);
 
     if (!serverKey || !clientKey) {
       console.error("Subscription keys missing in PlatformSettings. Check Super Admin Settings.");
@@ -46,8 +56,7 @@ export async function POST(req: NextRequest) {
       clientKey: clientKey
     });
 
-    const amount = 299000;
-    const orderId = `SUB-${store.id}-${Date.now()}`;
+    const orderId = `SUB-${store.id}-${plan}-${Date.now()}`;
 
     const parameter: any = {
       transaction_details: {
@@ -59,10 +68,10 @@ export async function POST(req: NextRequest) {
         first_name: store.owner.name || store.name,
       },
       item_details: [{
-        id: 'ENTERPRISE_MONTHLY',
+        id: `${plan}_MONTHLY`,
         price: amount,
         quantity: 1,
-        name: 'QuickMenu Enterprise Monthly Subscription'
+        name: planName
       }]
     };
 

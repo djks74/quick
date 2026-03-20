@@ -56,6 +56,7 @@ export default function AdminShell({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isFloatingNotificationsOpen, setIsFloatingNotificationsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [showSubscriptionGate, setShowSubscriptionGate] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [toastItems, setToastItems] = useState<any[]>([]);
   const notificationsReadyRef = useRef(false);
@@ -64,6 +65,14 @@ export default function AdminShell({
   const slug = store.slug;
   const baseUrl = `/${slug}/admin`;
   const unreadNotifications = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+
+  const isTrial = !isSuperAdmin && !['ENTERPRISE', 'SOVEREIGN', 'PRO'].includes(store.subscriptionPlan);
+
+  useEffect(() => {
+    if (isTrial) {
+      setShowSubscriptionGate(true);
+    }
+  }, [isTrial]);
 
   const sidebarItems: SidebarItem[] = [
     { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
@@ -111,6 +120,11 @@ export default function AdminShell({
       href: `${baseUrl}/settings`, 
       icon: Settings 
     },
+    {
+      name: "Billing",
+      icon: CreditCard,
+      onClick: () => setShowSubscriptionGate(true)
+    } as any,
     ...(store.subscriptionPlan !== 'FREE' ? [
       { 
         name: "Tables", 
@@ -132,8 +146,6 @@ export default function AdminShell({
   const isMinimal = layoutStyle === "minimal";
   const pageName = pathname.split("/").pop()?.replace("-", " ") || "Dashboard";
   const pageTitle = pageName.toLowerCase() === "ledger" ? "Report" : pageName;
-
-  const showSubscriptionGate = !isSuperAdmin && !['ENTERPRISE', 'SOVEREIGN', 'PRO'].includes(store.subscriptionPlan);
 
   const pushToast = (item: any) => {
     const toastId = `${item.id}-${Date.now()}`;
@@ -189,7 +201,7 @@ export default function AdminShell({
       isMinimal ? "bg-white dark:bg-[#0F1113]" : 
       "bg-[#f0f0f1] dark:bg-[#0F1113]"
     )}>
-      {showSubscriptionGate && <SubscriptionGate store={store} />}
+      {showSubscriptionGate && <SubscriptionGate store={store} onClose={() => setShowSubscriptionGate(false)} />}
       {/* WordPress Top Admin Bar */}
       <header className={cn(
         "h-10 md:h-[32px] flex items-center justify-between px-2 md:px-4 fixed top-0 w-full z-[100] text-sm transition-all",
@@ -451,6 +463,22 @@ export default function AdminShell({
                         </div>
                       )}
                     </>
+                  ) : item.onClick ? (
+                    <button
+                      onClick={() => {
+                        setIsMobileSidebarOpen(false);
+                        item.onClick();
+                      }}
+                      className={cn(
+                        "w-full flex items-center px-3 py-2 transition-colors duration-100",
+                        pathname === item.href 
+                          ? (isModern || isMinimal ? "bg-primary/10 dark:bg-blue-900/20 text-primary dark:text-blue-400 font-bold border-l-4 border-primary dark:border-blue-400" : "bg-[#1d2327] dark:bg-blue-900/20 text-white border-l-4 border-[#72aee6] dark:border-blue-400") 
+                          : (isModern || isMinimal ? "text-gray-600 dark:text-gray-400 border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-blue-400" : "text-[#f0f0f1] dark:text-gray-400 border-l-4 border-transparent hover:bg-[#1d2327] dark:hover:bg-gray-800 hover:text-[#72aee6] dark:hover:text-blue-400")
+                      )}
+                    >
+                      <item.icon className="w-4 h-4 mr-2" />
+                      <span>{item.name}</span>
+                    </button>
                   ) : (
                     <Link
                       href={item.href || "#"}
