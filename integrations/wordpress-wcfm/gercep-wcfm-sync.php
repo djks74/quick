@@ -8,7 +8,18 @@
 
 if (!defined('ABSPATH')) exit;
 
-// 1. Add Gercep Settings to WCFM Vendor Dashboard
+// 1. Add Gercep AI Menu to WCFM Sidebar
+add_filter('wcfm_menus', function($menus) {
+    $menus['gercep-ai'] = [
+        'label'    => __('Gercep AI', 'wc-frontend-manager'),
+        'link'     => get_wcfm_url() . 'settings/', // Redirect to settings for now, or custom endpoint
+        'icon'     => 'rocket',
+        'priority' => 65
+    ];
+    return $menus;
+});
+
+// 2. Add Gercep Settings to WCFM Vendor Dashboard (prominent section)
 add_filter('wcfm_marketplace_settings_fields_general', function($settings_fields, $vendor_id) {
     $gercep_api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
     
