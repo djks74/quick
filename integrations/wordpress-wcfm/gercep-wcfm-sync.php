@@ -379,3 +379,46 @@ add_action('before_delete_post', function($post_id) {
 
     gercep_sync_to_api($api_key, $payload);
 }, 10);
+
+// 8. Register REST API for Reverse Sync (Gercep -> WordPress)
+add_action('rest_api_init', function () {
+    register_rest_route('gercep/v1', '/sync-back', [
+        'methods'             => 'POST',
+        'callback'            => 'gercep_handle_reverse_sync',
+        'permission_callback' => '__return_true',
+    ]);
+});
+
+function gercep_handle_reverse_sync($request) {
+    $params = $request->get_json_params();
+    $external_id = $params['externalId'] ?? '';
+    $price = $params['price'] ?? null;
+    $stock = $params['stock'] ?? null;
+    $api_key = $request->get_header('x-api-key');
+
+    if (empty($external_id)) return new WP_Error('no_id', 'Product ID missing', ['status' => 400]);
+
+    // Verify vendor by API Key for security
+    global $wpdb;
+    $vendor_id = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = 'gercep_api_key' AND meta_value = %s", $api_key));
+
+    if (!$vendor_id) return new WP_Error('unauthorized', 'Invalid API Key', ['status' => 401]);
+
+    $product = wc_get_product($external_id);
+    if (!$product) return new WP_Error('not_found', 'Product not found in WordPress', ['status' => 404]);
+
+    // Update Price if provided
+    if ($price !== null) {
+        $product->set_regular_price($price);
+    }
+
+    // Update Stock if provided
+    if ($stock !== null) {
+        $product->set_manage_stock(true);
+        $product->set_stock_quantity($stock);
+    }
+
+    $product->save();
+
+    return ['success' => true, 'message' => 'Product updated from Gercep'];
+}
