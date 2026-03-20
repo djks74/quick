@@ -8,34 +8,55 @@
 
 if (!defined('ABSPATH')) exit;
 
+/**
+ * Debug helper
+ */
+function gercep_log($message) {
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('Gercep AI: ' . $message);
+    }
+}
+
 // 1. Add Gercep AI Menu to WCFM Sidebar
 add_filter('wcfm_menus', function($menus) {
-    $menus['gercep-ai'] = [
-        'label'    => __('Gercep AI', 'wc-frontend-manager'),
-        'link'     => get_wcfm_url() . 'settings/', // Redirect to settings for now, or custom endpoint
+    if (function_exists('get_wcfm_url')) {
+        $menus['gercep_ai_sync'] = [
+            'label'    => 'Gercep AI Assistant',
+            'link'     => get_wcfm_url() . 'settings/', 
+            'icon'     => 'rocket',
+            'priority' => 10 // Move it higher up
+        ];
+    }
+    return $menus;
+}, 999);
+
+// 2. Add a dedicated "Gercep AI" Tab in Settings
+add_filter('wcfm_marketplace_settings_menus', function($menus) {
+    $menus['gercep_ai_settings'] = [
+        'label'    => 'Gercep AI',
         'icon'     => 'rocket',
-        'priority' => 65
+        'priority' => 100
     ];
     return $menus;
+}, 999);
+
+// 3. Content for the Gercep AI Settings Tab
+add_action('wcfm_marketplace_settings_fields_gercep_ai_settings', function($vendor_id) {
+    $gercep_api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
+    ?>
+    <div class="wcfm-container">
+        <div id="wcfm_settings_form_gercep_ai_expander" class="wcfm-content">
+            <h2>Gercep AI Assistant Configuration</h2>
+            <div class="wcfm_clearfix"></div>
+            <div class="wcfm_ele wcfm_title">Gercep API Key</div>
+            <input type="text" name="gercep_api_key" class="wcfm-text" value="<?php echo esc_attr($gercep_api_key); ?>" placeholder="Enter your Sovereign API Key" />
+            <p class="description">Get your API key from the Gercep Dashboard under <strong>Integrations</strong>.</p>
+        </div>
+    </div>
+    <?php
 });
 
-// 2. Add Gercep Settings to WCFM Vendor Dashboard (prominent section)
-add_filter('wcfm_marketplace_settings_fields_general', function($settings_fields, $vendor_id) {
-    $gercep_api_key = get_user_meta($vendor_id, 'gercep_api_key', true);
-    
-    $settings_fields['gercep_api_key'] = [
-        'label'       => __('Gercep API Key', 'wc-frontend-manager'),
-        'type'        => 'text',
-        'class'       => 'wcfm-text wcfm_ele',
-        'label_class' => 'wcfm_title',
-        'value'       => $gercep_api_key,
-        'desc'        => __('Enter your Gercep Sovereign API Key to enable AI WhatsApp ordering.', 'wc-frontend-manager')
-    ];
-    
-    return $settings_fields;
-}, 10, 2);
-
-// 2. Save Gercep Settings
+// 4. Save Gercep Settings
 add_action('wcfm_vendor_settings_update', function($vendor_id, $wcfm_settings_form) {
     if (isset($wcfm_settings_form['gercep_api_key'])) {
         update_user_meta($vendor_id, 'gercep_api_key', sanitize_text_field($wcfm_settings_form['gercep_api_key']));
@@ -65,7 +86,7 @@ function gercep_sync_to_api($api_key, $payload) {
     return true;
 }
 
-// 3. Hook: Sync on Product Save/Update
+// 5. Hook: Sync on Product Save/Update
 add_action('wcfm_after_product_save', 'gercep_wcfm_sync_product', 10, 2);
 function gercep_wcfm_sync_product($product_id, $wcfm_data) {
     $vendor_id = wcfm_get_vendor_id_by_post($product_id);
