@@ -24,6 +24,7 @@ import {
   Bell,
   Check,
   Menu,
+  Puzzle,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -124,6 +125,11 @@ export default function AdminShell({
       name: "Settings", 
       href: `${baseUrl}/settings`, 
       icon: Settings 
+    },
+    {
+      name: "Integrations",
+      href: `${baseUrl}/settings?tab=Integrations`,
+      icon: Puzzle
     },
     {
       name: "Billing",

@@ -43,6 +43,16 @@ export default function AdminSettings() {
   // Hooks must be called unconditionally
   const { headerSettings, setHeaderSettings } = useShop();
   const [activeTab, setActiveTab] = useState("General");
+
+  // Handle tab from URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tab = searchParams.get("tab");
+    if (tab && ["General", "Payments", "Shipping", "Tax & Fees", "Appearance", "Integrations"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -288,10 +298,16 @@ export default function AdminSettings() {
   return (
     <div className="space-y-6">
       <div className="flex border-b border-[#ccd0d4] mb-6 overflow-x-auto">
-        {["General", "Payments", "Shipping", "Tax & Fees", "Appearance", "Developer"].map((tab) => (
+        {["General", "Payments", "Shipping", "Tax & Fees", "Appearance", "Integrations"].map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              // Update URL without reload
+              const url = new URL(window.location.href);
+              url.searchParams.set('tab', tab);
+              window.history.pushState({}, '', url);
+            }}
             className={cn(
               "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[2px] whitespace-nowrap",
               activeTab === tab 
@@ -841,7 +857,7 @@ export default function AdminSettings() {
           </div>
         )}
 
-        {activeTab === "Developer" && (
+        {activeTab === "Integrations" && (
           <div className="space-y-6">
             {!isSovereign && (
               <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-[20px] space-y-3">
@@ -850,8 +866,8 @@ export default function AdminSettings() {
                   <h4 className="font-bold uppercase tracking-tight text-sm">Sovereign Feature Only</h4>
                 </div>
                 <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
-                  Developer access and Product Sync API are exclusive to <strong>Sovereign</strong> members. 
-                  Upgrade your plan to start integrating with your internal systems.
+                  Integration tools and Product Sync API are exclusive to <strong>Sovereign</strong> members. 
+                  Upgrade your plan to start syncing with WooCommerce, Shopify, or internal systems.
                 </p>
               </div>
             )}
