@@ -234,9 +234,6 @@ export async function updatePlatformSettings(data: {
   midtransClientKey?: string;
   biteshipApiKey?: string;
   geminiApiKey?: string;
-  bankName?: string;
-  bankAccountNumber?: string;
-  bankAccountName?: string;
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
 }) {
@@ -253,9 +250,6 @@ export async function updatePlatformSettings(data: {
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
         geminiApiKey: data.geminiApiKey || null,
-        bankName: data.bankName || null,
-        bankAccountNumber: data.bankAccountNumber || null,
-        bankAccountName: data.bankAccountName || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null
       } as any,
@@ -267,9 +261,6 @@ export async function updatePlatformSettings(data: {
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
         geminiApiKey: data.geminiApiKey || null,
-        bankName: data.bankName || null,
-        bankAccountNumber: data.bankAccountNumber || null,
-        bankAccountName: data.bankAccountName || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null
       } as any

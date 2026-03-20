@@ -12,9 +12,6 @@ type PlatformSettings = {
   midtransServerKey?: string | null;
   midtransClientKey?: string | null;
   biteshipApiKey?: string | null;
-  bankName?: string | null;
-  bankAccountNumber?: string | null;
-  bankAccountName?: string | null;
   subscriptionServerKey?: string | null;
   subscriptionClientKey?: string | null;
   geminiApiKey?: string | null;
@@ -29,9 +26,6 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
       midtransServerKey: initialSettings?.midtransServerKey || "",
       midtransClientKey: initialSettings?.midtransClientKey || "",
       biteshipApiKey: initialSettings?.biteshipApiKey || "",
-      bankName: initialSettings?.bankName || "",
-      bankAccountNumber: initialSettings?.bankAccountNumber || "",
-      bankAccountName: initialSettings?.bankAccountName || "",
       subscriptionServerKey: initialSettings?.subscriptionServerKey || "",
       subscriptionClientKey: initialSettings?.subscriptionClientKey || "",
       geminiApiKey: initialSettings?.geminiApiKey || ""
@@ -180,42 +174,6 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
               className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.subscriptionClientKey}
               onChange={(e) => setForm({ ...form, subscriptionClientKey: e.target.value })}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        <div>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Manual Transfer</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Default bank account for non-Enterprise.</p>
-        </div>
-        <div className="md:col-span-2 space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Bank Name</label>
-            <input
-              type="text"
-              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
-              value={form.bankName}
-              onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Account Number</label>
-            <input
-              type="text"
-              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
-              value={form.bankAccountNumber}
-              onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Account Name</label>
-            <input
-              type="text"
-              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
-              value={form.bankAccountName}
-              onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
             />
           </div>
         </div>
