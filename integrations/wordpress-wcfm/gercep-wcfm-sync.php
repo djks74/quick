@@ -259,6 +259,18 @@ function gercep_sync_to_api($api_key, $payload) {
 
 // 5. Hook: Sync on Product Save/Update
 add_action('wcfm_after_product_save', 'gercep_wcfm_sync_product', 10, 2);
+add_action('woocommerce_product_set_stock', 'gercep_wcfm_sync_stock_only');
+add_action('woocommerce_variation_set_stock', 'gercep_wcfm_sync_stock_only');
+
+function gercep_wcfm_sync_stock_only($product) {
+    if (is_numeric($product)) {
+        $product = wc_get_product($product);
+    }
+    if ($product) {
+        gercep_wcfm_sync_product($product->get_id(), []);
+    }
+}
+
 function gercep_wcfm_sync_product($product_id, $wcfm_data) {
     $vendor_id = wcfm_get_vendor_id_by_post($product_id);
     if (!$vendor_id) return;
@@ -289,7 +301,66 @@ function gercep_wcfm_sync_product($product_id, $wcfm_data) {
     gercep_sync_to_api($api_key, $payload);
 }
 
-// 4. Hook: Sync on Product Delete
+// 6. WP-Cron: Hourly Safety Sync
+if (!wp_next_scheduled('gercep_hourly_sync_event')) {
+    wp_schedule_event(time(), 'hourly', 'gercep_hourly_sync_event');
+}
+
+add_action('gercep_hourly_sync_event', 'gercep_run_hourly_sync');
+
+function gercep_run_hourly_sync() {
+    // Get all vendors who have a Gercep API Key
+    global $wpdb;
+    $vendors = $wpdb->get_results("SELECT user_id, meta_value as api_key FROM {$wpdb->usermeta} WHERE meta_key = 'gercep_api_key' AND meta_value != ''");
+
+    foreach ($vendors as $vendor) {
+        $vendor_id = $vendor->user_id;
+        $api_key = $vendor->api_key;
+
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'author'         => $vendor_id,
+        ];
+
+        $query = new WP_Query($args);
+        $products = $query->posts;
+
+        if (empty($products)) continue;
+
+        $sync_payload = [];
+        foreach ($products as $post) {
+            $product = wc_get_product($post->ID);
+            if (!$product) continue;
+
+            $categories = wp_get_post_terms($post->ID, 'product_cat', ['fields' => 'names']);
+            $category = !empty($categories) ? end($categories) : 'General';
+
+            $sync_payload[] = [
+                'externalId'  => (string)$post->ID,
+                'name'        => $product->get_name(),
+                'price'       => (float)$product->get_price(),
+                'category'    => $category,
+                'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+                'stock'       => $product->get_stock_quantity() !== null ? (int)$product->get_stock_quantity() : 999999,
+                'image'       => wp_get_attachment_url($product->get_image_id()) ?: null
+            ];
+
+            // Sync in batches of 50 to avoid payload limits
+            if (count($sync_payload) >= 50) {
+                gercep_sync_to_api($api_key, ['action' => 'upsert', 'products' => $sync_payload]);
+                $sync_payload = [];
+            }
+        }
+
+        if (!empty($sync_payload)) {
+            gercep_sync_to_api($api_key, ['action' => 'upsert', 'products' => $sync_payload]);
+        }
+    }
+}
+
+// 7. Hook: Sync on Product Delete
 add_action('before_delete_post', function($post_id) {
     if (get_post_type($post_id) !== 'product') return;
 
