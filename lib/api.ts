@@ -153,91 +153,57 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
 
-    // 2. Transaction to update Store and User
-    const [updatedStore] = await prisma.$transaction([
-      // prisma.store.update({
-      //   where: { id: storeId },
-      //   data: {
-      //     name: data.storeName,
-      //     whatsapp: data.whatsapp,
-      //     themeColor: data.themeColor,
-      //     enableWhatsApp: data.enableWhatsApp,
-      //     enableMidtrans: data.enableMidtrans,
-      //     enableXendit: data.enableXendit,
-      //     enableManualTransfer: data.enableManualTransfer,
-      //     posEnabled: data.posEnabled ?? data.enablePos,
-      //     taxPercent: data.taxPercent,
-      //     serviceChargePercent: data.serviceChargePercent,
-      //     qrisFeePercent: data.qrisFeePercent,
-      //     manualTransferFee: data.manualTransferFee,
-      //     feePaidBy: data.feePaidBy,
-      //     posGridColumns: data.posGridColumns,
-      //     ...(canUseOwnIntegrationConfig
-      //       ? {
-      //           whatsappToken: data.whatsappToken,
-      //           whatsappPhoneId: data.whatsappPhoneId,
-      //           paymentGatewaySecret: data.paymentGatewaySecret,
-      //           paymentGatewayClientKey: data.paymentGatewayClientKey,
-      //           bankAccount: data.bankAccount
-      //         }
-      //       : {})
-      //   }
-      // }),
+    // 2. Update Store and User
+    const updatedStore = await prisma.store.update({
+      where: { id: storeId },
+      data: {
+        name: data.storeName,
+        whatsapp: data.whatsapp,
+        themeColor: data.themeColor,
+        enableWhatsApp: data.enableWhatsApp,
+        enableMidtrans: data.enableMidtrans,
+        enableManualTransfer: data.enableManualTransfer,
+        posEnabled: data.posEnabled ?? data.enablePos,
+        taxPercent: data.taxPercent,
+        serviceChargePercent: data.serviceChargePercent,
+        qrisFeePercent: data.qrisFeePercent,
+        manualTransferFee: data.manualTransferFee,
+        feePaidBy: data.feePaidBy,
+        posGridColumns: data.posGridColumns,
+        posPaymentMethods: Array.isArray(data.posPaymentMethods) ? data.posPaymentMethods : [],
+        shippingEnableJne: data.shippingEnableJne ?? false,
+        shippingEnableGosend: data.shippingEnableGosend ?? false,
+        shippingJneOnly: data.shippingJneOnly ?? false,
+        shippingEnableStoreCourier: data.shippingEnableStoreCourier ?? false,
+        shippingStoreCourierFee: data.shippingStoreCourierFee !== undefined && data.shippingStoreCourierFee !== null && data.shippingStoreCourierFee !== "" ? Number(data.shippingStoreCourierFee) : 0,
+        enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
+        biteshipOriginAreaId: data.biteshipOriginAreaId || null,
+        biteshipOriginLat: data.biteshipOriginLat !== undefined && data.biteshipOriginLat !== null && data.biteshipOriginLat !== "" ? Number(data.biteshipOriginLat) : null,
+        biteshipOriginLng: data.biteshipOriginLng !== undefined && data.biteshipOriginLng !== null && data.biteshipOriginLng !== "" ? Number(data.biteshipOriginLng) : null,
+        shippingSenderName: data.shippingSenderName || null,
+        shippingSenderPhone: data.shippingSenderPhone || null,
+        shippingSenderAddress: data.shippingSenderAddress || null,
+        shippingSenderPostalCode: data.shippingSenderPostalCode || null,
+        webhookUrl: data.webhookUrl || null,
+        customGeminiKey: data.customGeminiKey || null,
+        ...(canUseOwnIntegrationConfig
+          ? {
+              whatsappToken: data.whatsappToken,
+              whatsappPhoneId: data.whatsappPhoneId,
+              paymentGatewaySecret: data.paymentGatewaySecret,
+              paymentGatewayClientKey: data.paymentGatewayClientKey,
+              bankAccount: data.bankAccount
+            }
+          : {})
+      }
+    });
 
-      // Using update without transaction to debug if transaction is the issue, or splitting
-      
-      // Update store settings first
-      prisma.store.update({
-        where: { id: storeId },
-        data: {
-          name: data.storeName,
-          whatsapp: data.whatsapp,
-          themeColor: data.themeColor,
-          enableWhatsApp: data.enableWhatsApp,
-          enableMidtrans: data.enableMidtrans,
-          enableManualTransfer: data.enableManualTransfer,
-          posEnabled: data.posEnabled ?? data.enablePos,
-          taxPercent: data.taxPercent,
-          serviceChargePercent: data.serviceChargePercent,
-          qrisFeePercent: data.qrisFeePercent,
-          manualTransferFee: data.manualTransferFee,
-          feePaidBy: data.feePaidBy,
-          posGridColumns: data.posGridColumns,
-          posPaymentMethods: Array.isArray(data.posPaymentMethods) ? data.posPaymentMethods : [],
-          shippingEnableJne: data.shippingEnableJne ?? false,
-          shippingEnableGosend: data.shippingEnableGosend ?? false,
-          shippingJneOnly: data.shippingJneOnly ?? false,
-          shippingEnableStoreCourier: data.shippingEnableStoreCourier ?? false,
-          shippingStoreCourierFee: data.shippingStoreCourierFee !== undefined && data.shippingStoreCourierFee !== null && data.shippingStoreCourierFee !== "" ? Number(data.shippingStoreCourierFee) : 0,
-          enableTakeawayDelivery: data.enableTakeawayDelivery ?? true,
-          biteshipOriginAreaId: data.biteshipOriginAreaId || null,
-          biteshipOriginLat: data.biteshipOriginLat !== undefined && data.biteshipOriginLat !== null && data.biteshipOriginLat !== "" ? Number(data.biteshipOriginLat) : null,
-          biteshipOriginLng: data.biteshipOriginLng !== undefined && data.biteshipOriginLng !== null && data.biteshipOriginLng !== "" ? Number(data.biteshipOriginLng) : null,
-          shippingSenderName: data.shippingSenderName || null,
-          shippingSenderPhone: data.shippingSenderPhone || null,
-          shippingSenderAddress: data.shippingSenderAddress || null,
-          shippingSenderPostalCode: data.shippingSenderPostalCode || null,
-          webhookUrl: data.webhookUrl || null,
-          customGeminiKey: data.customGeminiKey || null,
-          ...(canUseOwnIntegrationConfig
-            ? {
-                whatsappToken: data.whatsappToken,
-                whatsappPhoneId: data.whatsappPhoneId,
-                paymentGatewaySecret: data.paymentGatewaySecret,
-                paymentGatewayClientKey: data.paymentGatewayClientKey,
-                bankAccount: data.bankAccount
-              }
-            : {})
-        }
-      }),
-      // Only update user phone if whatsapp number is provided
-      ...(data.whatsapp ? [
-        prisma.user.update({
-          where: { id: store.ownerId },
-          data: { phoneNumber: data.whatsapp }
-        })
-      ] : [])
-    ]);
+    if (data.whatsapp) {
+      await prisma.user.update({
+        where: { id: store.ownerId },
+        data: { phoneNumber: data.whatsapp }
+      });
+    }
 
     let finalStore: any = updatedStore;
     const postalDigits = String(data?.shippingSenderPostalCode || "").replace(/\D/g, "");
@@ -778,6 +744,59 @@ export async function createProduct(storeId: number, data: any) {
   }
 }
 
+export async function triggerReverseSync(productId: number) {
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: {
+        store: {
+          select: {
+            apiKey: true,
+            webhookUrl: true
+          }
+        }
+      }
+    });
+
+    if (!product || !product.externalId || !product.store.webhookUrl) return;
+
+    console.log(`[SYNC] Triggering reverse sync for product "${product.name}" (ID: ${productId}, ExternalID: ${product.externalId}) to ${product.store.webhookUrl}`);
+    
+    let wpWebhookUrl = product.store.webhookUrl.trim();
+    if (!wpWebhookUrl.startsWith('http')) {
+      wpWebhookUrl = 'https://' + wpWebhookUrl;
+    }
+    
+    try {
+      const urlObj = new URL(wpWebhookUrl);
+      const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+      wpWebhookUrl = baseUrl.replace(/\/$/, '') + '/wp-json/gercep/v1/sync-back';
+    } catch (e) {
+      wpWebhookUrl = wpWebhookUrl.replace(/\/$/, '') + '/wp-json/gercep/v1/sync-back';
+    }
+    
+    console.log(`[SYNC] Target Webhook URL: ${wpWebhookUrl}`);
+
+    const res = await fetch(wpWebhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': product.store.apiKey || ''
+      },
+      body: JSON.stringify({
+        externalId: product.externalId,
+        price: product.price,
+        stock: product.stock
+      })
+    });
+
+    const body = await res.text();
+    console.log(`[SYNC_RESPONSE] Status: ${res.status}, Body: ${body}`);
+  } catch (err: any) {
+    console.error(`[SYNC_ERROR] Failed to notify WordPress: ${err.message}`);
+  }
+}
+
 export async function updateProduct(id: number, data: any) {
   try {
     await ensureRecipeSchema();
@@ -824,35 +843,11 @@ export async function updateProduct(id: number, data: any) {
           include: {
             store: {
               select: {
-                apiKey: true,
-                webhookUrl: true,
                 slug: true
               }
             }
           }
         });
-
-        // Trigger Reverse Sync if externalId and webhookUrl exist
-        if ((product as any).externalId && product.store.webhookUrl) {
-          console.log(`[SYNC] Triggering reverse sync for product ${id} to ${product.store.webhookUrl}`);
-          
-          // Construct the reverse sync URL (assuming it's a WordPress site using our plugin)
-          const wpWebhookUrl = product.store.webhookUrl.replace(/\/$/, '') + '/wp-json/gercep/v1/sync-back';
-          
-          // Fire and forget (don't block the main update)
-          fetch(wpWebhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': product.store.apiKey || ''
-            },
-            body: JSON.stringify({
-              externalId: (product as any).externalId,
-              price: product.price,
-              stock: product.stock
-            })
-          }).catch(err => console.error(`[SYNC_ERROR] Failed to notify WordPress: ${err.message}`));
-        }
 
         return product;
       });
@@ -861,8 +856,13 @@ export async function updateProduct(id: number, data: any) {
       throw dbError;
     }
 
-    if (result && result.store?.slug) {
-      revalidatePath(`/${result.store.slug}`);
+    if (result) {
+      // Trigger Reverse Sync in background
+      triggerReverseSync(id).catch(err => console.error("[SYNC_ERROR] Async trigger failed:", err));
+      
+      if (result.store?.slug) {
+        revalidatePath(`/${result.store.slug}`);
+      }
     }
     return result;
   } catch (error) {

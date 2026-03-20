@@ -10,6 +10,7 @@ import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } fr
 import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
+import { triggerReverseSync } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -128,11 +129,15 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       if (idx >= 0) {
         variations[idx].price = Number(newPrice);
         await prisma.product.update({ where: { id: product.id }, data: { variations } });
+        // Trigger Reverse Sync
+        triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] AI trigger failed:", err));
         return { success: true, message: `Updated ${product.name} (${variations[idx].name}) to ${newPrice}` };
       }
     }
     
     await prisma.product.update({ where: { id: product.id }, data: { price: Number(newPrice) } });
+    // Trigger Reverse Sync
+    triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] AI trigger failed:", err));
     return { success: true, message: `Updated ${product.name} price to ${newPrice}` };
   },
 
