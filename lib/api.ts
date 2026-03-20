@@ -585,7 +585,10 @@ export async function deleteTable(id: number) {
 export async function getProducts(storeId: number, categorySlug?: string): Promise<Product[]> {
   try {
     await ensureRecipeSchema();
-    const where: any = { storeId };
+    const where: any = { 
+      storeId,
+      category: { not: "_ARCHIVED_" }
+    };
     if (categorySlug) {
       where.category = categorySlug;
     }
@@ -902,18 +905,37 @@ export async function updateProduct(id: number, data: any) {
 
 export async function deleteProduct(id: number) {
   try {
-    // Trigger Reverse Sync before deletion to ensure we have the externalId
+    // 1. Trigger Reverse Sync before deletion to ensure we have the externalId
     await triggerReverseSync(id, 'delete').catch(err => console.error("[SYNC_ERROR] Async delete trigger failed:", err));
 
-    // Delete ingredients first due to foreign key constraints
-    await prisma.productIngredient.deleteMany({
-      where: { productId: id }
-    });
-    
-    await prisma.product.delete({
-      where: { id }
-    });
-    return true;
+    // 2. Try to delete the product
+    try {
+      // Delete ingredients first due to foreign key constraints
+      await prisma.productIngredient.deleteMany({
+        where: { productId: id }
+      });
+      
+      await prisma.product.delete({
+        where: { id }
+      });
+      return true;
+    } catch (error: any) {
+      // 3. Handle Foreign Key Constraint (P2003) - e.g. Product is in an Order
+      if (error.code === 'P2003') {
+        console.log(`[SOFT_DELETE] Product ${id} has order history. Archiving instead of deleting.`);
+        
+        await prisma.product.update({
+          where: { id },
+          data: {
+            category: "_ARCHIVED_",
+            externalId: null, // Clear this so it doesn't conflict with future syncs
+            name: `[ARCHIVED] ${new Date().toISOString().split('T')[0]} - ID ${id}` // Rename to avoid unique name constraint conflicts
+          }
+        });
+        return true;
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error deleting product:', error);
     return false;
@@ -953,7 +975,10 @@ export async function getCategories(storeId: number): Promise<Category[]> {
     // Count products per category
     const products = await prisma.product.groupBy({
       by: ['category'],
-      where: { storeId },
+      where: { 
+        storeId,
+        category: { not: "_ARCHIVED_" }
+      },
       _count: { category: true }
     });
 
