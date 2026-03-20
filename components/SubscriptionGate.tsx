@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, CheckCircle2, MessageCircle, ShoppingBag, ShieldCheck, Zap, Sparkles, X } from "lucide-react";
+import { CheckCircle2, MessageCircle, ShoppingBag, ShieldCheck, Zap, Sparkles, X } from "lucide-react";
 
 export default function SubscriptionGate({ store, onClose }: { store: any, onClose?: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
@@ -144,7 +144,7 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
                     <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></span>
                   ) : (
                     <>
-                      <CreditCard className="w-4 h-4" />
+                      <Zap className="w-4 h-4" />
                       {plan.id === 'PRO' ? 'Get Started' : plan.id === 'SOVEREIGN' ? 'Go Sovereign' : 'Upgrade Now'}
                     </>
                   )}

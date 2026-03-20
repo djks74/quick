@@ -14,6 +14,8 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
+  Zap,
+  Sparkles,
   Home,
   MousePointer2,
   Wallet,
@@ -122,7 +124,7 @@ export default function AdminShell({
     },
     {
       name: "Billing",
-      icon: CreditCard,
+      icon: Zap,
       onClick: () => setShowSubscriptionGate(true)
     } as any,
     ...(store.subscriptionPlan !== 'FREE' ? [
