@@ -159,6 +159,59 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { success: true, productId: product.id, message: `Added new product ${name}` };
   },
 
+  async toggle_store_active({ slug, active }: { slug: string; active: boolean }) {
+    await ensureStoreSettingsSchema();
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) return { error: "Store not found" };
+
+    await (prisma.store as any).update({
+      where: { id: store.id },
+      data: { isActive: active }
+    });
+
+    return { success: true, message: `Store '${store.name}' is now ${active ? "ENABLED" : "DISABLED"}.` };
+  },
+
+  async toggle_store_open({ slug, open }: { slug: string; open: boolean }) {
+    await ensureStoreSettingsSchema();
+    const store = await prisma.store.findUnique({ where: { slug } });
+    if (!store) return { error: "Store not found" };
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { isOpen: open }
+    });
+
+    return { success: true, message: `Store '${store.name}' is now manually ${open ? "OPENED" : "CLOSED"}.` };
+  },
+
+  async get_corporate_stats({ corporateId }: { corporateId: number }) {
+    await ensureStoreSettingsSchema();
+    const stores = await prisma.store.findMany({
+      where: { ownerId: Number(corporateId) } as any,
+      include: {
+        orders: { where: { status: "PAID" }, select: { totalAmount: true } }
+      }
+    }) as any[];
+
+    const stats = stores.map(s => ({
+      name: s.name,
+      slug: s.slug,
+      sales: s.orders.reduce((sum: number, o: any) => sum + o.totalAmount, 0),
+      balance: s.balance,
+      isActive: s.isActive,
+      isOpen: s.isOpen
+    }));
+
+    const totalSales = stats.reduce((sum, s) => sum + s.sales, 0);
+
+    return {
+      totalOutlets: stores.length,
+      totalSales,
+      outlets: stats
+    };
+  },
+
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
@@ -748,9 +801,13 @@ export async function POST(req: NextRequest) {
     }) : [];
 
     // If not public, require session
+    const session = await getServerSession(authOptions);
     if (!isPublic) {
-      const session = await getServerSession(authOptions);
-      if (!session || (session as any).user?.role !== "SUPER_ADMIN") {
+      if (!session) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const userRole = (session as any).user?.role;
+      if (userRole !== "SUPER_ADMIN" && userRole !== "MERCHANT" && userRole !== "MANAGER") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
@@ -786,14 +843,36 @@ export async function POST(req: NextRequest) {
     // Determine if the user is a Merchant for the system instruction
     let userContextInfo = "";
     let isMerchantUser = false;
-    if (context?.phoneNumber) {
+    let corporateId: number | null = null;
+
+    if (session && (session as any).user) {
+      const dbUser = await prisma.user.findUnique({
+        where: { email: (session as any).user.email! },
+        include: { stores: true }
+      }) as any;
+      
+      if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER")) {
+        isMerchantUser = true;
+        corporateId = dbUser.id;
+        const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
+        userContextInfo = ` The user is an authenticated ADMIN/MERCHANT (ID: ${dbUser.id}). They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
+        
+        if (dbUser.subscriptionPlan === "CORPORATE") {
+           userContextInfo += " They are a CORPORATE user with multi-outlet access.";
+        }
+      } else if (dbUser && dbUser.role === "SUPER_ADMIN") {
+        isMerchantUser = true; // Super admin can do everything
+        userContextInfo = " The user is a SUPER_ADMIN with full platform access.";
+      }
+    } else if (context?.phoneNumber) {
       const cleanPhone = context.phoneNumber.replace(/\D/g, "");
       const user = await prisma.user.findFirst({
         where: { phoneNumber: { contains: cleanPhone } },
         include: { stores: true }
       });
-      if (user && user.role === "MERCHANT" && user.stores.length > 0) {
+      if (user && (user.role === "MERCHANT" || user.role === "MANAGER") && user.stores.length > 0) {
         isMerchantUser = true;
+        corporateId = user.id;
         userContextInfo = ` The user is a MERCHANT of the store '${user.stores[0].name}' (slug: ${user.stores[0].slug}). They can use merchant tools like 'get_store_stats' and 'create_merchant_invoice'. If they ask to 'tambah produk' or 'update harga', use the tools to help them.`;
       }
     }
@@ -807,7 +886,7 @@ export async function POST(req: NextRequest) {
       });
       if (store) {
         const hasTables = store.tables && store.tables.length > 0;
-        storeContextInfo = ` You are currently assisting a customer at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
+        storeContextInfo = ` You are currently assisting at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
       }
     }
 
@@ -819,7 +898,19 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: validatedHistory,
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
+        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. 
+
+MERCHANT/ADMIN ASSISTANCE:
+If the user is an ADMIN or MERCHANT (see userContextInfo):
+1. Help them manage their outlets. You can check sales using 'get_store_stats' or 'get_corporate_stats'.
+2. You can update product prices ('update_product_price') or add products ('add_new_product').
+3. You can enable/disable stores ('toggle_store_active') or manually open/close them ('toggle_store_open').
+4. If they ask "bagaimana performa toko saya?", use stats tools.
+5. If they are a CORPORATE user, prioritize 'get_corporate_stats' to show them a summary of all their outlets.
+6. Always confirm changes before applying them if they involve data modification.
+
+CUSTOMER ASSISTANCE:
+1. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
 
 GREETING & INITIAL FLOW:
 1. When a user first starts a conversation or if you have a store context (from a QR scan), greet them warmly: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
@@ -894,6 +985,41 @@ Once an order is created:
                   slug: { type: "string", description: "Store slug." }
                 },
                 required: ["slug"]
+              }
+            },
+            {
+              name: "get_corporate_stats",
+              description: "Retrieve multi-outlet stats for a corporate account.",
+              parameters: {
+                type: "object",
+                properties: {
+                  corporateId: { type: "number", description: "The ID of the corporate user/owner." }
+                },
+                required: ["corporateId"]
+              }
+            },
+            {
+              name: "toggle_store_active",
+              description: "Enable or disable a store outlet. Only for admins.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  active: { type: "boolean" }
+                },
+                required: ["slug", "active"]
+              }
+            },
+            {
+              name: "toggle_store_open",
+              description: "Manually open or close a store (override schedule). Only for admins.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  open: { type: "boolean" }
+                },
+                required: ["slug", "open"]
               }
             },
             {
@@ -1036,10 +1162,15 @@ Once an order is created:
       for (const call of calls) {
         const toolFn = tools[call.name];
         if (toolFn) {
-          // Auto-inject isMerchant flag if the user is identified as a merchant
+          // Auto-inject isMerchant flag or corporateId
           const args = { ...call.args } as any;
-          if (isMerchantUser && ["send_order_to_whatsapp", "create_customer_order", "get_last_order_by_phone"].includes(call.name)) {
-            args.isMerchant = true;
+          if (isMerchantUser) {
+            if (["send_order_to_whatsapp", "create_customer_order", "get_last_order_by_phone"].includes(call.name)) {
+              args.isMerchant = true;
+            }
+            if (call.name === "get_corporate_stats" && !args.corporateId && corporateId) {
+              args.corporateId = corporateId;
+            }
           }
 
           console.log(`[AI_CHAT] Calling tool: ${call.name}`, args);

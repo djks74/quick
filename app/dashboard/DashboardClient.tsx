@@ -16,12 +16,14 @@ import {
   Loader2,
   Power,
   PowerOff,
-  LogOut
+  LogOut,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 import { toggleStoreActive } from "@/lib/api";
 import { signOut } from "next-auth/react";
+import AdminChat from "@/components/AdminChat";
 
 export default function DashboardClient({ stores, user }: { stores: any[], user: any }) {
   const router = useRouter();
@@ -403,6 +405,9 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
           </div>
         </div>
       )}
+
+      {/* Admin AI Assistant */}
+      <AdminChat user={user} context={{ isCorporate: true }} />
     </div>
   );
 }

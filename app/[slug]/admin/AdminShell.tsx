@@ -27,14 +27,16 @@ import {
   Menu,
   Puzzle,
   Users,
-  X
+  X,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdmin } from "@/lib/admin-context";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
+import AdminChat from "@/components/AdminChat";
 
 interface SidebarItem {
   name: string;
@@ -56,6 +58,7 @@ export default function AdminShell({
   isSuperAdmin?: boolean;
   userRole?: string;
 }) {
+  const { data: session } = useSession();
   const pathname = usePathname();
   const { layoutStyle, siteName } = useAdmin();
   const [openMenus, setOpenMenus] = useState<string[]>(["Products", "Orders", "Pages", "Appearance"]);
@@ -591,6 +594,12 @@ export default function AdminShell({
           </div>
         </main>
       </div>
+
+      {/* Admin AI Assistant */}
+      <AdminChat 
+        user={session?.user} 
+        context={{ slug, storeId: store.id }} 
+      />
 
       <div className="fixed top-12 right-2 md:right-6 z-[130] space-y-2">
         {toastItems.map((t) => (
