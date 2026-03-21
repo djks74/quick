@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
-import { updatePlatformSettings } from "@/lib/super-admin";
+import { Check, Loader2, Send } from "lucide-react";
+import { updatePlatformSettings, testWhatsAppConnection } from "@/lib/super-admin";
 import { cn } from "@/lib/utils";
 
 type PlatformSettings = {
@@ -36,6 +36,36 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
   const [form, setForm] = useState(defaults);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+
+  const handleTestWhatsApp = async () => {
+    if (!form.whatsappToken || !form.whatsappPhoneId || !testPhone) {
+      setTestMessage("Token, Phone ID, and Test Phone Number are required.");
+      return;
+    }
+
+    setIsTesting(true);
+    setTestMessage(null);
+    try {
+      const res = await testWhatsAppConnection({
+        token: form.whatsappToken,
+        phoneNumberId: form.whatsappPhoneId,
+        testPhone: testPhone
+      });
+
+      if (res.success) {
+        setTestMessage("Test message sent successfully! Check your WhatsApp.");
+      } else {
+        setTestMessage(`Failed: ${res.error}`);
+      }
+    } catch (e) {
+      setTestMessage("An error occurred during testing.");
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -82,6 +112,32 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
               value={form.whatsappPhoneId}
               onChange={(e) => setForm({ ...form, whatsappPhoneId: e.target.value })}
             />
+          </div>
+          
+          <div className="pt-2 border-t dark:border-gray-800 space-y-3">
+            <h4 className="text-xs font-black uppercase tracking-widest text-gray-400">Connection Test</h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Test Phone (e.g. 628...)"
+                className="flex-1 border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-1.5 rounded-lg text-sm dark:text-white outline-none focus:border-blue-500"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+              />
+              <button
+                onClick={handleTestWhatsApp}
+                disabled={isTesting}
+                className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-600 text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                {isTesting ? "Sending..." : "Test Now"}
+              </button>
+            </div>
+            {testMessage && (
+              <p className={cn("text-[10px] font-bold uppercase tracking-tight", testMessage.includes("success") ? "text-green-600" : "text-red-500")}>
+                {testMessage}
+              </p>
+            )}
           </div>
         </div>
       </div>

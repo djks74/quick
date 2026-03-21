@@ -227,7 +227,37 @@ export async function getPlatformSettings() {
   }
 }
 
-export async function updatePlatformSettings(data: {
+export async function testWhatsAppConnection(data: { token: string, phoneNumberId: string, testPhone: string }) {
+  try {
+    await requireSuperAdmin();
+    
+    const res = await fetch(`https://graph.facebook.com/v17.0/${data.phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: data.testPhone.replace(/\D/g, ""),
+        type: "text",
+        text: { body: "Gercep WhatsApp API Connection Test Success! ✅" }
+      })
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      return { success: false, error: result.error?.message || "Meta API Error" };
+    }
+
+    return { success: true, messageId: result.messages?.[0]?.id };
+  } catch (error) {
+    console.error('[WHATSAPP_TEST_ERROR]', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
+  }
+}
+
+export async function updatePlatformSettings(data: any) {
   whatsappToken?: string;
   whatsappPhoneId?: string;
   midtransServerKey?: string;
