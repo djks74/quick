@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Edit, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, ExternalLink, MoreVertical, Trash2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate } from "@/lib/super-admin";
@@ -11,6 +11,7 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
   const router = useRouter();
   const [editingStore, setEditingStore] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [corporateOwnerId, setCorporateOwnerId] = useState("");
 
   const handleJoinCorporate = async () => {
@@ -59,16 +60,21 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
   };
 
   const handleDeleteStore = async (id: number, name: string) => {
-    if (!confirm(`Are you sure you want to PERMANENTLY delete "${name}"? This action cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to PERMANENTLY delete "${name}"? This action cannot be undone and will delete all orders, products, and logs.`)) return;
     
-    setLoading(true);
-    const res = await deleteStore(id);
-    if (res.success) {
-      router.refresh();
-    } else {
-      alert("Failed to delete store");
+    setDeletingId(id);
+    try {
+      const res = await deleteStore(id);
+      if (res.success) {
+        router.refresh();
+      } else {
+        alert(res.error || "Failed to delete store");
+      }
+    } catch (err) {
+      alert("An unexpected error occurred during deletion.");
+    } finally {
+      setDeletingId(null);
     }
-    setLoading(false);
   };
 
   return (
@@ -157,10 +163,15 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
                   </button>
                   <button 
                     onClick={() => handleDeleteStore(store.id, store.name)}
-                    className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 p-1"
+                    disabled={deletingId === store.id}
+                    className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 p-1 disabled:opacity-50"
                     title="Delete Store"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {deletingId === store.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </td>

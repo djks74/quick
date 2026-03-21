@@ -13,12 +13,10 @@ import {
   Building2,
   Wallet,
   X,
-  Loader2,
-  Trash2
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
-import { deleteOutlet } from "@/lib/api";
 
 export default function DashboardClient({ stores, user }: { stores: any[], user: any }) {
   const router = useRouter();
@@ -26,34 +24,10 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const [newStoreName, setNewStoreName] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const isCorporate = stores.some(s => s.subscriptionPlan === "CORPORATE");
   const activePlan = stores[0]?.subscriptionPlan || "FREE";
-
-  const handleDeleteOutlet = async (e: React.MouseEvent, storeId: number, storeName: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!confirm(`Are you sure you want to delete "${storeName}"? This action is permanent and will delete all products, orders, and settings for this outlet.`)) {
-      return;
-    }
-
-    setIsDeleting(storeId);
-    try {
-      const res = await deleteOutlet(storeId);
-      if (res.success) {
-        router.refresh();
-      } else {
-        alert(res.error || "Failed to delete outlet");
-      }
-    } catch (err) {
-      alert("An unexpected error occurred.");
-    } finally {
-      setIsDeleting(null);
-    }
-  };
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,20 +154,6 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                     )}>
                       {store.subscriptionPlan}
                     </div>
-                    {isCorporate && (
-                      <button 
-                        onClick={(e) => handleDeleteOutlet(e, store.id, store.name)}
-                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 dark:hover:bg-red-900/40"
-                        title="Delete Outlet"
-                        disabled={isDeleting === store.id}
-                      >
-                        {isDeleting === store.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    )}
                   </div>
                 </div>
 
