@@ -15,15 +15,18 @@ import {
   X,
   Loader2,
   Power,
-  PowerOff
+  PowerOff,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 import { toggleStoreActive } from "@/lib/api";
+import { signOut } from "next-auth/react";
 
 export default function DashboardClient({ stores, user }: { stores: any[], user: any }) {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -94,12 +97,40 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
         
         <div className="flex items-center gap-4">
           <ThemeToggle />
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-widest border border-blue-100 dark:border-blue-800">
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-black uppercase tracking-widest border border-blue-100 dark:border-blue-800">
             <Building2 className="w-3 h-3" />
             {isCorporate ? "Corporate" : "Merchant"}
           </div>
-          <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-xs font-bold dark:text-white">
-            {user.name?.charAt(0).toUpperCase()}
+          
+          <div className="relative">
+            <button 
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-xs font-bold dark:text-white hover:ring-2 hover:ring-blue-500 transition-all"
+            >
+              {user.name?.charAt(0).toUpperCase()}
+            </button>
+
+            {isUserMenuOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setIsUserMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl border border-gray-100 dark:border-white/10 z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 border-b border-gray-50 dark:border-white/5">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{user.name}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                  </div>
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="font-bold uppercase tracking-widest text-[10px]">Sign Out</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </nav>
