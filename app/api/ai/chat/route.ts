@@ -231,7 +231,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method, isMerchant, table_number }: any) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findUnique({ where: { slug } }) as any;
     if (!store) return { error: "Store not found" };
     if (!store.isActive) return { error: `Mohon maaf, toko '${store.name}' sedang tidak aktif (Disabled) saat ini. Silakan hubungi admin toko.` };
 

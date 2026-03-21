@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Edit, ExternalLink, MoreVertical, Trash2, Loader2, Power, PowerOff } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive } from "@/lib/super-admin";
 
