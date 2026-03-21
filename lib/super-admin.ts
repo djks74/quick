@@ -257,7 +257,7 @@ export async function testWhatsAppConnection(data: { token: string, phoneNumberI
   }
 }
 
-export async function updatePlatformSettings(data: any) {
+export async function updatePlatformSettings(data: {
   whatsappToken?: string;
   whatsappPhoneId?: string;
   midtransServerKey?: string;
