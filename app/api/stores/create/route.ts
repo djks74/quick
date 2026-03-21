@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     }
 
     const user = (session as any).user;
-    const { name } = await req.json();
+    const { name, sourceStoreId } = await req.json();
 
     if (!name) {
       return NextResponse.json({ error: "Store name is required" }, { status: 400 });
@@ -44,20 +44,71 @@ export async function POST(req: Request) {
       slug = `${slug}-${Math.floor(Math.random() * 1000)}`;
     }
 
-    // Create the store
-    const newStore = await prisma.store.create({
-      data: {
-        name,
-        slug,
-        ownerId: dbUser.id,
-        subscriptionPlan: isCorporate ? "CORPORATE" : "FREE",
-        enableWhatsApp: true,
-        qrisFeePercent: 1.0,
-        manualTransferFee: 5000,
-        posEnabled: true,
-        whatsapp: dbUser.phoneNumber || "",
-        // Copy some defaults if needed
+    // Create the store and optionally copy menu in a transaction
+    const newStore = await prisma.$transaction(async (tx) => {
+      const store = await tx.store.create({
+        data: {
+          name,
+          slug,
+          ownerId: dbUser.id,
+          subscriptionPlan: isCorporate ? "CORPORATE" : "FREE",
+          enableWhatsApp: true,
+          qrisFeePercent: 1.0,
+          manualTransferFee: 5000,
+          posEnabled: true,
+          whatsapp: dbUser.phoneNumber || "",
+        }
+      });
+
+      // Copy menu if requested
+      if (sourceStoreId) {
+        const sourceId = parseInt(sourceStoreId);
+        
+        // Copy Categories
+        const categories = await tx.category.findMany({
+          where: { storeId: sourceId }
+        });
+
+        for (const cat of categories) {
+          await tx.category.create({
+            data: {
+              storeId: store.id,
+              name: cat.name,
+              slug: cat.slug,
+              image: cat.image,
+              subCategories: cat.subCategories || [],
+            }
+          });
+        }
+
+        // Copy Products
+        const products = await tx.product.findMany({
+          where: { storeId: sourceId }
+        });
+
+        for (const prod of products) {
+          await tx.product.create({
+            data: {
+              storeId: store.id,
+              name: prod.name,
+              price: prod.price,
+              image: prod.image,
+              gallery: prod.gallery || [],
+              category: prod.category,
+              subCategory: prod.subCategory,
+              description: prod.description,
+              shortDescription: prod.shortDescription,
+              type: prod.type,
+              variations: prod.variations || {},
+              unit: prod.unit,
+              stock: prod.stock,
+              barcode: prod.barcode,
+            }
+          });
+        }
       }
+
+      return store;
     });
 
     return NextResponse.json({ success: true, slug: newStore.slug });

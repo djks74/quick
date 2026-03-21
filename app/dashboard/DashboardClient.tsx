@@ -22,6 +22,7 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
+  const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,7 +38,10 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
       const res = await fetch("/api/stores/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newStoreName })
+        body: JSON.stringify({ 
+          name: newStoreName,
+          sourceStoreId: sourceStoreId || undefined
+        })
       });
 
       const data = await res.json();
@@ -86,10 +90,10 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2 text-sm"
           >
-            <Plus className="w-5 h-5" />
-            Add New Outlet
+            <Plus className="w-4 h-4" />
+            Add Outlet
           </button>
         </div>
 
@@ -168,6 +172,45 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
           </div>
         </div>
 
+        {/* Staff Management Section */}
+        {isCorporate && (
+          <div className="p-8 rounded-[2.5rem] bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm space-y-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-purple-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                  <Users className="w-7 h-7" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Staff Management</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Manage Managers and Cashiers across all outlets.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {stores.slice(0, 3).map(store => (
+                <div key={store.id} className="p-6 rounded-3xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-white/5 flex items-center justify-between group">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">{store.name}</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white mt-1">Manage Staff</p>
+                  </div>
+                  <Link 
+                    href={`/${store.slug}/admin/users`}
+                    className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400 group-hover:text-purple-600 transition-colors shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Link>
+                </div>
+              ))}
+              <div className="p-6 rounded-3xl bg-purple-50 dark:bg-purple-900/10 border border-dashed border-purple-200 dark:border-purple-800/50 flex items-center justify-center text-center">
+                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                  Staff are assigned per outlet.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Billing & Subscription Section */}
         <div className="p-8 rounded-[2.5rem] bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm space-y-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -237,6 +280,20 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                     value={newStoreName}
                     onChange={(e) => setNewStoreName(e.target.value)}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Copy Menu From (Optional)</label>
+                  <select 
+                    className="w-full px-5 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-white/10 focus:border-blue-500 outline-none transition-all dark:text-white font-bold appearance-none"
+                    value={sourceStoreId}
+                    onChange={(e) => setSourceStoreId(e.target.value)}
+                  >
+                    <option value="">Start with New Menu</option>
+                    {stores.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {error && (
