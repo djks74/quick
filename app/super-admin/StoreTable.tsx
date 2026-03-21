@@ -2,17 +2,29 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Edit, ExternalLink, MoreVertical, Trash2, Loader2 } from "lucide-react";
+import { Edit, ExternalLink, MoreVertical, Trash2, Loader2, Power, PowerOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive } from "@/lib/super-admin";
 
 export default function StoreTable({ stores, users }: { stores: any[], users?: any[] }) {
   const router = useRouter();
   const [editingStore, setEditingStore] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [corporateOwnerId, setCorporateOwnerId] = useState("");
+
+  const handleToggleActive = async (storeId: number, currentActive: boolean) => {
+    setTogglingId(storeId);
+    const res = await toggleStoreActive(storeId, !currentActive);
+    if (res.success) {
+      router.refresh();
+    } else {
+      alert(res.error || "Failed to update store status");
+    }
+    setTogglingId(null);
+  };
 
   const handleJoinCorporate = async () => {
     if (!corporateOwnerId) return;
@@ -127,13 +139,36 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
                 </span>
               </td>
               <td className="px-6 py-4">
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  store.isOpen
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                }`}>
-                  {store.isOpen ? "Active" : "Closed"}
-                </span>
+                <div className="flex flex-col gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold text-center ${
+                    store.isOpen
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                      : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                  }`}>
+                    {store.isOpen ? "Open" : "Closed"}
+                  </span>
+                  <button
+                    onClick={() => handleToggleActive(store.id, store.isActive)}
+                    disabled={togglingId === store.id}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 px-2 py-1 rounded-full transition-all border",
+                      store.isActive 
+                        ? "text-green-600 bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800" 
+                        : "text-red-600 bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800"
+                    )}
+                  >
+                    {togglingId === store.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : store.isActive ? (
+                      <Power className="w-3 h-3" />
+                    ) : (
+                      <PowerOff className="w-3 h-3" />
+                    )}
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      {store.isActive ? "Active" : "Disabled"}
+                    </span>
+                  </button>
+                </div>
               </td>
               <td className="px-6 py-4 dark:text-gray-300">
                 {store._count?.orders || 0}

@@ -19,6 +19,21 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     notFound();
   }
 
+  // Handle Disabled Store
+  if (!store.isActive) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black p-6">
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Temporarily Unavailable</h1>
+          <p className="text-gray-500 dark:text-gray-400 font-medium max-w-xs mx-auto">This store is currently inactive. Please check back later or contact the business owner.</p>
+        </div>
+      </div>
+    );
+  }
+
   // Log Web Traffic
   await logTraffic(store.id, "WEB");
 

@@ -233,6 +233,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
+    if (!store.isActive) return { error: `Mohon maaf, toko '${store.name}' sedang tidak aktif (Disabled) saat ini. Silakan hubungi admin toko.` };
 
     // Default to qris as manual transfer is disabled
     payment_method = payment_method === 'bank_transfer' ? 'qris' : (payment_method || 'qris');

@@ -304,6 +304,24 @@ export async function upsertPosCashier(storeId: number, storeSlug: string, usern
   return updated;
 }
 
+export async function toggleStoreActive(storeId: number, isActive: boolean) {
+  try {
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { isActive }
+    });
+    
+    revalidatePath(`/dashboard`);
+    revalidatePath(`/${updated.slug}`);
+    revalidatePath(`/${updated.slug}/admin`);
+    
+    return updated;
+  } catch (error) {
+    console.error('Error toggling store active:', error);
+    return null;
+  }
+}
+
 export async function toggleStoreStatus(storeId: number, isOpen: boolean) {
   try {
     const updated = await prisma.store.update({

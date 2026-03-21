@@ -402,6 +402,24 @@ export async function joinStoreToCorporate(storeId: number, corporateOwnerId: nu
   }
 }
 
+export async function toggleStoreActive(storeId: number, isActive: boolean) {
+  try {
+    await requireSuperAdmin();
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { isActive }
+    });
+    
+    revalidatePath('/super-admin');
+    revalidatePath(`/${updated.slug}`);
+    
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error toggling store active:', error);
+    return { success: false, error: 'Failed to toggle store status' };
+  }
+}
+
 export async function deleteStore(storeId: number) {
   try {
     await requireSuperAdmin();

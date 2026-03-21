@@ -13,10 +13,13 @@ import {
   Building2,
   Wallet,
   X,
-  Loader2
+  Loader2,
+  Power,
+  PowerOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
+import { toggleStoreActive } from "@/lib/api";
 
 export default function DashboardClient({ stores, user }: { stores: any[], user: any }) {
   const router = useRouter();
@@ -24,10 +27,30 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const [newStoreName, setNewStoreName] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const isCorporate = stores.some(s => s.subscriptionPlan === "CORPORATE");
   const activePlan = stores[0]?.subscriptionPlan || "FREE";
+
+  const handleToggleActive = async (e: React.MouseEvent, storeId: number, currentActive: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setTogglingId(storeId);
+    try {
+      const res = await toggleStoreActive(storeId, !currentActive);
+      if (res) {
+        router.refresh();
+      } else {
+        alert("Failed to update store status.");
+      }
+    } catch (err) {
+      alert("An unexpected error occurred.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,9 +186,32 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-white/5">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-2 h-2 rounded-full", store.isOpen ? "bg-green-500" : "bg-red-500")} />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{store.isOpen ? "Open" : "Closed"}</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", store.isOpen ? "bg-green-500" : "bg-red-500")} />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{store.isOpen ? "Open" : "Closed"}</span>
+                    </div>
+                    <button
+                      onClick={(e) => handleToggleActive(e, store.id, store.isActive)}
+                      disabled={togglingId === store.id}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all",
+                        store.isActive 
+                          ? "text-green-600 bg-green-50 dark:bg-green-900/20" 
+                          : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                      )}
+                    >
+                      {togglingId === store.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : store.isActive ? (
+                        <Power className="w-3 h-3" />
+                      ) : (
+                        <PowerOff className="w-3 h-3" />
+                      )}
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        {store.isActive ? "Active" : "Disabled"}
+                      </span>
+                    </button>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-300 group-hover:translate-x-1 transition-transform" />
                 </div>
