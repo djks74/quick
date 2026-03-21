@@ -54,6 +54,8 @@ model Store {
   balance                     Float               @default(0.0)
   isOpen                      Boolean             @default(true)
   isActive                    Boolean             @default(true)
+  operatingHours              Json?               // { monday: { open: "09:00", close: "21:00", closed: false }, ... }
+  timezone                    String              @default("Asia/Jakarta")
   waBalance                   Float               @default(50000)
   waPricePerMessage           Float               @default(350)
   waLowCreditAlertSentAt      DateTime?

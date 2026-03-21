@@ -82,6 +82,44 @@ async function ensureRecipeSchema() {
 
 // --- Store ---
 
+export async function isStoreOpen(store: any) {
+  if (!store.isActive) return false;
+  if (!store.isOpen) return false; // Manual override: Closed
+
+  if (!store.operatingHours) return true; // Default to open if no schedule set
+
+  const tz = store.timezone || "Asia/Jakarta";
+  const now = new Date();
+  
+  // Get current time in store's timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const weekday = parts.find(p => p.type === 'weekday')?.value.toLowerCase() || "";
+  const hour = parseInt(parts.find(p => p.type === 'hour')?.value || "0");
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value || "0");
+  const currentTime = hour * 60 + minute;
+
+  const hours = store.operatingHours as any;
+  const todaySchedule = hours[weekday];
+
+  if (!todaySchedule || todaySchedule.closed) return false;
+
+  const [openH, openM] = todaySchedule.open.split(':').map(Number);
+  const [closeH, closeM] = todaySchedule.close.split(':').map(Number);
+  
+  const openTime = openH * 60 + openM;
+  const closeTime = closeH * 60 + closeM;
+
+  return currentTime >= openTime && currentTime <= closeTime;
+}
+
 export async function getStoreBySlug(slug: string) {
   try {
     await ensureWaCreditSchema();
@@ -188,13 +226,16 @@ export async function updateStoreSettings(storeId: number, data: any) {
         shippingSenderPostalCode: data.shippingSenderPostalCode || null,
         webhookUrl: data.webhookUrl || null,
         customGeminiKey: data.customGeminiKey || null,
+        operatingHours: data.operatingHours || null,
+        timezone: data.timezone || null,
         ...(canUseOwnIntegrationConfig
           ? {
               whatsappToken: data.whatsappToken,
               whatsappPhoneId: data.whatsappPhoneId,
               paymentGatewaySecret: data.paymentGatewaySecret,
               paymentGatewayClientKey: data.paymentGatewayClientKey,
-              bankAccount: data.bankAccount
+              bankAccount: data.bankAccount,
+              biteshipApiKey: data.biteshipApiKey
             }
           : {})
       }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import DigitalMenuClient from "@/components/DigitalMenuClient";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { logTraffic } from "@/lib/traffic";
+import { isStoreOpen } from "@/lib/api";
 
 export const revalidate = 60; // Revalidate every minute (ISR)
 
@@ -18,6 +19,9 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   if (!store) {
     notFound();
   }
+
+  // Check if store is open based on schedule and manual toggle
+  const isOpen = await isStoreOpen(store);
 
   // Handle Disabled Store
   if (!store.isActive) {
@@ -88,7 +92,8 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     shippingEnableJne: store.shippingEnableJne,
     shippingEnableGosend: store.shippingEnableGosend,
     shippingJneOnly: store.shippingJneOnly,
-    isOpen: store.isOpen
+    isOpen: isOpen,
+    manualOpen: store.isOpen
   };
 
   return <DigitalMenuClient products={products} store={storeData} categories={categories} />;

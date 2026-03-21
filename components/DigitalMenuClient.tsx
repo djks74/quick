@@ -468,7 +468,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   store.isOpen ? "bg-green-500 animate-pulse" : "bg-red-500"
                 )} />
                 <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                  {store.isOpen ? "Open Now" : "Closed"}
+                  {store.isOpen ? "Open Now" : store.manualOpen === false ? "Closed (Manual)" : "Closed (Schedule)"}
                 </span>
               </div>
             </div>

@@ -10,7 +10,7 @@ import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } fr
 import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
-import { triggerReverseSync } from "@/lib/api";
+import { triggerReverseSync, isStoreOpen } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -234,6 +234,20 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
     if (!store.isActive) return { error: `Mohon maaf, toko '${store.name}' sedang tidak aktif (Disabled) saat ini. Silakan hubungi admin toko.` };
+
+    const isOpen = await isStoreOpen(store);
+    if (!isOpen) {
+      const schedule = store.operatingHours as any;
+      let scheduleInfo = "";
+      if (schedule) {
+        const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: store.timezone || 'Asia/Jakarta' }).format(new Date()).toLowerCase();
+        const todaySchedule = schedule[today];
+        if (todaySchedule) {
+          scheduleInfo = todaySchedule.closed ? " (Tutup sepanjang hari)" : ` (Buka: ${todaySchedule.open} - ${todaySchedule.close})`;
+        }
+      }
+      return { error: `Mohon maaf, toko '${store.name}' saat ini sedang tutup${scheduleInfo}. Silakan cek kembali di jam operasional kami.` };
+    }
 
     // Default to qris as manual transfer is disabled
     payment_method = payment_method === 'bank_transfer' ? 'qris' : (payment_method || 'qris');

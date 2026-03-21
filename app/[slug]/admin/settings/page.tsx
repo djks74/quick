@@ -102,7 +102,17 @@ export default function AdminSettings() {
     shippingSenderAddress: "",
     shippingSenderPostalCode: "",
     customGeminiKey: "",
-    webhookUrl: ""
+    webhookUrl: "",
+    timezone: "Asia/Jakarta",
+    operatingHours: {
+      monday: { open: "09:00", close: "21:00", closed: false },
+      tuesday: { open: "09:00", close: "21:00", closed: false },
+      wednesday: { open: "09:00", close: "21:00", closed: false },
+      thursday: { open: "09:00", close: "21:00", closed: false },
+      friday: { open: "09:00", close: "21:00", closed: false },
+      saturday: { open: "09:00", close: "21:00", closed: false },
+      sunday: { open: "09:00", close: "21:00", closed: false },
+    } as any
   });
 
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -179,7 +189,17 @@ export default function AdminSettings() {
           shippingSenderAddress: data.shippingSenderAddress || "",
           shippingSenderPostalCode: data.shippingSenderPostalCode || "",
           customGeminiKey: (data as any).customGeminiKey || "",
-          webhookUrl: (data as any).webhookUrl || ""
+          webhookUrl: (data as any).webhookUrl || "",
+          timezone: (data as any).timezone || "Asia/Jakarta",
+          operatingHours: (data as any).operatingHours || {
+            monday: { open: "09:00", close: "21:00", closed: false },
+            tuesday: { open: "09:00", close: "21:00", closed: false },
+            wednesday: { open: "09:00", close: "21:00", closed: false },
+            thursday: { open: "09:00", close: "21:00", closed: false },
+            friday: { open: "09:00", close: "21:00", closed: false },
+            saturday: { open: "09:00", close: "21:00", closed: false },
+            sunday: { open: "09:00", close: "21:00", closed: false },
+          }
         });
         
         if (data.bankAccount) {
@@ -220,7 +240,9 @@ export default function AdminSettings() {
         shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount,
         customGeminiKey: settings.customGeminiKey,
-        webhookUrl: settings.webhookUrl
+        webhookUrl: settings.webhookUrl,
+        operatingHours: settings.operatingHours,
+        timezone: settings.timezone
       });
 
       if (result) {
@@ -347,6 +369,78 @@ export default function AdminSettings() {
                     onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })}
                     placeholder="628..."
                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Operating Hours</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Set your weekly schedule and timezone.</p>
+              </div>
+              <div className="md:col-span-2 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Timezone</label>
+                  <select 
+                    className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                    value={settings.timezone}
+                    onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+                  >
+                    <option value="Asia/Jakarta">WIB - Jakarta (UTC+7)</option>
+                    <option value="Asia/Makassar">WITA - Makassar (UTC+8)</option>
+                    <option value="Asia/Jayapura">WIT - Jayapura (UTC+9)</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  {Object.entries(settings.operatingHours).map(([day, schedule]: [string, any]) => (
+                    <div key={day} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-800">
+                      <div className="w-24 shrink-0">
+                        <span className="text-sm font-bold capitalize text-gray-700 dark:text-gray-300">{day}</span>
+                      </div>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            checked={!schedule.closed}
+                            onChange={(e) => {
+                              const newHours = { ...settings.operatingHours };
+                              newHours[day] = { ...newHours[day], closed: !e.target.checked };
+                              setSettings({ ...settings, operatingHours: newHours });
+                            }}
+                            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          />
+                          <span className="text-xs font-medium dark:text-gray-400">{schedule.closed ? "Closed" : "Open"}</span>
+                        </div>
+                        {!schedule.closed && (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="time" 
+                              value={schedule.open}
+                              onChange={(e) => {
+                                const newHours = { ...settings.operatingHours };
+                                newHours[day] = { ...newHours[day], open: e.target.value };
+                                setSettings({ ...settings, operatingHours: newHours });
+                              }}
+                              className="border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-xs rounded outline-none dark:text-white"
+                            />
+                            <span className="text-xs text-gray-400">to</span>
+                            <input 
+                              type="time" 
+                              value={schedule.close}
+                              onChange={(e) => {
+                                const newHours = { ...settings.operatingHours };
+                                newHours[day] = { ...newHours[day], close: e.target.value };
+                                setSettings({ ...settings, operatingHours: newHours });
+                              }}
+                              className="border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-xs rounded outline-none dark:text-white"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
