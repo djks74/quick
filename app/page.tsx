@@ -19,7 +19,9 @@ import {
   TrendingUp,
   MessageSquare,
   Sparkles,
-  X
+  X,
+  Building2,
+  Phone
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -100,9 +102,12 @@ const translations = {
     enterprise_badge: "Advanced Business",
     enterprise_price: "Rp 249.000",
     enterprise_period: "/month",
-    sovereign_badge: "Most Professional",
-    sovereign_price: "Rp 499.000",
+    sovereign_badge: "Full Ecosystem",
+    sovereign_price: "Rp 999.000",
     sovereign_period: "/month",
+    corporate_badge: "Multi-Outlet",
+    corporate_price: "Contact Us",
+    corporate_period: "",
     sovereign_feature1: "Custom WhatsApp Number",
     sovereign_feature2: "Your Own Gemini API Key",
     sovereign_feature3: "Product Sync API Access",
@@ -165,9 +170,12 @@ const translations = {
     enterprise_badge: "Bisnis Lanjutan",
     enterprise_price: "Rp 249.000",
     enterprise_period: "/bulan",
-    sovereign_badge: "Paling Profesional",
-    sovereign_price: "Rp 499.000",
+    sovereign_badge: "Ekosistem Lengkap",
+    sovereign_price: "Rp 999.000",
     sovereign_period: "/bulan",
+    corporate_badge: "Multi-Outlet",
+    corporate_price: "Hubungi Kami",
+    corporate_period: "",
     sovereign_feature1: "Nomor WhatsApp Sendiri",
     sovereign_feature2: "Gemini API Key Milik Anda",
     sovereign_feature3: "Akses API Sinkronisasi Produk",
@@ -490,7 +498,7 @@ export default function Home() {
             <p className="text-gray-500 font-medium">Choose the perfect plan for your business growth.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
             {/* PRO PLAN */}
             <div className="p-8 rounded-[40px] border-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex flex-col justify-between group hover:border-blue-500/30 transition-all">
               <div className="space-y-6">
@@ -592,9 +600,47 @@ export default function Home() {
                   ))}
                 </ul>
               </div>
-              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-orange-500 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20">
+              <Link href="/register" className="mt-8 w-full py-4 rounded-2xl bg-orange-500 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/30">
                 Go Sovereign
               </Link>
+            </div>
+
+            {/* CORPORATE PLAN */}
+            <div className="p-8 rounded-[40px] border-2 border-purple-500/30 bg-purple-50/10 dark:bg-purple-900/5 flex flex-col justify-between group hover:border-purple-500 transition-all">
+              <div className="space-y-6">
+                <div className="inline-flex px-3 py-1 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-black uppercase tracking-widest">
+                  {t.corporate_badge}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-purple-500">CORPORATE</h3>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-3xl font-black dark:text-white">{t.corporate_price}</span>
+                    <span className="text-gray-500 text-xs font-bold">{t.corporate_period}</span>
+                  </div>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    "Multi-Outlet System",
+                    "Centralized Inventory",
+                    "Enterprise API Access",
+                    "Dedicated Account Manager",
+                    "Custom Integration Support"
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300">
+                      <Building2 size={14} className="text-purple-500" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <a 
+                href="https://wa.me/6287768201551?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business." 
+                target="_blank"
+                className="mt-8 w-full py-4 rounded-2xl bg-purple-600 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2"
+              >
+                <Phone size={14} />
+                Call Us
+              </a>
             </div>
           </div>
         </div>

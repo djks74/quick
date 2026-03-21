@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, MessageCircle, ShoppingBag, ShieldCheck, Zap, Sparkles, X } from "lucide-react";
+import { CheckCircle2, MessageCircle, ShoppingBag, ShieldCheck, Zap, Sparkles, X, Building2, Phone } from "lucide-react";
 
 export default function SubscriptionGate({ store, onClose }: { store: any, onClose?: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleSubscribe = async (plan: string) => {
+    if (plan === 'CORPORATE') {
+      window.open("https://wa.me/6287768201551?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business.", "_blank");
+      return;
+    }
     setLoading(plan);
     try {
       console.log("Generating checkout for store:", store.id, "Plan:", plan);
@@ -73,12 +77,26 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
         "Product Sync API",
         "Custom Midtrans Keys"
       ]
+    },
+    {
+      id: 'CORPORATE',
+      name: 'CORPORATE',
+      price: 'Custom',
+      icon: Building2,
+      color: 'bg-purple-600',
+      features: [
+        "Multi-Outlet System",
+        "Centralized Inventory",
+        "Enterprise API Access",
+        "Dedicated Account Manager",
+        "Custom Integration Support"
+      ]
     }
   ];
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-gray-900/90 backdrop-blur-xl p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-[#1A1D21] rounded-[2.5rem] shadow-2xl max-w-5xl w-full overflow-hidden animate-in fade-in zoom-in duration-300 border dark:border-white/10 transition-colors relative my-auto">
+      <div className="bg-white dark:bg-[#1A1D21] rounded-[2.5rem] shadow-2xl max-w-7xl w-full overflow-hidden animate-in fade-in zoom-in duration-300 border dark:border-white/10 transition-colors relative my-auto">
         
         {onClose && (
           <button 
@@ -95,7 +113,7 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
             <p className="text-gray-500 dark:text-gray-400 max-w-lg mx-auto">Select the plan that best fits your business needs. Upgrade or cancel anytime.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {plans.map((plan) => (
               <div 
                 key={plan.id}
@@ -117,8 +135,10 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
                   </div>
                   <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{plan.name}</h3>
                   <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-3xl font-black text-gray-900 dark:text-white transition-colors">Rp {plan.price}</span>
-                    <span className="text-gray-500 dark:text-gray-400 text-xs transition-colors">/month</span>
+                    <span className="text-3xl font-black text-gray-900 dark:text-white transition-colors">
+                      {plan.price === 'Custom' ? 'Contact Us' : `Rp ${plan.price}`}
+                    </span>
+                    {plan.price !== 'Custom' && <span className="text-gray-500 dark:text-gray-400 text-xs transition-colors">/month</span>}
                   </div>
                 </div>
 
@@ -133,10 +153,12 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
 
                 <button 
                   onClick={() => handleSubscribe(plan.id)}
-                  disabled={!!loading}
+                  disabled={!!loading && loading !== plan.id}
                   className={`w-full py-4 rounded-2xl font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-3 disabled:opacity-50 ${
                     plan.recommended 
                       ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30' 
+                      : plan.id === 'CORPORATE'
+                      ? 'bg-purple-600 text-white hover:bg-purple-700 hover:shadow-purple-500/30'
                       : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90'
                   }`}
                 >
@@ -144,8 +166,8 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
                     <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></span>
                   ) : (
                     <>
-                      <Zap className="w-4 h-4" />
-                      {plan.id === 'PRO' ? 'Get Started' : plan.id === 'SOVEREIGN' ? 'Go Sovereign' : 'Upgrade Now'}
+                      {plan.id === 'CORPORATE' ? <Phone className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                      {plan.id === 'PRO' ? 'Get Started' : plan.id === 'SOVEREIGN' ? 'Go Sovereign' : plan.id === 'CORPORATE' ? 'Call Us' : 'Upgrade Now'}
                     </>
                   )}
                 </button>
