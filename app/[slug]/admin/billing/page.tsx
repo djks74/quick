@@ -13,6 +13,7 @@ import {
   Building2,
   Calendar,
   History,
+  Settings,
   ArrowUpRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -11,6 +11,7 @@ import {
   Settings, 
   Layers,
   LogOut,
+  Power,
   ChevronRight,
   ChevronDown,
   Plus,
