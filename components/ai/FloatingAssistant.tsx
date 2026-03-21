@@ -16,7 +16,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   
-  // Hide on POS pages
+  // Hide on Admin, Dashboard, and POS pages
+  const isAdminPage = pathname?.includes("/admin") || pathname?.includes("/dashboard") || pathname?.includes("/super-admin");
   const isPosPage = pathname?.includes("/pos");
 
   useEffect(() => {
@@ -144,7 +145,7 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
     }
   };
 
-  if (isPosPage) return null;
+  if (isAdminPage || isPosPage) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">

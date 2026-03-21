@@ -855,9 +855,10 @@ export async function POST(req: NextRequest) {
         isMerchantUser = true;
         corporateId = dbUser.id;
         const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
+        const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
         userContextInfo = ` The user is an authenticated ADMIN/MERCHANT (ID: ${dbUser.id}). They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
         
-        if (dbUser.subscriptionPlan === "CORPORATE") {
+        if (userPlan === "CORPORATE") {
            userContextInfo += " They are a CORPORATE user with multi-outlet access.";
         }
       } else if (dbUser && dbUser.role === "SUPER_ADMIN") {
@@ -866,14 +867,21 @@ export async function POST(req: NextRequest) {
       }
     } else if (context?.phoneNumber) {
       const cleanPhone = context.phoneNumber.replace(/\D/g, "");
-      const user = await prisma.user.findFirst({
+      const dbUser = await prisma.user.findFirst({
         where: { phoneNumber: { contains: cleanPhone } },
         include: { stores: true }
-      });
-      if (user && (user.role === "MERCHANT" || user.role === "MANAGER") && user.stores.length > 0) {
+      }) as any;
+      
+      if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER" || dbUser.role === "SUPER_ADMIN")) {
         isMerchantUser = true;
-        corporateId = user.id;
-        userContextInfo = ` The user is a MERCHANT of the store '${user.stores[0].name}' (slug: ${user.stores[0].slug}). They can use merchant tools like 'get_store_stats' and 'create_merchant_invoice'. If they ask to 'tambah produk' or 'update harga', use the tools to help them.`;
+        corporateId = dbUser.id;
+        const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
+        const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
+        userContextInfo = ` The user is a registered ${dbUser.role} (ID: ${dbUser.id}) chatting via WhatsApp. They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
+        
+        if (userPlan === "CORPORATE") {
+           userContextInfo += " They are a CORPORATE user with multi-outlet access.";
+        }
       }
     }
 

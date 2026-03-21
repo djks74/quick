@@ -361,6 +361,28 @@ export async function POST(req: NextRequest) {
     // Log WhatsApp Traffic
       await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
 
+      // --- SENDER IDENTIFICATION ---
+      const senderPhoneVariants = (() => {
+        const raw = String(from || "").trim();
+        const cleaned = raw.replace(/[^\d+]/g, "");
+        const noPlus = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
+        const digits = noPlus.replace(/\D/g, "");
+        const normalized = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+        const variants = new Set<string>();
+        if (digits) variants.add(digits);
+        if (normalized) variants.add(normalized);
+        if (normalized.startsWith("62")) variants.add(`0${normalized.slice(2)}`);
+        if (digits) variants.add(`+${digits}`);
+        if (normalized) variants.add(`+${normalized}`);
+        return Array.from(variants).filter(Boolean);
+      })();
+
+      // Check if sender is a registered Admin/Merchant
+      let dbUser = await prisma.user.findFirst({
+        where: { phoneNumber: { in: senderPhoneVariants } },
+        include: { stores: true }
+      });
+
       // --- AI AGENT HANDLER ---
       const isAICommand = 
         lowerText?.startsWith("ai ") || 
@@ -443,7 +465,10 @@ export async function POST(req: NextRequest) {
                 channel: "WHATSAPP",
                 storeId: aiStoreId || undefined,
                 tableNumber: aiSession?.tableNumber || undefined,
-                location: (message as any).location // Pass location if available
+                location: (message as any).location, // Pass location if available
+                userName: dbUser?.name || undefined,
+                userRole: dbUser?.role || undefined,
+                subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined
               }
             })
           });
@@ -486,30 +511,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      const senderPhoneVariants = (() => {
-      const raw = String(from || "").trim();
-      const cleaned = raw.replace(/[^\d+]/g, "");
-      const noPlus = cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
-      const digits = noPlus.replace(/\D/g, "");
-      const normalized = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
-      const variants = new Set<string>();
-      if (digits) variants.add(digits);
-      if (normalized) variants.add(normalized);
-      if (normalized.startsWith("62")) variants.add(`0${normalized.slice(2)}`);
-      if (digits) variants.add(`+${digits}`);
-      if (normalized) variants.add(`+${normalized}`);
-      return Array.from(variants).filter(Boolean);
-    })();
-
-    console.log(`[WHATSAPP] Incoming Message: "${textBody}" from ${from} (Store Context: ${phoneNumberId})`);
+      console.log(`[WHATSAPP] Incoming Message: "${textBody}" from ${from} (Store Context: ${phoneNumberId})`);
 
     if (message && phoneNumberId) {
       // 0. MERCHANT CHECK
-      // Check if sender is a registered Merchant
-      let user = await prisma.user.findFirst({
-        where: { phoneNumber: { in: senderPhoneVariants } },
-        include: { stores: true }
-      });
+      // Use the identification already performed above
+      let user = dbUser;
 
       let preferredMerchantStoreId: number | null = null;
       let isStoreWhatsappNumber = false;
