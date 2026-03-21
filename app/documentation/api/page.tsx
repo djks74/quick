@@ -100,6 +100,33 @@ const apiEndpoints = [
     }
   ];
 
+const plugins = [
+  {
+    name: "WCFM (Multivendor)",
+    description: "Integrasikan toko WCFM Anda dengan sinkronisasi produk real-time dan manajemen vendor.",
+    icon: "https://ps.w.org/wc-frontend-manager/assets/icon-256x256.png",
+    link: "https://github.com/djks74/quick/raw/main/integrations/wordpress-wcfm/gercep-wcfm-sync.php"
+  },
+  {
+    name: "WooCommerce",
+    description: "Plugin standar untuk sinkronisasi produk WooCommerce ke platform Gercep.",
+    icon: "https://ps.w.org/woocommerce/assets/icon-256x256.png",
+    link: "https://github.com/djks74/quick/raw/main/integrations/woocommerce/gercep-woocommerce-sync.php"
+  },
+  {
+    name: "Shopify",
+    description: "Panduan integrasi Shopify menggunakan Custom App dan Webhook.",
+    icon: "https://cdn.shopify.com/assets/images/logos/shopify-bag.png",
+    link: "https://github.com/djks74/quick/blob/main/integrations/shopify/README.md"
+  },
+  {
+    name: "Magento 2",
+    description: "Panduan integrasi Magento 2 via REST API (Coming Soon).",
+    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Magento_logo.svg/1200px-Magento_logo.svg.png",
+    link: "https://github.com/djks74/quick/tree/main/integrations/magento2"
+  }
+];
+
 const authGuide = [
   "Semua request API harus menyertakan header 'X-API-KEY'.",
   "API Key dapat ditemukan di dashboard Merchant pada bagian Settings > API.",
@@ -120,6 +147,39 @@ export default function ApiDocumentationPage() {
             Integrasikan sistem restoran Anda dengan ekosistem Gercep AI menggunakan API RESTful kami yang tangguh.
           </p>
         </div>
+
+        {/* Plugins Section */}
+        <section className="space-y-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <h2 className="text-2xl font-black uppercase tracking-tight">Plugins & Integrasi</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {plugins.map((plugin) => (
+              <div key={plugin.name} className="p-6 rounded-[32px] bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 flex flex-col justify-between space-y-4 hover:border-blue-500/30 transition-all duration-300">
+                <div className="space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-white/10 overflow-hidden p-2">
+                    <img src={plugin.icon} alt={plugin.name} className="w-full h-full object-contain" />
+                  </div>
+                  <h3 className="font-black text-lg uppercase tracking-tight">{plugin.name}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {plugin.description}
+                  </p>
+                </div>
+                <Link 
+                  href={plugin.link} 
+                  target="_blank"
+                  className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-blue-600 text-white text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                >
+                  Download / Doc
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Authentication Section */}
         <section className="bg-white dark:bg-white/5 p-8 rounded-[40px] border border-gray-100 dark:border-white/10 shadow-sm space-y-6">
