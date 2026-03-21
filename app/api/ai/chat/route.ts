@@ -229,7 +229,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }
   },
 
-  async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method, isMerchant }: any) {
+  async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method, isMerchant, table_number }: any) {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findUnique({ where: { slug } });
     if (!store) return { error: "Store not found" };
@@ -241,6 +241,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const orderType = String(order_type || "").toUpperCase();
     const isDelivery = orderType === "DELIVERY";
     const trimmedAddress = String(address || "").trim();
+
+    if (orderType === "DINE_IN" && !table_number) {
+      return { error: "Nomor meja wajib diisi untuk pesanan makan di tempat (DINE_IN)." };
+    }
 
     if (isDelivery) {
       if (!trimmedAddress || trimmedAddress.length < 8) {
@@ -328,6 +332,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         paymentFee,
         status: "PENDING",
         orderType: orderType || "DINE_IN",
+        tableNumber: table_number || null,
         paymentMethod: payment_method || null,
         shippingAddress: isDelivery ? (trimmedAddress || null) : null,
         shippingProvider: isDelivery ? (providerUpper || null) : null,
@@ -778,6 +783,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Inject store context if provided
+    let storeContextInfo = "";
+    if (context?.storeId) {
+      const store = await prisma.store.findUnique({
+        where: { id: Number(context.storeId) },
+        select: { name: true, slug: true, tables: true }
+      });
+      if (store) {
+        const hasTables = store.tables && store.tables.length > 0;
+        storeContextInfo = ` You are currently assisting a customer at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
+      }
+    }
+
+    const tableInfo = context?.tableNumber ? ` The customer is sitting at Table ${context.tableNumber}.` : "";
     const locationInfo = context?.location 
       ? ` The user's current location is latitude: ${context.location.latitude}, longitude: ${context.location.longitude}.`
       : "";
@@ -787,25 +806,34 @@ export async function POST(req: NextRequest) {
       systemInstruction: {
         parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
 
+GREETING & INITIAL FLOW:
+1. When a user first starts a conversation or if you have a store context (from a QR scan), greet them warmly: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
+2. If the store context is available, ask them early what they'd like to do: "Mau makan di sini (DINE_IN), pesan antar (DELIVERY), atau ambil sendiri (TAKEAWAY)?"
+
 SHIPPING & LOCATION:
 1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
-2. If the user is looking for a restaurant or food "near them", "in their area", or "nearby", you MUST ask them to share their location (use the 📍 button) or at least provide their area, city, or postal code BEFORE searching. Do not just list all available restaurants globally if they asked for something nearby.
-3. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
-4. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
-5. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
-6. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
-7. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
-8. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
-9. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
-10. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
-11. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
-12. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
+2. For DINE_IN (makan di tempat): 
+   - You MUST ask for the table number (nomor meja) if it's not already provided in the context.
+   - If the user provides a table number, confirm it: "Baik, pesanan untuk meja [Nomor Meja] ya."
+   - When calling 'create_customer_order', you MUST pass the 'table_number'.
+3. If the user is looking for a restaurant or food "near them", "in their area", or "nearby", you MUST ask them to share their location (use the 📍 button) or at least provide their area, city, or postal code BEFORE searching. Do not just list all available restaurants globally if they asked for something nearby.
+4. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
+5. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
+6. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
+7. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
+8. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
+9. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
+10. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
+11. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
+12. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
+13. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
 
 PAYMENT & RE-ORDERING:
 1. You MUST ask the user for their preferred payment method ('qris' or 'bank_transfer') BEFORE calling 'create_customer_order'.
 2. If a user wants to "re-order" or "order again", use 'get_last_order_by_phone' to find their items, but you MUST still ask for:
    - Their current location/address (if delivery).
    - Their preferred payment method.
+   - Their table number (if dine-in).
 3. If a product has variations (like size, flavor, etc.), you MUST pass the correct 'variationName' when calling 'create_customer_order' to ensure the correct price is used.
 4. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
 
@@ -814,7 +842,7 @@ Once an order is created:
 2. Tell them they can pay directly here or have the payment link sent to their WhatsApp.
 3. If they want to pay on WhatsApp, ask for their WhatsApp number and call 'send_order_to_whatsapp'.
 4. If the user is a MERCHANT and asks to send order details or summary to their WhatsApp (or any number), you MUST set 'isMerchant=true' in 'send_order_to_whatsapp' to ensure they receive the merchant summary format.
-5. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+5. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -923,6 +951,7 @@ Once an order is created:
                   shippingService: { type: "string" },
                   shippingFee: { type: "number" },
                   payment_method: { type: "string", enum: ["qris", "bank_transfer"] },
+                  table_number: { type: "string", description: "Nomor meja jika makan di tempat (DINE_IN)." },
                   isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
                 },
                 required: ["slug", "customer_phone", "items", "order_type", "payment_method"]

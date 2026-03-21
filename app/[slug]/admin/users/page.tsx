@@ -43,7 +43,8 @@ export default function AdminUsers() {
     name: "",
     email: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    role: "CASHIER"
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -90,14 +91,15 @@ export default function AdminUsers() {
       const result = await createStoreCashier(storeId, {
         name: formData.name,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        role: formData.role
       });
 
       if (result.error) {
         setFormError(result.error);
       } else {
-        setFormSuccess("Cashier created successfully!");
-        setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+        setFormSuccess(`${formData.role} created successfully!`);
+        setFormData({ name: "", email: "", password: "", confirmPassword: "", role: "CASHIER" });
         // Refresh list
         const cashiers = await getStoreCashiers(storeId);
         setUsers(cashiers as any);
@@ -178,6 +180,18 @@ export default function AdminUsers() {
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Role</label>
+                <select 
+                  className="w-full border border-[#ccd0d4] px-3 py-2 rounded focus:border-[#2271b1] outline-none bg-white"
+                  value={formData.role}
+                  onChange={e => setFormData({...formData, role: e.target.value})}
+                >
+                  <option value="CASHIER">Cashier (POS Only)</option>
+                  <option value="MANAGER">Manager (Dashboard + POS)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -289,7 +303,10 @@ export default function AdminUsers() {
                     </td>
                     <td className="px-6 py-4 text-gray-600">{user.email}</td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <span className={cn(
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        user.role === 'MANAGER' ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                      )}>
                         {user.role}
                       </span>
                     </td>

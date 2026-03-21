@@ -442,6 +442,7 @@ export async function POST(req: NextRequest) {
                 phoneNumber: from,
                 channel: "WHATSAPP",
                 storeId: aiStoreId || undefined,
+                tableNumber: aiSession?.tableNumber || undefined,
                 location: (message as any).location // Pass location if available
               }
             })

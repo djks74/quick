@@ -307,7 +307,7 @@ export default function FlowShowcase() {
             <p className="text-lg text-white/60 dark:text-black/60 mb-12 max-w-xl mx-auto font-medium">{t.readyDesc}</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/register" className="w-full sm:w-auto px-12 py-5 bg-white dark:bg-black text-black dark:text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">{t.getStarted}</Link>
-              <Link href="https://wa.me/6287768201551" className="w-full sm:w-auto px-12 py-5 bg-white/10 dark:bg-black/10 text-white dark:text-black rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 dark:hover:bg-black/20 transition-all flex items-center justify-center gap-2">
+              <Link href="https://wa.me/62882003961609" className="w-full sm:w-auto px-12 py-5 bg-white/10 dark:bg-black/10 text-white dark:text-black rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 dark:hover:bg-black/20 transition-all flex items-center justify-center gap-2">
                 <MessageSquare className="w-5 h-5" />
                 {t.contactSales}
               </Link>

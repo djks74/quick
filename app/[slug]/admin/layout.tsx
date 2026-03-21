@@ -22,19 +22,25 @@ export default async function AdminLayout({ children, params }: { children: Reac
   // Access Control
   const user = (session as any).user;
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
-  const isOwner = user.storeSlug === slug;
+  
+  // Corporate Check: If owner, allow access to any store they own
+  const isOwner = store.ownerId === parseInt(user.id);
+  
+  // Manager Check: If manager, allow access to assigned store
+  const isManager = user.role === 'MANAGER' && user.storeId === store.id;
 
-  if (!isSuperAdmin && !isOwner) {
-    // If user has another store, redirect there. Else 403.
-    if (user.storeSlug) {
-        redirect(`/${user.storeSlug}/admin`);
-    } else {
-        redirect('/'); // Or 403 page
+  if (!isSuperAdmin && !isOwner && !isManager) {
+    // If user is a cashier for THIS store, redirect to POS
+    if (user.role === 'CASHIER' && user.storeId === store.id) {
+        redirect(`/${slug}/pos`);
     }
+    
+    // Default fallback
+    redirect('/'); 
   }
 
   return (
-    <AdminShell store={store} isSuperAdmin={isSuperAdmin}>
+    <AdminShell store={store} isSuperAdmin={isSuperAdmin} userRole={user.role}>
       <Suspense fallback={<AdminSpinner label="Loading..." />}>{children}</Suspense>
     </AdminShell>
   );

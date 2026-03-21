@@ -25,6 +25,7 @@ import {
   Check,
   Menu,
   Puzzle,
+  Users,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,11 +47,13 @@ interface SidebarItem {
 export default function AdminShell({
   children,
   store,
-  isSuperAdmin
+  isSuperAdmin,
+  userRole
 }: {
   children: React.ReactNode;
   store: any;
   isSuperAdmin?: boolean;
+  userRole?: string;
 }) {
   const pathname = usePathname();
   const { layoutStyle, siteName } = useAdmin();
@@ -70,7 +73,8 @@ export default function AdminShell({
   const baseUrl = `/${slug}/admin`;
   const unreadNotifications = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
 
-  const isTrial = !isSuperAdmin && !['ENTERPRISE', 'SOVEREIGN', 'PRO'].includes(store.subscriptionPlan);
+  const isOwner = userRole === 'MERCHANT' || userRole === 'SUPER_ADMIN';
+  const isTrial = !isSuperAdmin && !['ENTERPRISE', 'SOVEREIGN', 'PRO', 'CORPORATE'].includes(store.subscriptionPlan);
 
   useEffect(() => {
     if (isTrial) {
@@ -126,11 +130,13 @@ export default function AdminShell({
       href: `${baseUrl}/settings`, 
       icon: Settings 
     },
-    {
-      name: "Billing",
-      icon: Zap,
-      onClick: () => setShowSubscriptionGate(true)
-    },
+    ...(isOwner || isSuperAdmin ? [
+      {
+        name: "Billing",
+        href: `${baseUrl}/billing`,
+        icon: Zap
+      }
+    ] : []),
     ...(store.subscriptionPlan !== 'FREE' ? [
       { 
         name: "Tables", 
@@ -138,6 +144,13 @@ export default function AdminShell({
         icon: Layers 
       }
     ] : []),
+    ...(isOwner || isSuperAdmin ? [
+      {
+        name: "Staff",
+        href: `${baseUrl}/users`,
+        icon: Users
+      }
+    ] : [])
   ];
 
   const toggleMenu = (name: string) => {
@@ -316,9 +329,22 @@ export default function AdminShell({
               >
                 <div className="w-16 h-16 rounded bg-gray-500 mx-auto mb-2 flex items-center justify-center text-2xl text-white">A</div>
                 <p className={cn("font-bold mb-1", isModern || isMinimal ? "text-gray-900 dark:text-white" : "text-white")}>admin</p>
-                <div className={cn("border-t pt-2", isModern || isMinimal ? "border-gray-100 dark:border-gray-800" : "border-[#3c434a] dark:border-gray-800")}>
+                <div className={cn("border-t pt-2 flex flex-col gap-2", isModern || isMinimal ? "border-gray-100 dark:border-gray-800" : "border-[#3c434a] dark:border-gray-800")}>
+                  {(isOwner || isSuperAdmin) && (
+                    <Link 
+                      href="/dashboard" 
+                      className={cn("text-xs flex items-center justify-center w-full space-x-1", isModern || isMinimal ? "text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-blue-400" : "hover:text-[#72aee6] dark:hover:text-blue-400")}
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <LayoutDashboard className="w-3 h-3" />
+                      <span>Multi-Outlet Dashboard</span>
+                    </Link>
+                  )}
                   <button 
-                    onClick={() => signOut({ callbackUrl: '/login' })}
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      signOut({ callbackUrl: '/login' });
+                    }}
                     className={cn("text-xs flex items-center justify-center w-full space-x-1", isModern || isMinimal ? "text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-blue-400" : "hover:text-[#72aee6] dark:hover:text-blue-400")}
                   >
                     <LogOut className="w-3 h-3" />
@@ -507,14 +533,39 @@ export default function AdminShell({
             })}
           </nav>
           
-          <button className={cn(
-            "p-3 flex items-center space-x-2 border-t",
-            isModern || isMinimal ? "text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-blue-400 border-gray-100 dark:border-gray-800" : "text-[#c3c4c7] dark:text-gray-500 hover:text-white dark:hover:text-gray-300 border-[#3c434a] dark:border-gray-800"
+          <div className={cn(
+            "p-4 border-t space-y-2",
+            isModern || isMinimal ? "border-gray-100 dark:border-gray-800" : "border-[#3c434a] dark:border-gray-800"
           )}>
-            <MousePointer2 className="w-4 h-4" />
-            <span className="text-xs">Collapse menu</span>
-          </button>
-        </aside>
+            {(isOwner || isSuperAdmin) && (
+              <Link 
+                href="/dashboard" 
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors",
+                  isModern || isMinimal 
+                    ? "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-blue-400" 
+                    : "text-[#f0f0f1] dark:text-gray-400 hover:bg-[#1d2327] dark:hover:bg-gray-800 hover:text-[#72aee6] dark:hover:text-blue-400"
+                )}
+                onClick={() => setIsMobileSidebarOpen(false)}
+              >
+                <LayoutDashboard className="w-4 h-4 opacity-70" />
+                <span>Multi-Outlet Dashboard</span>
+              </Link>
+            )}
+            <button 
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors",
+                isModern || isMinimal
+                  ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  : "text-red-400 hover:text-red-300 hover:bg-red-900/20"
+              )}
+            >
+              <Power className="w-4 h-4" />
+               <span>Sign Out</span>
+             </button>
+           </div>
+         </aside>
 
         {/* Main Content Area */}
         <main className="flex-1 ml-0 md:ml-[160px] p-3 md:p-6 min-h-screen">

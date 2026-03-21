@@ -56,8 +56,19 @@ function LoginForm() {
             const session = await getSession();
             if (session?.user?.role === 'SUPER_ADMIN') {
               router.push('/super-admin');
+            } else if (session?.user?.hasMultipleStores) {
+              router.push('/dashboard');
             } else if (session?.user?.storeSlug) {
               router.push(`/${session.user.storeSlug}/admin`);
+            } else if (session?.user?.role === 'MANAGER' && session?.user?.storeId) {
+              // Fetch store slug for manager
+              const res = await fetch(`/api/stores/${session.user.storeId}`);
+              const data = await res.json();
+              if (data.slug) {
+                router.push(`/${data.slug}/admin`);
+              } else {
+                router.push('/');
+              }
             } else {
               router.push('/');
             }

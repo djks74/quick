@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 async function updateUserPhone() {
   const email = 'demo@mythoz.com';
-  const phone = '6287768201551'; // Your number
+  const phone = '62882003961609'; // Real Gercep number
 
   console.log(`Updating User ${email} with Phone: ${phone}`);
 

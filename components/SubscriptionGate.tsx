@@ -8,7 +8,7 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
 
   const handleSubscribe = async (plan: string) => {
     if (plan === 'CORPORATE') {
-      window.open("https://wa.me/6287768201551?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business.", "_blank");
+      window.open("https://wa.me/62882003961609?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business.", "_blank");
       return;
     }
     setLoading(plan);

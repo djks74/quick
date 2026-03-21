@@ -90,8 +90,14 @@ export default function StoreTable({ stores }: { stores: any[] }) {
               </td>
               <td className="px-6 py-4">
                 <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  store.subscriptionPlan === 'PRO' 
-                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' 
+                  store.subscriptionPlan === 'CORPORATE'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                    : store.subscriptionPlan === 'SOVEREIGN'
+                    ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                    : store.subscriptionPlan === 'ENTERPRISE'
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                    : store.subscriptionPlan === 'PRO' 
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                 }`}>
                   {store.subscriptionPlan}
@@ -159,6 +165,7 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                   className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
                   defaultValue={editingStore.subscriptionPlan}
                 >
+                  <option value="CORPORATE">Corporate</option>
                   <option value="SOVEREIGN">Sovereign</option>
                   <option value="ENTERPRISE">Enterprise</option>
                   <option value="PRO">Pro</option>

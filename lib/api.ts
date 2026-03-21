@@ -338,7 +338,7 @@ export async function getStoreCashiers(storeId: number) {
     const cashiers = await prisma.user.findMany({
       where: {
         workedAtId: storeId,
-        role: "CASHIER"
+        role: { in: ["CASHIER", "MANAGER"] }
       },
       select: {
         id: true,
@@ -438,7 +438,7 @@ export async function createPosOrder(storeId: number, data: any) {
 
 export async function createStoreCashier(storeId: number, data: any) {
   try {
-    const { name, email, password } = data;
+    const { name, email, password, role } = data;
     
     // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -453,7 +453,7 @@ export async function createStoreCashier(storeId: number, data: any) {
         name,
         email,
         password: hashedPassword,
-        role: "CASHIER",
+        role: role || "CASHIER",
         workedAtId: storeId
       }
     });
@@ -524,24 +524,24 @@ export async function markAllOrderNotificationsRead(storeId: number) {
 
 export async function deleteStoreCashier(storeId: number, cashierId: number) {
   try {
-    // Verify the cashier belongs to this store
-    const cashier = await prisma.user.findFirst({
+    // Verify the user belongs to this store and has staff role
+    const staff = await prisma.user.findFirst({
       where: {
         id: cashierId,
         workedAtId: storeId,
-        role: "CASHIER"
+        role: { in: ["CASHIER", "MANAGER"] }
       }
     });
 
-    if (!cashier) {
-      return { error: "Cashier not found or unauthorized" };
+    if (!staff) {
+      return { error: "Staff user not found or unauthorized" };
     }
 
     await prisma.user.delete({ where: { id: cashierId } });
     return { success: true };
   } catch (error) {
-    console.error('Error deleting cashier:', error);
-    return { error: "Failed to delete cashier" };
+    console.error('Error deleting staff:', error);
+    return { error: "Failed to delete staff" };
   }
 }
 

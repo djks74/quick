@@ -75,13 +75,16 @@ export const authOptions: any = {
         if (!isValid) return null;
 
         // Return user object with store info (we'll expand token later)
+        const storeCount = await prisma.store.count({ where: { ownerId: user.id } });
+        
         return {
           id: user.id.toString(),
           email: user.email,
           name: user.name,
           role: user.role,
-          storeId: user.role === "CASHIER" ? (user.workedAtId || null) : (user.stores[0]?.id || null),
-          storeSlug: user.role === "CASHIER" ? null : (user.stores[0]?.slug || null)
+          storeId: user.role === "CASHIER" || user.role === "MANAGER" ? (user.workedAtId || null) : (user.stores[0]?.id || null),
+          storeSlug: user.role === "CASHIER" || user.role === "MANAGER" ? null : (user.stores[0]?.slug || null),
+          hasMultipleStores: storeCount > 1
         };
       }
     })
@@ -96,6 +99,7 @@ export const authOptions: any = {
         token.role = user.role;
         token.storeId = user.storeId;
         token.storeSlug = user.storeSlug;
+        token.hasMultipleStores = user.hasMultipleStores;
       }
       return token;
     },
@@ -105,6 +109,7 @@ export const authOptions: any = {
         session.user.role = token.role;
         session.user.storeId = token.storeId;
         session.user.storeSlug = token.storeSlug;
+        session.user.hasMultipleStores = token.hasMultipleStores;
       }
       return session;
     },

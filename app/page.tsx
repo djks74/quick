@@ -60,8 +60,8 @@ const translations = {
     order_via_whatsapp: "Chat to Order",
     new_order: "AI Order",
     whatsapp_features: "Your customers can search products and order just by chatting with our AI Assistant.",
-    scan_demo: "Scan to start order on WhatsApp",
-    contact_demo: "Book a Demo Call",
+    scan_demo: "Chat & Order via WhatsApp AI",
+    contact_demo: "Chat for Demo",
     flow_subtitle: "The Future of AI Commerce",
     flow_title_start: "Smart shopping with",
     flow_title_highlight: "AI Assistant.",
@@ -128,8 +128,8 @@ const translations = {
     order_via_whatsapp: "Chat untuk Pesan",
     new_order: "Pesanan AI",
     whatsapp_features: "Pelanggan Anda bisa mencari produk dan pesan hanya dengan chatting dengan AI Assistant kami.",
-    scan_demo: "Scan untuk mulai belanja di WhatsApp",
-    contact_demo: "Hubungi kami untuk aktivasi demo",
+    scan_demo: "Chat & Pesan via WhatsApp AI",
+    contact_demo: "Chat untuk Aktivasi Demo",
     flow_subtitle: "Masa Depan AI Commerce",
     flow_title_start: "Belanja pintar dengan",
     flow_title_highlight: "AI Assistant.",
@@ -304,7 +304,7 @@ export default function Home() {
 
           <div className="flex justify-center lg:justify-start">
             <Link 
-              href="https://wa.me/6287768201551?text=Halo%20Gercep,%20saya%20tertarik%20untuk%20aktivasi%20demo."
+              href="https://wa.me/62882003961609?text=Halo%20Gercep,%20saya%20tertarik%20untuk%20aktivasi%20demo."
               target="_blank"
               className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4 flex items-center gap-2 transition-all"
             >
@@ -634,7 +634,7 @@ export default function Home() {
                 </ul>
               </div>
               <a 
-                href="https://wa.me/6287768201551?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business." 
+                href="https://wa.me/62882003961609?text=Hi%20Gercep,%20I'm%20interested%20in%20the%20Corporate%20Plan%20for%20my%20multi-outlet%20business." 
                 target="_blank"
                 className="mt-8 w-full py-4 rounded-2xl bg-purple-600 text-white text-center font-black uppercase tracking-widest text-xs hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2"
               >

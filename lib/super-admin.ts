@@ -136,7 +136,7 @@ export async function updateStorePlan(storeId: number, plan: string, fee: number
       data: {
         subscriptionPlan: plan,
         transactionFeePercent: Number.isFinite(fee) ? fee : 0,
-        ...(plan !== "ENTERPRISE" && plan !== "SOVEREIGN" || store?.slug === "demo"
+        ...(plan !== "ENTERPRISE" && plan !== "SOVEREIGN" && plan !== "CORPORATE" || store?.slug === "demo"
           ? {
               whatsappToken: null,
               whatsappPhoneId: null,
@@ -269,6 +269,88 @@ export async function updatePlatformSettings(data: {
   } catch (error) {
     console.error('[PLATFORM_SETTINGS_ERROR]', error);
     return { success: false, error: error instanceof Error ? error.message : 'Failed to update settings' };
+  }
+}
+
+export async function createMerchant(data: { name: string, email: string, phoneNumber: string, storeName: string, plan: string }) {
+  try {
+    await requireSuperAdmin();
+    
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existingUser) {
+      return { success: false, error: "User with this email already exists" };
+    }
+
+    const hashedPassword = await bcrypt.hash("gercep123", 10); // Default password
+    const slug = data.storeName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          phoneNumber: data.phoneNumber,
+          password: hashedPassword,
+          role: "MERCHANT"
+        }
+      });
+
+      const store = await tx.store.create({
+        data: {
+          name: data.storeName,
+          slug: slug,
+          ownerId: user.id,
+          subscriptionPlan: data.plan,
+          enableWhatsApp: true,
+          qrisFeePercent: 1.0,
+          manualTransferFee: 5000,
+          posEnabled: true,
+          whatsapp: data.phoneNumber
+        }
+      });
+
+      return { user, store };
+    });
+
+    revalidatePath('/super-admin');
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error creating merchant:', error);
+    return { success: false, error: 'Failed to create merchant' };
+  }
+}
+
+export async function createStore(data: { ownerId: number, name: string, plan: string }) {
+  try {
+    await requireSuperAdmin();
+    
+    const slug = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const existingStore = await prisma.store.findUnique({ where: { slug } });
+    const finalSlug = existingStore ? `${slug}-${Math.floor(Math.random() * 1000)}` : slug;
+
+    const owner = await prisma.user.findUnique({ where: { id: data.ownerId } });
+    if (!owner) return { success: false, error: "Owner not found" };
+
+    const store = await prisma.store.create({
+      data: {
+        name: data.name,
+        slug: finalSlug,
+        ownerId: data.ownerId,
+        subscriptionPlan: data.plan,
+        enableWhatsApp: true,
+        qrisFeePercent: 1.0,
+        manualTransferFee: 5000,
+        posEnabled: true,
+        whatsapp: owner.phoneNumber || ""
+      }
+    });
+
+    revalidatePath('/super-admin');
+    return { success: true, data: store };
+  } catch (error) {
+    console.error('Error creating store:', error);
+    return { success: false, error: 'Failed to create store' };
   }
 }
 

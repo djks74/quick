@@ -19,7 +19,7 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
         name: editingUser.name,
         email: editingUser.email,
         role: editingUser.role,
-        workedAtId: editingUser.role === 'CASHIER' ? (editingUser.workedAtId ? parseInt(editingUser.workedAtId) : null) : null
+        workedAtId: (editingUser.role === 'CASHIER' || editingUser.role === 'MANAGER') ? (editingUser.workedAtId ? parseInt(editingUser.workedAtId) : null) : null
       });
       if (res.success) {
         setEditingUser(null);
@@ -86,6 +86,8 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
                       ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' 
                       : user.role === 'MERCHANT'
                       ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                      : user.role === 'MANAGER'
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
                       : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                   }`}>
                     {user.role === 'SUPER_ADMIN' && <Shield size={10} />}
@@ -110,7 +112,7 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
                   )}
                 </td>
                 <td className="px-6 py-4">
-                  {user.role === 'CASHIER' ? (
+                  {(user.role === 'CASHIER' || user.role === 'MANAGER') ? (
                     user.workedAt ? (
                       <div className="flex items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
                         <Store size={12} />
@@ -187,12 +189,13 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 >
                   <option value="MERCHANT">MERCHANT</option>
+                  <option value="MANAGER">MANAGER</option>
                   <option value="CASHIER">CASHIER</option>
                   <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                 </select>
               </div>
 
-              {editingUser.role === 'CASHIER' && (
+              {(editingUser.role === 'CASHIER' || editingUser.role === 'MANAGER') && (
                 <div>
                   <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Assign to Store</label>
                   <select 

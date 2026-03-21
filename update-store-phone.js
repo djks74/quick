@@ -10,7 +10,7 @@ async function updateStore() {
       where: { slug: 'demo' },
       data: {
         whatsappPhoneId: phoneId,
-        whatsapp: '6287768201551' // Updating to your testing number just in case
+        whatsapp: '62882003961609' // Updating to real Gercep number
       }
     });
     console.log('✅ Store Updated:', store.name);
