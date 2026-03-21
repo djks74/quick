@@ -283,7 +283,9 @@ export async function createMerchant(data: { name: string, email: string, phoneN
     }
 
     const hashedPassword = await bcrypt.hash("gercep123", 10); // Default password
-    const slug = data.storeName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const baseSlug = data.storeName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const existingStoreWithSlug = await prisma.store.findUnique({ where: { slug: baseSlug } });
+    const slug = existingStoreWithSlug ? `${baseSlug}-${Math.floor(Math.random() * 1000)}` : baseSlug;
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
