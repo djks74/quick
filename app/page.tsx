@@ -60,7 +60,7 @@ const translations = {
     order_via_whatsapp: "Chat to Order",
     new_order: "AI Order",
     whatsapp_features: "Your customers can search products and order just by chatting with our AI Assistant.",
-    scan_demo: "Scan to try Whatsapp Demo",
+    scan_demo: "Scan to start order on WhatsApp",
     contact_demo: "Book a Demo Call",
     flow_subtitle: "The Future of AI Commerce",
     flow_title_start: "Smart shopping with",
@@ -128,7 +128,7 @@ const translations = {
     order_via_whatsapp: "Chat untuk Pesan",
     new_order: "Pesanan AI",
     whatsapp_features: "Pelanggan Anda bisa mencari produk dan pesan hanya dengan chatting dengan AI Assistant kami.",
-    scan_demo: "Scan untuk coba Demo Whatsapp",
+    scan_demo: "Scan untuk mulai belanja di WhatsApp",
     contact_demo: "Hubungi kami untuk aktivasi demo",
     flow_subtitle: "Masa Depan AI Commerce",
     flow_title_start: "Belanja pintar dengan",
@@ -654,7 +654,7 @@ export default function Home() {
            <div className="relative">
               <div className="block sm:hidden">
                  <QRCodeSVG 
-                   value="https://gercep.click/demo?table=toko" 
+                   value="https://wa.me/62882003961609" 
                    size={80}
                    level="H"
                    includeMargin={false}
@@ -670,7 +670,7 @@ export default function Home() {
                </div>
                <div className="hidden sm:block">
                  <QRCodeSVG 
-                   value="https://gercep.click/demo?table=toko" 
+                   value="https://wa.me/62882003961609" 
                    size={120}
                    level="H"
                    includeMargin={false}
