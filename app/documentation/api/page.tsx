@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const apiEndpoints = [
   {
@@ -161,8 +162,14 @@ export default function ApiDocumentationPage() {
             {plugins.map((plugin) => (
               <div key={plugin.name} className="p-6 rounded-[32px] bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 flex flex-col justify-between space-y-4 hover:border-blue-500/30 transition-all duration-300">
                 <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-white/10 overflow-hidden p-2">
-                    <img src={plugin.icon} alt={plugin.name} className="w-full h-full object-contain" />
+                  <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-white/10 overflow-hidden p-2 relative">
+                    <Image 
+                      src={plugin.icon} 
+                      alt={plugin.name} 
+                      fill
+                      className="object-contain p-2"
+                      unoptimized
+                    />
                   </div>
                   <h3 className="font-black text-lg uppercase tracking-tight">{plugin.name}</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">

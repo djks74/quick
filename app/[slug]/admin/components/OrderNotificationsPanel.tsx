@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
@@ -32,16 +32,16 @@ export default function OrderNotificationsPanel({
   const [items, setItems] = useState<Row[]>(initialNotifications);
   const unreadCount = useMemo(() => items.filter((i) => !i.readAt).length, [items]);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const rows = await getOrderNotifications(storeId, 25);
     setItems(rows as any);
-  };
+  }, [storeId]);
 
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, 10000);
     return () => clearInterval(t);
-  }, [storeId]);
+  }, [refresh]);
 
   const markRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);

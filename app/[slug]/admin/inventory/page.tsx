@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import { 
   Plus, 
   Search, 
@@ -123,11 +123,7 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
   const [saving, setSaving] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState("");
 
-  useEffect(() => {
-    fetchItems();
-  }, [slug]);
-
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/inventory?slug=${slug}`);
       const data = await res.json();
@@ -137,7 +133,11 @@ export default function InventoryListPage({ params }: { params: Promise<{ slug: 
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const filteredItems = items.filter(item => 
     item.name.toLowerCase().includes(search.toLowerCase()) || 

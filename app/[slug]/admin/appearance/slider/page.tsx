@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useShop, Slide } from "@/context/ShopContext";
 import { 
   Plus, 
@@ -63,8 +64,14 @@ export default function AdminSlider() {
         {slides.map((slide) => (
           <div key={slide.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all">
             <div className="relative h-48 bg-gray-100">
-              <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+              <Image 
+                src={slide.image} 
+                alt={slide.title} 
+                fill
+                className="object-cover"
+                unoptimized
+              />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10">
                 <div className="flex space-x-2">
                   <button 
                     onClick={() => handleEdit(slide)}
@@ -80,7 +87,7 @@ export default function AdminSlider() {
                   </button>
                 </div>
               </div>
-              <div className="absolute bottom-4 left-4 text-white">
+              <div className="absolute bottom-4 left-4 text-white z-10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">{slide.subtitle}</p>
                 <h3 className="text-xl font-bold italic uppercase">{slide.title}</h3>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
+import { useState, useRef, useEffect, use, useCallback } from "react";
 import { 
   Search, 
   Scan, 
@@ -32,6 +32,69 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
   const detectorRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
 
+  const lookupIngredient = useCallback(async (value: string) => {
+    if (!value) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    setItem(null);
+
+    try {
+      const res = await fetch(`/api/admin/inventory?barcode=${encodeURIComponent(value)}&slug=${slug}`);
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Ingredient not found");
+
+      setItem(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setBarcode("");
+      if (inputRef.current) inputRef.current.focus();
+    }
+  }, [slug]);
+
+  const stopCamera = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  }, []);
+
+  const runDetectLoop = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const loop = async () => {
+      if (!videoRef.current || !detectorRef.current || !isCameraOpen) return;
+      try {
+        const barcodes = await detectorRef.current.detect(videoRef.current);
+        if (barcodes?.length) {
+          const rawValue = barcodes[0]?.rawValue;
+          if (rawValue) {
+            stopCamera();
+            setBarcode(rawValue);
+            await lookupIngredient(rawValue);
+            return;
+          }
+        }
+      } catch {
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+  }, [isCameraOpen, lookupIngredient, stopCamera]);
+
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
     setCameraSupported(typeof window !== "undefined" && "BarcodeDetector" in window && !!navigator.mediaDevices?.getUserMedia);
@@ -56,74 +119,11 @@ export default function IngredientStockManager({ params }: { params: Promise<{ s
       }
     };
     attach();
-  }, [isCameraOpen]);
-
-  const lookupIngredient = async (value: string) => {
-    if (!value) return;
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    setItem(null);
-
-    try {
-      const res = await fetch(`/api/admin/inventory?barcode=${encodeURIComponent(value)}&slug=${slug}`);
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || "Ingredient not found");
-
-      setItem(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setBarcode("");
-      if (inputRef.current) inputRef.current.focus();
-    }
-  };
-
-  const stopCamera = () => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraOpen(false);
-  };
+  }, [isCameraOpen, runDetectLoop]);
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault();
     await lookupIngredient(barcode);
-  };
-
-  const runDetectLoop = () => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    const loop = async () => {
-      if (!videoRef.current || !detectorRef.current || !isCameraOpen) return;
-      try {
-        const barcodes = await detectorRef.current.detect(videoRef.current);
-        if (barcodes?.length) {
-          const rawValue = barcodes[0]?.rawValue;
-          if (rawValue) {
-            stopCamera();
-            setBarcode(rawValue);
-            await lookupIngredient(rawValue);
-            return;
-          }
-        }
-      } catch {
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
   };
 
   const startCamera = async () => {

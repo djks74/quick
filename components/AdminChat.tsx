@@ -35,15 +35,17 @@ export default function AdminChat({ user, context }: AdminChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  if (!user) return null;
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (user) {
+      scrollToBottom();
+    }
+  }, [messages, user]);
+
+  if (!user) return null;
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;

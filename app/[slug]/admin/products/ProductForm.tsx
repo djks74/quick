@@ -3,6 +3,7 @@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import Image from "next/image";
 import { X, Plus, Trash2, Image as ImageIcon, Upload, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Product, Variation, Category } from "@/lib/types";
@@ -363,7 +364,13 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                 <div className="flex gap-4 items-start">
                   <div className="w-32 h-32 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 relative group">
                     {mainImage ? (
-                      <img src={mainImage} alt="Preview" className="w-full h-full object-cover" />
+                      <Image 
+                        src={mainImage} 
+                        alt="Product Preview" 
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
                     ) : (
                       <ImageIcon className="w-8 h-8 text-gray-300 dark:text-gray-600" />
                     )}
@@ -433,11 +440,17 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                 <div className="grid grid-cols-4 gap-3">
                   {gallery.map((url, index) => (
                     <div key={index} className="relative group aspect-square rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-                      <img src={url} alt={`Gallery ${index}`} className="w-full h-full object-cover" />
+                      <Image 
+                        src={url} 
+                        alt={`Gallery ${index}`} 
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
                       <button 
                         type="button"
                         onClick={() => removeGalleryImage(url)}
-                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-all shadow-lg"
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-all shadow-lg z-10"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>

@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
+import Image from "next/image";
 import { getOrderDetails } from "@/lib/api";
 
 const statusIcons: Record<string, any> = {
@@ -403,9 +404,15 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
                              {orderDetails?.items.map((item: any) => (
                                 <div key={item.id} className="flex justify-between items-center p-3 border border-gray-50 dark:border-gray-800 rounded-xl bg-gray-50/30 dark:bg-gray-800/20 transition-colors">
                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden transition-colors">
+                                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 flex items-center justify-center overflow-hidden transition-colors relative">
                                          {item.product.image ? (
-                                            <img src={item.product.image} className="w-full h-full object-cover" />
+                                            <Image 
+                                              src={item.product.image} 
+                                              alt={item.product.name} 
+                                              fill
+                                              className="object-cover"
+                                              unoptimized
+                                            />
                                          ) : (
                                             <Package className="w-4 h-4 text-gray-200 dark:text-gray-700" />
                                          )}

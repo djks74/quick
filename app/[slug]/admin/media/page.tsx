@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { 
   Search, 
   Grid, 
@@ -94,7 +95,13 @@ export default function AdminMedia() {
           {filteredMedia.map((item) => (
             <div key={item.id} className="aspect-square bg-gray-100 border border-[#ccd0d4] relative group overflow-hidden cursor-pointer">
               {item.type === 'image' ? (
-                <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                <Image 
+                  src={item.url} 
+                  alt={item.name} 
+                  fill
+                  className="object-cover group-hover:scale-110 transition-transform duration-300"
+                  unoptimized
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                   <File className="w-12 h-12" />
@@ -129,8 +136,16 @@ export default function AdminMedia() {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center">
-                      <div className="w-12 h-12 bg-gray-100 border border-[#ccd0d4] mr-3 overflow-hidden">
-                        {item.type === 'image' && <img src={item.url} className="w-full h-full object-cover" />}
+                      <div className="w-12 h-12 bg-gray-100 border border-[#ccd0d4] mr-3 overflow-hidden relative">
+                        {item.type === 'image' && (
+                          <Image 
+                            src={item.url} 
+                            alt={item.name} 
+                            fill
+                            className="object-cover" 
+                            unoptimized
+                          />
+                        )}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-bold text-[#2271b1] hover:text-[#135e96] cursor-pointer">{item.name}</span>
