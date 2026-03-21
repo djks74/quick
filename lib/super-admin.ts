@@ -354,6 +354,52 @@ export async function createStore(data: { ownerId: number, name: string, plan: s
   }
 }
 
+export async function joinStoreToCorporate(storeId: number, corporateOwnerId: number) {
+  try {
+    await requireSuperAdmin();
+    
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      include: { owner: true }
+    });
+
+    if (!store) return { success: false, error: "Store not found" };
+
+    const corporateOwner = await prisma.user.findUnique({
+      where: { id: corporateOwnerId }
+    });
+
+    if (!corporateOwner) return { success: false, error: "Corporate owner not found" };
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Update the store's ownership and plan
+      await tx.store.update({
+        where: { id: storeId },
+        data: {
+          ownerId: corporateOwnerId,
+          subscriptionPlan: "CORPORATE"
+        }
+      });
+
+      // 2. Update the original owner to be a MANAGER for this store
+      await tx.user.update({
+        where: { id: store.ownerId },
+        data: {
+          role: "MANAGER",
+          workedAtId: storeId
+        }
+      });
+    });
+
+    revalidatePath('/super-admin');
+    revalidatePath('/super-admin/users');
+    return { success: true };
+  } catch (error) {
+    console.error('Error joining store to corporate:', error);
+    return { success: false, error: 'Failed to join store to corporate' };
+  }
+}
+
 export async function deleteStore(storeId: number) {
   try {
     await requireSuperAdmin();

@@ -5,12 +5,29 @@ import Link from "next/link";
 import { Edit, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { updateStorePlan, deleteStore, setStoreWaBalance } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate } from "@/lib/super-admin";
 
-export default function StoreTable({ stores }: { stores: any[] }) {
+export default function StoreTable({ stores, users }: { stores: any[], users?: any[] }) {
   const router = useRouter();
   const [editingStore, setEditingStore] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [corporateOwnerId, setCorporateOwnerId] = useState("");
+
+  const handleJoinCorporate = async () => {
+    if (!corporateOwnerId) return;
+    if (!confirm(`Are you sure you want to move "${editingStore.name}" to the selected Corporate Account? The current owner (${editingStore.owner.email}) will become a Manager.`)) return;
+
+    setLoading(true);
+    const res = await joinStoreToCorporate(editingStore.id, parseInt(corporateOwnerId));
+    if (res.success) {
+      setEditingStore(null);
+      setCorporateOwnerId("");
+      router.refresh();
+    } else {
+      alert(res.error || "Failed to join store to corporate");
+    }
+    setLoading(false);
+  };
 
   const handleUpdatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +221,38 @@ export default function StoreTable({ stores }: { stores: any[] }) {
                   className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
                   placeholder="e.g. manual topup adjustment"
                 />
+              </div>
+
+              {/* Join Corporate Section */}
+              <div className="pt-6 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-2">Move to Corporate</h3>
+                  <p className="text-[10px] text-purple-500 dark:text-purple-300 mb-4 leading-relaxed">
+                    Transfer this store to a Corporate Account. The current owner will automatically become a Manager.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <select 
+                      className="w-full border dark:border-gray-700 dark:bg-gray-900 rounded-lg px-3 py-2 text-xs dark:text-white"
+                      value={corporateOwnerId}
+                      onChange={(e) => setCorporateOwnerId(e.target.value)}
+                    >
+                      <option value="">Select Corporate Owner...</option>
+                      {users?.filter(u => u.role === 'MERCHANT' && u.id !== editingStore.ownerId).map(user => (
+                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                      ))}
+                    </select>
+                    
+                    <button 
+                      type="button"
+                      disabled={!corporateOwnerId || loading}
+                      onClick={handleJoinCorporate}
+                      className="w-full py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-all disabled:opacity-50"
+                    >
+                      Join to Corporate Account
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 mt-6">

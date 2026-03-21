@@ -35,7 +35,7 @@ export default async function SuperAdminPage() {
         </header>
 
         <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <StoreTable stores={stores} />
+          <StoreTable stores={stores} users={users} />
         </div>
       </div>
     </div>
