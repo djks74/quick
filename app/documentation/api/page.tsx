@@ -105,25 +105,25 @@ const plugins = [
     name: "WCFM (Multivendor)",
     description: "Integrasikan toko WCFM Anda dengan sinkronisasi produk real-time dan manajemen vendor.",
     icon: "https://ps.w.org/wc-frontend-manager/assets/icon-256x256.png",
-    link: "https://github.com/djks74/quick/raw/main/integrations/wordpress-wcfm/gercep-wcfm-sync.php"
+    link: "/integrations/wcfm-sync.zip"
   },
   {
     name: "WooCommerce",
     description: "Plugin standar untuk sinkronisasi produk WooCommerce ke platform Gercep.",
     icon: "https://ps.w.org/woocommerce/assets/icon-256x256.png",
-    link: "https://github.com/djks74/quick/raw/main/integrations/woocommerce/gercep-woocommerce-sync.php"
+    link: "/integrations/woocommerce-sync.zip"
   },
   {
     name: "Shopify",
     description: "Panduan integrasi Shopify menggunakan Custom App dan Webhook.",
     icon: "https://cdn.shopify.com/assets/images/logos/shopify-bag.png",
-    link: "https://github.com/djks74/quick/blob/main/integrations/shopify/README.md"
+    link: "/integrations/shopify-sync.zip"
   },
   {
     name: "Magento 2",
-    description: "Panduan integrasi Magento 2 via REST API (Coming Soon).",
+    description: "Modul integrasi Magento 2 via REST API untuk sinkronisasi katalog.",
     icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Magento_logo.svg/1200px-Magento_logo.svg.png",
-    link: "https://github.com/djks74/quick/tree/main/integrations/magento2"
+    link: "/integrations/magento2-sync.zip"
   }
 ];
 
