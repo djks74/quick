@@ -81,12 +81,20 @@ export default function BillingPage() {
                   <p className="text-xs text-gray-500">{currentPlan.desc}</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setShowUpgrade(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20"
-              >
-                Upgrade Plan
-              </button>
+              {plan !== 'CORPORATE' && (
+                <button 
+                  onClick={() => {
+                    if (plan === 'SOVEREIGN') {
+                      window.open("https://wa.me/62882003961609?text=Hi%20Gercep,%20I'm%20interested%20in%20upgrading%20to%20the%20Corporate%20Plan.", "_blank");
+                    } else {
+                      setShowUpgrade(true);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20"
+                >
+                  {plan === 'SOVEREIGN' ? 'Call Us for Corporate' : 'Upgrade Plan'}
+                </button>
+              )}
             </div>
             
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
