@@ -13,10 +13,12 @@ import {
   Building2,
   Wallet,
   X,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
+import { deleteOutlet } from "@/lib/api";
 
 export default function DashboardClient({ stores, user }: { stores: any[], user: any }) {
   const router = useRouter();
@@ -24,10 +26,34 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const [newStoreName, setNewStoreName] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const isCorporate = stores.some(s => s.subscriptionPlan === "CORPORATE");
   const activePlan = stores[0]?.subscriptionPlan || "FREE";
+
+  const handleDeleteOutlet = async (e: React.MouseEvent, storeId: number, storeName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete "${storeName}"? This action is permanent and will delete all products, orders, and settings for this outlet.`)) {
+      return;
+    }
+
+    setIsDeleting(storeId);
+    try {
+      const res = await deleteOutlet(storeId);
+      if (res.success) {
+        router.refresh();
+      } else {
+        alert(res.error || "Failed to delete outlet");
+      }
+    } catch (err) {
+      alert("An unexpected error occurred.");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,14 +170,30 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                   <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Store className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
                   </div>
-                  <div className={cn(
-                    "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                    store.subscriptionPlan === 'CORPORATE' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                    store.subscriptionPlan === 'SOVEREIGN' ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
-                    store.subscriptionPlan === 'ENTERPRISE' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                    "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                  )}>
-                    {store.subscriptionPlan}
+                  <div className="flex flex-col items-end gap-2">
+                    <div className={cn(
+                      "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      store.subscriptionPlan === 'CORPORATE' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
+                      store.subscriptionPlan === 'SOVEREIGN' ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
+                      store.subscriptionPlan === 'ENTERPRISE' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                    )}>
+                      {store.subscriptionPlan}
+                    </div>
+                    {isCorporate && (
+                      <button 
+                        onClick={(e) => handleDeleteOutlet(e, store.id, store.name)}
+                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 dark:hover:bg-red-900/40"
+                        title="Delete Outlet"
+                        disabled={isDeleting === store.id}
+                      >
+                        {isDeleting === store.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
 
