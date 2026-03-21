@@ -98,6 +98,7 @@ export async function ensureWaCreditSchema() {
           if (plan === 'PRO') welcomeCredit = 10000;
           else if (plan === 'ENTERPRISE') welcomeCredit = 25000;
           else if (plan === 'SOVEREIGN') welcomeCredit = 50000;
+          else if (plan === 'CORPORATE') welcomeCredit = 100000;
 
           if (welcomeCredit <= 0) return;
 
@@ -341,6 +342,7 @@ export const grantBundleCredit = async (storeId: number, externalRef: string, pl
   let creditAmount = 25000; // Default ENTERPRISE
   if (targetPlan === 'PRO') creditAmount = 10000;
   if (targetPlan === 'SOVEREIGN') creditAmount = 50000;
+  if (targetPlan === 'CORPORATE') creditAmount = 100000;
 
   return prisma.$transaction(async (tx) => {
     const already = await tx.waUsageLog.findFirst({

@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
-import { Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
+import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
 
@@ -59,10 +59,11 @@ export default function AdminSettings() {
   const [storeId, setStoreId] = useState<number | null>(null);
   const [subscriptionPlan, setSubscriptionPlan] = useState("FREE");
   const isSovereign = subscriptionPlan === "SOVEREIGN";
+  const isCorporate = subscriptionPlan === "CORPORATE";
   const isEnterprise = subscriptionPlan === "ENTERPRISE";
   const isDemoStore = slugValue === "demo";
-  const canOverridePlatformConfig = (isEnterprise || isSovereign) && !isDemoStore;
-  const canOverrideWaAndGemini = isSovereign && !isDemoStore;
+  const canOverridePlatformConfig = (isEnterprise || isSovereign || isCorporate) && !isDemoStore;
+  const canOverrideWaAndGemini = (isSovereign || isCorporate) && !isDemoStore;
   const [newPosMethodName, setNewPosMethodName] = useState("");
   const [newPosMethodMode, setNewPosMethodMode] = useState<PosPaymentMethod["mode"]>("card");
   
@@ -663,14 +664,19 @@ export default function AdminSettings() {
                   <label className="text-sm font-medium dark:text-gray-300">Enable Checkout via WhatsApp</label>
                 </div>
 
-                {isSovereign && (
+                {(isSovereign || isCorporate) && (
                   <div className="border border-[#ccd0d4] dark:border-gray-800 p-6 rounded-lg bg-white dark:bg-gray-800 space-y-6 transition-colors shadow-sm">
                     <div className="flex items-center gap-3 border-b dark:border-gray-700 pb-4">
-                      <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500">
-                        <Sparkles size={20} />
+                      <div className={cn(
+                        "p-2 rounded-lg",
+                        isCorporate ? "bg-purple-500/10 text-purple-500" : "bg-orange-500/10 text-orange-500"
+                      )}>
+                        {isCorporate ? <Building2 size={20} /> : <Sparkles size={20} />}
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">Sovereign Configurations</h3>
+                        <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">
+                          {isCorporate ? "Corporate Configurations" : "Sovereign Configurations"}
+                        </h3>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
                       </div>
                     </div>
@@ -953,19 +959,19 @@ export default function AdminSettings() {
 
         {activeTab === "Integrations" && (
           <div className="space-y-6">
-            {!isSovereign && (
+            {(!isSovereign && !isCorporate) && (
               <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-[20px] space-y-3">
                 <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
                   <Lock size={18} />
-                  <h4 className="font-bold uppercase tracking-tight text-sm">Sovereign Feature Only</h4>
+                  <h4 className="font-bold uppercase tracking-tight text-sm">Top Tier Feature Only</h4>
                 </div>
                 <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
-                  Integration tools and Product Sync API are exclusive to <strong>Sovereign</strong> members. 
+                  Integration tools and Product Sync API are exclusive to <strong>Corporate</strong> and <strong>Sovereign</strong> members. 
                   Upgrade your plan to start syncing with WooCommerce, Shopify, or internal systems.
                 </p>
               </div>
             )}
-            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !isSovereign && "opacity-50 pointer-events-none")}>
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", (!isSovereign && !isCorporate) && "opacity-50 pointer-events-none")}>
               <div>
                 <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">API Access</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use this key to sync products from your internal systems.</p>

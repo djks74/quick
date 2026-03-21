@@ -620,6 +620,7 @@ export default function Home() {
                 </div>
                 <ul className="space-y-3">
                   {[
+                    "Everything in Sovereign",
                     "Multi-Outlet System",
                     "Centralized Inventory",
                     "Enterprise API Access",

@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   });
 
   if (!store) return NextResponse.json({ error: "Invalid API Key" }, { status: 403 });
-  if (store.subscriptionPlan !== "SOVEREIGN") {
-    return NextResponse.json({ error: "API access is only available for Sovereign plan." }, { status: 403 });
+  if (!["SOVEREIGN", "CORPORATE"].includes(store.subscriptionPlan)) {
+    return NextResponse.json({ error: "API access is only available for Sovereign and Corporate plans." }, { status: 403 });
   }
 
   return NextResponse.json({ 
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
 
   if (!store) return NextResponse.json({ error: "Invalid API Key" }, { status: 403 });
 
-  if (store.subscriptionPlan !== "SOVEREIGN") {
-    return NextResponse.json({ error: "API access is only available for Sovereign plan." }, { status: 403 });
+  if (!["SOVEREIGN", "CORPORATE"].includes(store.subscriptionPlan)) {
+    return NextResponse.json({ error: "API access is only available for Sovereign and Corporate plans." }, { status: 403 });
   }
 
   try {

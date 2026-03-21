@@ -16,7 +16,7 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
   let useEnterpriseConfig = false;
 
   if (store?.slug !== "demo" && 
-      store?.subscriptionPlan === "SOVEREIGN" &&
+      (store?.subscriptionPlan === "SOVEREIGN" || store?.subscriptionPlan === "CORPORATE") &&
       store?.whatsappToken && store.whatsappToken.trim().length > 10 && 
       store?.whatsappPhoneId && store.whatsappPhoneId.trim().length > 5) {
     token = store.whatsappToken.trim();

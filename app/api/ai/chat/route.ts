@@ -763,7 +763,7 @@ export async function POST(req: NextRequest) {
       const store = await prisma.store.findUnique({ 
         where: { slug: storeSlug }
       }) as any;
-      if (store?.subscriptionPlan === "SOVEREIGN" && store?.customGeminiKey) {
+      if (["SOVEREIGN", "CORPORATE"].includes(store?.subscriptionPlan) && store?.customGeminiKey) {
         geminiKey = store.customGeminiKey;
         console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
       }

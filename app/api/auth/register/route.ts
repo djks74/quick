@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate plan
-    const validPlans = ["FREE", "PRO", "ENTERPRISE", "SOVEREIGN"];
+    const validPlans = ["FREE", "PRO", "ENTERPRISE", "SOVEREIGN", "CORPORATE"];
     const targetPlan = validPlans.includes(plan) ? plan : "FREE";
 
     // Check existing email
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     if (targetPlan === "PRO") initialWaCredit = 10000;
     if (targetPlan === "ENTERPRISE") initialWaCredit = 25000;
     if (targetPlan === "SOVEREIGN") initialWaCredit = 50000;
+    if (targetPlan === "CORPORATE") initialWaCredit = 100000;
 
     // Transaction: Create User -> Create Store
     const result = await prisma.user.create({
