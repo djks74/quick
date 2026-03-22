@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Edit, Trash2, Key, X, Save, Shield, Store, User as UserIcon } from "lucide-react";
+import { Edit, Trash2, Key, X, Save, Shield, Store, User as UserIcon, Search } from "lucide-react";
 import { updateUser, resetUserPassword } from "@/lib/super-admin";
 
 export default function UserTable({ users, allStores }: { users: any[], allStores: any[] }) {
@@ -10,6 +10,17 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
   const [resettingUser, setResettingUser] = useState<any>(null);
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredUsers = users.filter(user => {
+    const query = searchQuery.toLowerCase();
+    return (
+      user.name?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query) ||
+      user.phoneNumber?.toLowerCase().includes(query) ||
+      user.role?.toLowerCase().includes(query)
+    );
+  });
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
@@ -54,8 +65,21 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
   };
 
   return (
-    <div className="relative">
-      <div className="overflow-x-auto">
+    <div className="relative space-y-4">
+      <div className="flex justify-end">
+        <div className="relative w-full max-w-sm">
+          <input 
+            type="text" 
+            placeholder="Search users by name, email, or role..." 
+            className="w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-gray-800 rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white shadow-sm"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5" />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-gray-200 dark:border-gray-800 rounded-xl">
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-800/50 border-b dark:border-gray-800 transition-colors">
             <tr>
@@ -67,84 +91,92 @@ export default function UserTable({ users, allStores }: { users: any[], allStore
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="bg-white dark:bg-[#1A1D21] border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold transition-colors">
-                      {user.name.charAt(0).toUpperCase()}
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((user) => (
+                <tr key={user.id} className="bg-white dark:bg-[#1A1D21] border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold transition-colors">
+                        {user.name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-900 dark:text-white">{user.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900 dark:text-white">{user.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                    user.role === 'SUPER_ADMIN' 
-                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' 
-                      : user.role === 'MERCHANT'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                      : user.role === 'MANAGER'
-                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
-                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                  }`}>
-                    {user.role === 'SUPER_ADMIN' && <Shield size={10} />}
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  {user.stores.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 max-w-[200px]">
-                      {user.stores.map((store: any) => (
-                        <Link 
-                          key={store.id} 
-                          href={`/${store.slug}/admin`}
-                          className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                        >
-                          {store.name}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-gray-400 dark:text-gray-500 text-xs italic">No stores</span>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  {(user.role === 'CASHIER' || user.role === 'MANAGER') ? (
-                    user.workedAt ? (
-                      <div className="flex items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
-                        <Store size={12} />
-                        {user.workedAt.name}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      user.role === 'SUPER_ADMIN' 
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' 
+                        : user.role === 'MERCHANT'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                        : user.role === 'MANAGER'
+                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    }`}>
+                      {user.role === 'SUPER_ADMIN' && <Shield size={10} />}
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {user.stores?.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {user.stores.map((store: any) => (
+                          <Link 
+                            key={store.id} 
+                            href={`/${store.slug}/admin`}
+                            className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          >
+                            {store.name}
+                          </Link>
+                        ))}
                       </div>
                     ) : (
-                      <span className="text-gray-400 dark:text-gray-500 text-xs italic">Unassigned</span>
-                    )
-                  ) : (
-                    <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button 
-                      onClick={() => setResettingUser(user)}
-                      className="text-gray-400 dark:text-gray-500 hover:text-yellow-600 dark:hover:text-yellow-400 p-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
-                      title="Reset Password"
-                    >
-                      <Key className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => setEditingUser(user)}
-                      className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                      title="Edit User"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <span className="text-gray-400 dark:text-gray-500 text-xs italic">No stores</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    {(user.role === 'CASHIER' || user.role === 'MANAGER') ? (
+                      user.workedAt ? (
+                        <div className="flex items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
+                          <Store size={12} />
+                          {user.workedAt.name}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500 text-xs italic">Unassigned</span>
+                      )
+                    ) : (
+                      <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => setResettingUser(user)}
+                        className="text-gray-400 dark:text-gray-500 hover:text-yellow-600 dark:hover:text-yellow-400 p-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
+                        title="Reset Password"
+                      >
+                        <Key className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setEditingUser(user)}
+                        className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Edit User"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400 italic bg-white dark:bg-[#1A1D21]">
+                  No users found matching your search.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

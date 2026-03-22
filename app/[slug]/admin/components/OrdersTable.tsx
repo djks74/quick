@@ -82,10 +82,14 @@ export default function OrdersTable({ initialOrders, slug, canForcePaid = false 
     return shipmentStatusColors[raw] || "bg-gray-100 text-gray-700";
   };
 
-  const filteredOrders = orders.filter(order => 
-    order.customerPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    order.id.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredOrders = orders.filter(order => {
+    const query = searchQuery.toLowerCase();
+    return (
+      order.customerPhone.toLowerCase().includes(query) ||
+      String(order.id).toLowerCase().includes(query) ||
+      (order.customerName && order.customerName.toLowerCase().includes(query))
+    );
+  });
 
   const handleForceMarkPaid = async (orderId: string) => {
     if (processingOrderId) return;

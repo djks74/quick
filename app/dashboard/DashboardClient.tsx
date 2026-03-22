@@ -17,7 +17,8 @@ import {
   Power,
   PowerOff,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -34,6 +35,16 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const [isCreating, setIsCreating] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredStores = stores.filter(store => {
+    const query = searchQuery.toLowerCase();
+    return (
+      store.name?.toLowerCase().includes(query) ||
+      store.slug?.toLowerCase().includes(query) ||
+      String(store.id).toLowerCase().includes(query)
+    );
+  });
 
   const isCorporate = stores.some(s => s.subscriptionPlan === "CORPORATE");
   const activePlan = stores[0]?.subscriptionPlan || "FREE";
@@ -186,70 +197,89 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
 
         {/* Outlet List */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Your Outlets</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Your Outlets</h2>
+            <div className="relative w-full max-w-sm">
+              <input 
+                type="text" 
+                placeholder="Search outlets by name, slug, or ID..." 
+                className="w-full bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5" />
+            </div>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stores.map((store) => (
-              <Link 
-                key={store.id} 
-                href={`/${store.slug}/admin`}
-                className="group p-6 rounded-3xl bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all space-y-6 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full group-hover:bg-blue-500/10 transition-colors" />
-                
-                <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Store className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className={cn(
-                      "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                      store.subscriptionPlan === 'CORPORATE' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                      store.subscriptionPlan === 'SOVEREIGN' ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
-                      store.subscriptionPlan === 'ENTERPRISE' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                    )}>
-                      {store.subscriptionPlan}
+            {filteredStores.length > 0 ? (
+              filteredStores.map((store) => (
+                <Link 
+                  key={store.id} 
+                  href={`/${store.slug}/admin`}
+                  className="group p-6 rounded-3xl bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all space-y-6 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full group-hover:bg-blue-500/10 transition-colors" />
+                  
+                  <div className="flex justify-between items-start">
+                    <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Store className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className={cn(
+                        "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                        store.subscriptionPlan === 'CORPORATE' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
+                        store.subscriptionPlan === 'SOVEREIGN' ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
+                        store.subscriptionPlan === 'ENTERPRISE' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                        "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                      )}>
+                        {store.subscriptionPlan}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div>
-                  <h3 className="text-xl font-black text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{store.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">/{store.slug}</p>
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-white/5">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", store.isOpen ? "bg-green-500" : "bg-red-500")} />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{store.isOpen ? "Open" : "Closed"}</span>
-                    </div>
-                    <button
-                      onClick={(e) => handleToggleActive(e, store.id, store.isActive)}
-                      disabled={togglingId === store.id}
-                      className={cn(
-                        "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all",
-                        store.isActive 
-                          ? "text-green-600 bg-green-50 dark:bg-green-900/20" 
-                          : "text-red-600 bg-red-50 dark:bg-red-900/20"
-                      )}
-                    >
-                      {togglingId === store.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : store.isActive ? (
-                        <Power className="w-3 h-3" />
-                      ) : (
-                        <PowerOff className="w-3 h-3" />
-                      )}
-                      <span className="text-[10px] font-black uppercase tracking-widest">
-                        {store.isActive ? "Active" : "Disabled"}
-                      </span>
-                    </button>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{store.name}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">/{store.slug}</p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-            ))}
+
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-white/5">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("w-2 h-2 rounded-full", store.isOpen ? "bg-green-500" : "bg-red-500")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{store.isOpen ? "Open" : "Closed"}</span>
+                      </div>
+                      <button
+                        onClick={(e) => handleToggleActive(e, store.id, store.isActive)}
+                        disabled={togglingId === store.id}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all",
+                          store.isActive 
+                            ? "text-green-600 bg-green-50 dark:bg-green-900/20" 
+                            : "text-red-600 bg-red-50 dark:bg-red-900/20"
+                        )}
+                      >
+                        {togglingId === store.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : store.isActive ? (
+                          <Power className="w-3 h-3" />
+                        ) : (
+                          <PowerOff className="w-3 h-3" />
+                        )}
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                          {store.isActive ? "Active" : "Disabled"}
+                        </span>
+                      </button>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center text-gray-500 dark:text-gray-400 italic bg-white dark:bg-[#1A1D21] rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
+                No outlets found matching your search.
+              </div>
+            )}
           </div>
         </div>
 
