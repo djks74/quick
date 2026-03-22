@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 interface Message {
   role: "user" | "model";
   parts: { text: string }[];
+  image?: string;
 }
 
 interface AdminChatProps {
@@ -37,6 +38,8 @@ export default function AdminChat({ user, context }: AdminChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  if (!user) return null;
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -46,8 +49,6 @@ export default function AdminChat({ user, context }: AdminChatProps) {
       scrollToBottom();
     }
   }, [messages, user]);
-
-  if (!user) return null;
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -76,7 +77,11 @@ export default function AdminChat({ user, context }: AdminChatProps) {
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      const botMessage: Message = { role: "model", parts: [{ text: data.text }] };
+      const botMessage: Message = { 
+        role: "model", 
+        parts: [{ text: data.text }],
+        image: data.productImage 
+      };
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error("Chat error:", error);
@@ -185,6 +190,11 @@ export default function AdminChat({ user, context }: AdminChatProps) {
                     ? "bg-slate-900 text-white rounded-tr-none font-medium" 
                     : "bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-gray-100 rounded-tl-none border border-gray-100 dark:border-white/5"
                 )}>
+                  {m.image && (
+                    <div className="mb-2 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10">
+                      <img src={m.image} alt="Product" className="w-full h-auto object-cover max-h-48" />
+                    </div>
+                  )}
                   {m.parts[0].text}
                 </div>
               </div>

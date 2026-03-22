@@ -27,13 +27,19 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
   return { token, phoneNumberId, useEnterpriseConfig };
 }
 
-async function dispatchWhatsAppMessage(formattedTo: string, message: string, token: string, phoneNumberId: string, options?: { buttonText?: string, buttonUrl?: string }) {
+async function dispatchWhatsAppMessage(formattedTo: string, message: string, token: string, phoneNumberId: string, options?: { buttonText?: string, buttonUrl?: string, imageUrl?: string }) {
   let body: any = {
     messaging_product: "whatsapp",
     to: formattedTo,
   };
 
-  if (options?.buttonText && options?.buttonUrl) {
+  if (options?.imageUrl) {
+    body.type = "image";
+    body.image = {
+      link: options.imageUrl,
+      caption: message
+    };
+  } else if (options?.buttonText && options?.buttonUrl) {
     body.type = "interactive";
     body.interactive = {
       type: "cta_url",
@@ -115,7 +121,7 @@ async function dispatchWhatsAppTemplateMessage(
   return { ok: true as const, messageId };
 }
 
-export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string, isSystemAlert?: boolean }) {
+export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string, imageUrl?: string, isSystemAlert?: boolean }) {
   // Sanitize Phone Number (Indonesia Default)
   let formattedTo = to.replace(/\D/g, ''); 
   if (formattedTo.startsWith('0')) {

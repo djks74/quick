@@ -496,11 +496,13 @@ export async function POST(req: NextRequest) {
               .trim();
 
             // If there's a payment link, add a button
-            const options = data.paymentUrl 
-              ? { buttonText: "Pay Now", buttonUrl: data.paymentUrl }
-              : undefined;
+            const options = {
+              buttonText: data.paymentUrl ? "Pay Now" : undefined,
+              buttonUrl: data.paymentUrl || undefined,
+              imageUrl: data.productImage || undefined
+            };
 
-            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options);
+            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any);
           } else {
             await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", aiStoreId);
           }

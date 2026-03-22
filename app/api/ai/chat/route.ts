@@ -98,7 +98,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       include: {
         products: {
           where: { category: { not: "System" } },
-          select: { id: true, name: true, price: true, category: true, variations: true, stock: true }
+          select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true }
         }
       }
     });
@@ -924,6 +924,11 @@ GREETING & INITIAL FLOW:
 1. When a user first starts a conversation or if you have a store context (from a QR scan), greet them warmly: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
 2. If the store context is available, ask them early what they'd like to do: "Mau makan di sini (DINE_IN), pesan antar (DELIVERY), atau ambil sendiri (TAKEAWAY)?"
 
+PRODUCT IMAGES & DETAILS:
+1. When a user asks about a product, or if you are showing the menu, you should mention that you can show pictures of the products.
+2. If a user asks "boleh lihat fotonya?" or "tampilkan gambar [Produk]", find the product using 'get_store_products' and if it has an image URL, you MUST include it in your response using this exact format: [PRODUCT_IMAGE: https://url-to-image.jpg].
+3. You can also provide a brief description of the product if available in the tool output.
+
 SHIPPING & LOCATION:
 1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
 2. For DINE_IN (makan di tempat): 
@@ -1164,6 +1169,7 @@ Once an order is created:
 
     let finalBreakdown = undefined;
     let finalPaymentUrl = undefined;
+    let finalProductImage = undefined;
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       const toolResponses = [];
@@ -1225,11 +1231,18 @@ Once an order is created:
       iterations++;
     }
 
+    const responseText = response.text();
+    const imageMatch = responseText.match(/\[PRODUCT_IMAGE:\s*(https?:\/\/[^\]]+)\]/i);
+    if (imageMatch) {
+      finalProductImage = imageMatch[1];
+    }
+
     return NextResponse.json({ 
-      text: response.text(),
+      text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
       history: await chat.getHistory(),
       breakdown: finalBreakdown,
-      paymentUrl: finalPaymentUrl
+      paymentUrl: finalPaymentUrl,
+      productImage: finalProductImage
     });
 
   } catch (error: any) {

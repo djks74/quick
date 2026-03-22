@@ -10,6 +10,7 @@ interface Message {
   text: string;
   breakdown?: string;
   paymentUrl?: string;
+  productImage?: string;
 }
 
 export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOpen?: boolean; onOpenChange?: (open: boolean) => void }) {
@@ -91,7 +92,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
             role: "assistant", 
             text: data.text,
             breakdown: data.breakdown,
-            paymentUrl: data.paymentUrl
+            paymentUrl: data.paymentUrl,
+            productImage: data.productImage
           }]);
           if (data.history) setHistory(data.history);
         } catch (e) {
@@ -134,7 +136,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
           role: "assistant", 
           text: data.text,
           breakdown: data.breakdown,
-          paymentUrl: data.paymentUrl
+          paymentUrl: data.paymentUrl,
+          productImage: data.productImage
         }]);
         if (data.history) setHistory(data.history);
       }
@@ -187,6 +190,11 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
                     {m.breakdown && (
                       <div className="mb-3 p-3 bg-gray-50 dark:bg-black/40 rounded-xl font-mono text-[11px] border border-black/5 dark:border-white/5 whitespace-pre-wrap leading-tight text-gray-600 dark:text-gray-400">
                         {m.breakdown}
+                      </div>
+                    )}
+                    {m.productImage && (
+                      <div className="mb-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <img src={m.productImage} alt="Product" className="w-full h-auto object-cover max-h-48" />
                       </div>
                     )}
                     <div className="break-words">
