@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import { Send, Bot, User, Loader2, Sparkles, X, MessageCircle, MapPin, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -193,8 +194,14 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
                       </div>
                     )}
                     {m.productImage && (
-                      <div className="mb-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm">
-                        <img src={m.productImage} alt="Product" className="w-full h-auto object-cover max-h-48" />
+                      <div className="mb-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm relative h-48 w-full">
+                        <Image 
+                          src={m.productImage} 
+                          alt="Product" 
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
                       </div>
                     )}
                     <div className="break-words">

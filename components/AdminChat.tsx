@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { 
   MessageSquare, 
   X, 
@@ -38,8 +39,6 @@ export default function AdminChat({ user, context }: AdminChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  if (!user) return null;
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -49,6 +48,8 @@ export default function AdminChat({ user, context }: AdminChatProps) {
       scrollToBottom();
     }
   }, [messages, user]);
+
+  if (!user) return null;
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -191,8 +192,14 @@ export default function AdminChat({ user, context }: AdminChatProps) {
                     : "bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-gray-100 rounded-tl-none border border-gray-100 dark:border-white/5"
                 )}>
                   {m.image && (
-                    <div className="mb-2 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10">
-                      <img src={m.image} alt="Product" className="w-full h-auto object-cover max-h-48" />
+                    <div className="mb-2 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 relative h-48 w-full">
+                      <Image 
+                        src={m.image} 
+                        alt="Product" 
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
                     </div>
                   )}
                   {m.parts[0].text}
