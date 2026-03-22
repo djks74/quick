@@ -926,8 +926,11 @@ GREETING & INITIAL FLOW:
 
 PRODUCT IMAGES & DETAILS:
 1. When a user asks about a product, or if you are showing the menu, you should mention that you can show pictures of the products.
-2. If a user asks "boleh lihat fotonya?" or "tampilkan gambar [Produk]", find the product using 'get_store_products' and if it has an image URL, you MUST include it in your response using this exact format: [PRODUCT_IMAGE: https://url-to-image.jpg].
-3. You can also provide a brief description of the product if available in the tool output.
+2. If a user asks "boleh lihat fotonya?", "tampilkan gambar [Produk]", or requests an image using informal Indonesian/slang (e.g., "kirolim poto", "spill gambar", "liat ikannya"), you MUST find the product first.
+3. If you have a store context, use 'get_store_products' to find the item and its 'image' field.
+4. If you DO NOT have a store context, use 'search_stores' with the product name as the query to find which store sells it, then use 'get_store_products' for that store.
+5. If a product has an image URL in the tool output, you MUST include it in your response using this exact format: [PRODUCT_IMAGE: https://url-to-image.jpg].
+6. You can also provide a brief description of the product if available in the tool output.
 
 SHIPPING & LOCATION:
 1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
@@ -968,11 +971,11 @@ Once an order is created:
           functionDeclarations: [
             {
               name: "search_stores",
-              description: "Find restaurants or stores by name or food category. Use location_context if the user specifies an area, city, or postal code.",
+              description: "Find restaurants or stores by name, food category, or specific product. Use this if the user asks for a product but you don't know which store sells it.",
               parameters: {
                 type: "object",
                 properties: {
-                  query: { type: "string", description: "Search keyword." },
+                  query: { type: "string", description: "Search keyword (store name, category, or product name)." },
                   location_context: { type: "string", description: "Area, city, or postal code to filter results." }
                 },
                 required: ["query"]
