@@ -24,7 +24,9 @@ import {
   Package,
   Home,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  MapPin,
+  Navigation
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { useSearchParams } from "next/navigation";
@@ -114,6 +116,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [checkoutPhone, setCheckoutPhone] = useState("");
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>(tableNumber ? 'DINE_IN' : 'TAKEAWAY');
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLatitude, setDeliveryLatitude] = useState<number | null>(null);
+  const [deliveryLongitude, setDeliveryLongitude] = useState<number | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [shippingQuotes, setShippingQuotes] = useState<any[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
   const [isFetchingQuotes, setIsFetchingQuotes] = useState(false);
@@ -299,7 +304,34 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     return options;
   };
 
-  const fetchShippingQuotes = async () => {
+  const shareLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setDeliveryLatitude(latitude);
+        setDeliveryLongitude(longitude);
+        setIsLocating(false);
+        // If we already have an address, re-fetch quotes automatically
+        if (deliveryAddress.trim()) {
+          fetchShippingQuotes(latitude, longitude);
+        } else {
+          alert("Location detected! Please also type your street address for the driver.");
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        alert("Unable to retrieve your location. Please check your browser permissions.");
+      }
+    );
+  };
+
+  const fetchShippingQuotes = async (lat?: number | null, lng?: number | null) => {
     if (!store.enableTakeawayDelivery || orderType !== 'DELIVERY') return;
     if (!deliveryAddress.trim()) {
       setShippingQuotes([]);
@@ -313,7 +345,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeId: store.id,
-          destinationAddress: deliveryAddress.trim()
+          destinationAddress: deliveryAddress.trim(),
+          destinationLatitude: lat ?? deliveryLatitude,
+          destinationLongitude: lng ?? deliveryLongitude
         })
       });
       const data = await res.json();
@@ -382,7 +416,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           shippingService: orderType === 'DELIVERY' ? selectedQuote?.service : undefined,
           shippingAddress: orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined,
           shippingCost: orderType === 'DELIVERY' ? currentShippingCost : 0,
-          shippingEta: orderType === 'DELIVERY' ? selectedQuote?.etd || selectedQuote?.eta : undefined
+          shippingEta: orderType === 'DELIVERY' ? selectedQuote?.etd || selectedQuote?.eta : undefined,
+          destinationLatitude: orderType === 'DELIVERY' ? deliveryLatitude : undefined,
+          destinationLongitude: orderType === 'DELIVERY' ? deliveryLongitude : undefined
         },
         paymentMethod: "midtrans",
         specificType: method === 'qris' ? 'qris' : 'bank_transfer'
@@ -812,7 +848,21 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
                  {orderType === 'DELIVERY' && (
                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
+                        <button 
+                          onClick={shareLocation}
+                          disabled={isLocating}
+                          className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest"
+                        >
+                          {isLocating ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Navigation className="w-3 h-3" />
+                          )}
+                          {deliveryLatitude ? "Location Set" : "Detect Location"}
+                        </button>
+                      </div>
                       <textarea
                         value={deliveryAddress}
                         onChange={(e) => {
@@ -822,8 +872,14 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                         placeholder="Masukkan alamat lengkap + kode pos"
                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[84px]"
                       />
+                      {deliveryLatitude && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 animate-in fade-in zoom-in duration-300">
+                           <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                           <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-tight">Coordinates captured for precise delivery</span>
+                        </div>
+                      )}
                       <button
-                        onClick={fetchShippingQuotes}
+                        onClick={() => fetchShippingQuotes()}
                         disabled={isFetchingQuotes || !deliveryAddress.trim()}
                         className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
                         style={{ backgroundColor: themeColor }}

@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
     const shippingAddress = customerInfo?.shippingAddress ? String(customerInfo.shippingAddress) : null;
     const shippingCost = customerInfo?.shippingCost ? Number(customerInfo.shippingCost) : 0;
     const shippingEta = customerInfo?.shippingEta ? String(customerInfo.shippingEta) : null;
+    const destinationLat = customerInfo?.destinationLatitude ? Number(customerInfo.destinationLatitude) : null;
+    const destinationLng = customerInfo?.destinationLongitude ? Number(customerInfo.destinationLongitude) : null;
 
     let order = await prisma.order.create({
       data: {
@@ -36,6 +38,8 @@ export async function POST(req: NextRequest) {
         shippingAddress: shippingAddress || undefined,
         shippingCost: Number.isFinite(shippingCost) ? shippingCost : 0,
         shippingEta: shippingEta || undefined,
+        destinationLat: destinationLat || undefined,
+        destinationLng: destinationLng || undefined,
         shippingStatus: shippingProvider && shippingAddress ? 'QUOTE_READY' : undefined,
         items: {
           create: items.map((item: any) => ({
@@ -56,7 +60,11 @@ export async function POST(req: NextRequest) {
           name: item.name,
           quantity: item.quantity,
           price: item.price
-        }))
+        })),
+        destinationCoordinate: order.destinationLat && order.destinationLng ? {
+          latitude: order.destinationLat,
+          longitude: order.destinationLng
+        } : undefined
       });
       if (draft?.ok && draft?.draftOrderId) {
         const pendingDraft = draft as any;

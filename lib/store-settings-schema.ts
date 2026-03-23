@@ -147,6 +147,11 @@ export async function ensureStoreSettingsSchema() {
         ALTER TABLE "Store"
         ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true;
       `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "destinationLat" DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS "destinationLng" DOUBLE PRECISION;
+      `);
     })().catch((error) => {
       console.error("ensureStoreSettingsSchema error:", error);
     });

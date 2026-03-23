@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
     const storeId = Number(body?.storeId);
     const destinationAddress = String(body?.destinationAddress || "").trim();
     const destinationPostalCode = body?.destinationPostalCode ? String(body.destinationPostalCode) : undefined;
+    const destinationLatitude = body?.destinationLatitude ? Number(body.destinationLatitude) : undefined;
+    const destinationLongitude = body?.destinationLongitude ? Number(body.destinationLongitude) : undefined;
     const weightGrams = Number(body?.weightGrams || 1000);
 
     if (!storeId || !destinationAddress) {
@@ -25,6 +27,8 @@ export async function POST(req: NextRequest) {
       store,
       destinationAddress,
       destinationPostalCode,
+      destinationLatitude,
+      destinationLongitude,
       weightGrams
     });
 

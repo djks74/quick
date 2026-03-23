@@ -186,6 +186,8 @@ model Order {
   shippingAddress    String?
   shippingCost       Float               @default(0)
   shippingEta        String?
+  destinationLat     Float?
+  destinationLng     Float?
   notes              String?
   store              Store               @relation(fields: [storeId], references: [id])
   items              OrderItem[]
