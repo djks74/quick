@@ -950,6 +950,31 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  </div>
 
                  <div className="space-y-2">
+                    {/* Item Breakdown */}
+                    <div className="pb-4 mb-2 border-b border-gray-100 dark:border-gray-800 space-y-2">
+                       <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 block">Order Details</label>
+                       {cart.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-start text-xs">
+                             <div className="flex-1 pr-4">
+                                <p className="font-bold text-gray-900 dark:text-white leading-tight">
+                                   {item.name}
+                                   {item.selectedVariation && (
+                                      <span className="text-[10px] font-medium text-gray-500 block">
+                                         Option: {item.selectedVariation.name}
+                                      </span>
+                                   )}
+                                </p>
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                   {item.quantity} x {formatPrice(item.price)}
+                                </p>
+                             </div>
+                             <span className="font-black text-gray-900 dark:text-white whitespace-nowrap">
+                                {formatPrice(item.price * item.quantity)}
+                             </span>
+                          </div>
+                       ))}
+                    </div>
+
                     <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
                        <span>Subtotal</span>
                        <span>{formatPrice(subtotal)}</span>
