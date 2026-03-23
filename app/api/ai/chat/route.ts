@@ -30,9 +30,10 @@ const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
-  async search_stores({ query, location_context }: { query: string, location_context?: string }) {
+  async search_stores({ query, location_context, latitude, longitude }: { query: string, location_context?: string, latitude?: number, longitude?: number }) {
     await ensureStoreSettingsSchema();
     const where: any = {
+      isActive: true,
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { slug: { contains: query, mode: "insensitive" } },
@@ -52,7 +53,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       ];
     }
 
-    const stores = await prisma.store.findMany({
+    let stores = await prisma.store.findMany({
       where,
       select: { 
         name: true, 
@@ -70,8 +71,33 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           take: 2
         }
       },
-      take: 5
+      take: 20 // Fetch more to filter by distance
     });
+
+    if (latitude && longitude) {
+      const mapped = stores.map(s => {
+        let distance = null;
+        if (s.biteshipOriginLat && s.biteshipOriginLng) {
+          distance = getDistanceMeters(
+            Number(latitude), 
+            Number(longitude), 
+            parseFloat(String(s.biteshipOriginLat)), 
+            parseFloat(String(s.biteshipOriginLng))
+          );
+        }
+        return { ...s, distance };
+      });
+
+      // Filter: If coordinates provided, only show stores with coordinates OR within 50km if distance known
+      // Also sort by distance
+      stores = mapped
+        .filter(s => s.distance === null || s.distance <= 50000) // 50km limit for "nearby"
+        .sort((a, b) => (a.distance || 999999) - (b.distance || 999999))
+        .slice(0, 5) as any;
+    } else {
+      stores = stores.slice(0, 5);
+    }
+
     return { stores };
   },
 
@@ -1007,7 +1033,9 @@ If the user is an ADMIN or MERCHANT (see userContextInfo):
    - Explain that Gercep helps businesses automate orders via WhatsApp and Web with AI.
 
 CUSTOMER ASSISTANCE:
-1. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
+1. If a user asks for a specific food (like 'nasi uduk') or "nearby" stores, use 'search_stores'.
+2. If you have the user's location (latitude/longitude) in the context, you MUST pass them to 'search_stores' to ensure results are relevant to their area.
+3. If no stores are found within 50km, tell the user: "Maaf, sepertinya belum ada toko di area kamu yang bergabung dengan Gercep."
 
 GREETING & INITIAL FLOW:
 1. When a user first starts a conversation or if you have a store context (from a QR scan), greet them warmly: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
@@ -1060,12 +1088,14 @@ Once an order is created:
           functionDeclarations: [
             {
               name: "search_stores",
-              description: "Find restaurants or stores by name, food category, or specific product. Use this if the user asks for a product but you don't know which store sells it.",
+              description: "Find restaurants or stores by name, food category, or specific product. Use this if the user asks for a product or 'nearby' stores.",
               parameters: {
                 type: "object",
                 properties: {
                   query: { type: "string", description: "Search keyword (store name, category, or product name)." },
-                  location_context: { type: "string", description: "Area, city, or postal code to filter results." }
+                  location_context: { type: "string", description: "Area, city, or postal code to filter results." },
+                  latitude: { type: "number", description: "The customer's latitude for distance sorting." },
+                  longitude: { type: "number", description: "The customer's longitude for distance sorting." }
                 },
                 required: ["query"]
               }
