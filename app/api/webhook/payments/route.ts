@@ -116,10 +116,8 @@ export async function POST(req: NextRequest) {
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
-        source: "PAYMENT_FAILURE",
-        title: `Pembayaran gagal untuk order #${order.id}`,
-        body: `${order.customerPhone} • ${normalizedStatus || "cancelled"}`,
-        metadata: { status: normalizedStatus || "cancelled" }
+        message: `Pembayaran Gagal: Order #${order.id} (${normalizedStatus || "cancelled"})`,
+        type: "PAYMENT_FAILURE"
       }).catch(() => null);
     }
 
@@ -138,10 +136,8 @@ export async function POST(req: NextRequest) {
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
-        source: "PAYMENT_PENDING",
-        title: `Pembayaran pending untuk order #${order.id}`,
-        body: `${order.customerPhone} • ${normalizedStatus || "pending"}`,
-        metadata: { status: normalizedStatus || "pending" }
+        message: `Pembayaran Pending: Order #${order.id} (${normalizedStatus || "pending"})`,
+        type: "PAYMENT_PENDING"
       }).catch(() => null);
     }
 
@@ -310,14 +306,8 @@ export async function POST(req: NextRequest) {
           await createOrderNotification({
             storeId: order.storeId,
             orderId: order.id,
-            source: isShipment ? "MERCHANT_SHIPMENT" : (isInvoice ? "MERCHANT_INVOICE" : "PAYMENT_SUCCESS"),
-            title: isShipment ? `Pengiriman baru #${order.id}` : (isInvoice ? `Tagihan lunas #${order.id}` : `Order baru #${order.id} (Lunas)`),
-            body: `${order.customerPhone} • Rp ${new Intl.NumberFormat('id-ID').format(order.totalAmount)}`,
-            metadata: {
-              orderType: order.orderType,
-              totalAmount: order.totalAmount,
-              tableNumber: order.tableNumber
-            }
+            message: isShipment ? `Pengiriman baru #${order.id}: ${order.customerPhone}` : (isInvoice ? `Tagihan lunas #${order.id}: ${order.customerPhone}` : `Order baru #${order.id} (Lunas): ${order.customerPhone}`),
+            type: isShipment ? "MERCHANT_SHIPMENT" : (isInvoice ? "MERCHANT_INVOICE" : "PAYMENT_SUCCESS")
           }).catch(() => null);
 
           // 2.6 Trigger Partner Webhook

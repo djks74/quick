@@ -81,14 +81,8 @@ export async function POST(req: NextRequest) {
     await createOrderNotification({
       storeId: parseInt(storeId),
       orderId: order.id,
-      source: "STOREFRONT",
-      title: `Order #${order.id} menunggu pembayaran`,
-      body: `${customerInfo?.phone || "GUEST"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
-      metadata: {
-        paymentMethod,
-        totalAmount: total,
-        tableNumber: customerInfo?.tableNumber || null
-      }
+      message: `Order Baru #${order.id}: ${customerInfo?.phone || "GUEST"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
+      type: "NEW_ORDER"
     });
 
     // Notify Merchant

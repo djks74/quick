@@ -8,11 +8,10 @@ import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotifica
 type Row = {
   id: number;
   orderId: number;
-  source: string;
-  title: string;
-  body: string;
+  message: string;
+  type: string;
+  isRead: boolean;
   createdAt: string;
-  readAt: string | null;
 };
 
 function formatIsoHourMinute(iso: string) {
@@ -30,7 +29,7 @@ export default function OrderNotificationsPanel({
   initialNotifications?: Row[];
 }) {
   const [items, setItems] = useState<Row[]>(initialNotifications);
-  const unreadCount = useMemo(() => items.filter((i) => !i.readAt).length, [items]);
+  const unreadCount = useMemo(() => items.filter((i) => !i.isRead).length, [items]);
 
   const refresh = useCallback(async () => {
     const rows = await getOrderNotifications(storeId, 25);
@@ -45,12 +44,12 @@ export default function OrderNotificationsPanel({
 
   const markRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);
-    if (ok) setItems((prev) => prev.map((p) => (p.id === id ? { ...p, readAt: new Date().toISOString() } : p)));
+    if (ok) setItems((prev) => prev.map((p) => (p.id === id ? { ...p, isRead: true } : p)));
   };
 
   const markAllRead = async () => {
     const ok = await markAllOrderNotificationsRead(storeId);
-    if (ok) setItems((prev) => prev.map((p) => ({ ...p, readAt: p.readAt || new Date().toISOString() })));
+    if (ok) setItems((prev) => prev.map((p) => ({ ...p, isRead: true })));
   };
 
   return (
@@ -84,21 +83,23 @@ export default function OrderNotificationsPanel({
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
             {items.map((n) => (
-              <div key={n.id} className={cn("p-5 flex gap-4 items-start", !n.readAt ? "bg-orange-50/40 dark:bg-orange-900/10" : "")}>
-                <div className={cn("w-2 h-2 rounded-full mt-1.5", !n.readAt ? "bg-orange-500" : "bg-gray-300 dark:bg-gray-700")} />
+              <div key={n.id} className={cn("p-5 flex gap-4 items-start", !n.isRead ? "bg-orange-50/40 dark:bg-orange-900/10" : "")}>
+                <div className={cn("w-2 h-2 rounded-full mt-1.5", !n.isRead ? "bg-orange-500" : "bg-gray-300 dark:bg-gray-700")} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{n.title}</div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                       {n.type === 'NEW_ORDER' ? '🛒 Pesanan Baru' : (n.type === 'PAYMENT_SUCCESS' ? '✅ Pembayaran Lunas' : '🔔 Notifikasi Order')}
+                    </div>
                     <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest shrink-0">
                       {formatIsoHourMinute(n.createdAt)}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{n.body}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{n.message}</div>
                   <div className="mt-2 flex items-center justify-between">
                     <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                      {n.source} • Order #{n.orderId}
+                      Order #{n.orderId}
                     </div>
-                    {!n.readAt && (
+                    {!n.isRead && (
                       <button
                         type="button"
                         onClick={() => markRead(n.id)}

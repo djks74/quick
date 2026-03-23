@@ -135,13 +135,13 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [notifications, setNotifications] = useState<any[]>([]);
   const [lastSeenCreatedAt, setLastSeenCreatedAt] = useState<string | null>(null);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
   const refreshNotifications = useCallback(async (silent = false) => {
     const rows = await getOrderNotifications(store.id, 25);
     const newestCreatedAt = rows?.[0]?.createdAt || null;
     if (!silent && lastSeenCreatedAt && newestCreatedAt) {
-      const hasNewUnread = rows.some((r: any) => !r.readAt && r.createdAt > lastSeenCreatedAt);
+      const hasNewUnread = rows.some((r: any) => !r.isRead && r.createdAt > lastSeenCreatedAt);
       if (hasNewUnread) playBeep();
     }
     if (!lastSeenCreatedAt && newestCreatedAt) setLastSeenCreatedAt(newestCreatedAt);
@@ -157,12 +157,12 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
   const markNotifRead = async (id: number) => {
     const ok = await markOrderNotificationRead(id);
-    if (ok) setNotifications((prev) => prev.map((p: any) => (p.id === id ? { ...p, readAt: new Date().toISOString() } : p)));
+    if (ok) setNotifications((prev) => prev.map((p: any) => (p.id === id ? { ...p, isRead: true } : p)));
   };
 
   const markAllNotifRead = async () => {
     const ok = await markAllOrderNotificationsRead(store.id);
-    if (ok) setNotifications((prev) => prev.map((p: any) => ({ ...p, readAt: p.readAt || new Date().toISOString() })));
+    if (ok) setNotifications((prev) => prev.map((p: any) => ({ ...p, isRead: true })));
   };
 
   // Filter products
@@ -710,19 +710,21 @@ export default function PosClient({ store, products, categories, user }: PosClie
                   ) : (
                     <div className={cn("divide-y", isDarkMode ? "divide-gray-700" : "divide-gray-100")}>
                       {notifications.map((n: any) => (
-                        <div key={n.id} className={cn("p-4", !n.readAt ? (isDarkMode ? "bg-orange-900/10" : "bg-orange-50/60") : "")}>
+                        <div key={n.id} className={cn("p-4", !n.isRead ? (isDarkMode ? "bg-orange-900/10" : "bg-orange-50/60") : "")}>
                           <div className="flex items-start justify-between gap-2">
-                            <div className={cn("text-sm font-bold", isDarkMode ? "text-white" : "text-gray-900")}>{n.title}</div>
+                            <div className={cn("text-sm font-bold", isDarkMode ? "text-white" : "text-gray-900")}>
+                               {n.type === 'NEW_ORDER' ? '🛒 Pesanan Baru' : (n.type === 'PAYMENT_SUCCESS' ? '✅ Pembayaran Lunas' : '🔔 Notifikasi Order')}
+                            </div>
                             <div className={cn("text-[10px] font-black uppercase tracking-widest shrink-0", isDarkMode ? "text-gray-400" : "text-gray-400")}>
                               {formatIsoHourMinute(n.createdAt)}
                             </div>
                           </div>
-                          <div className={cn("text-xs mt-1", isDarkMode ? "text-gray-300" : "text-gray-600")}>{n.body}</div>
+                          <div className={cn("text-xs mt-1", isDarkMode ? "text-gray-300" : "text-gray-600")}>{n.message}</div>
                           <div className="mt-2 flex items-center justify-between">
                             <div className={cn("text-[10px] font-black uppercase tracking-widest", isDarkMode ? "text-gray-400" : "text-gray-400")}>
-                              {n.source} • Order #{n.orderId}
+                              Order #{n.orderId}
                             </div>
-                            {!n.readAt && (
+                            {!n.isRead && (
                               <button
                                 type="button"
                                 onClick={() => markNotifRead(n.id)}

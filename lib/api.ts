@@ -462,14 +462,8 @@ export async function createPosOrder(storeId: number, data: any) {
     await createOrderNotification({
       storeId,
       orderId: order.id,
-      source: "POS",
-      title: `New POS order #${order.id}`,
-      body: `${customerPhone || "POS-CUSTOMER"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
-      metadata: {
-        paymentMethod,
-        totalAmount: total,
-        discountAmount: discountAmount || 0
-      }
+      message: `Pesanan POS Baru #${order.id}: ${customerPhone || "POS-CUSTOMER"} • Rp ${Math.round(total).toLocaleString("id-ID")}`,
+      type: "NEW_ORDER"
     });
 
     // Trigger Partner Webhook
@@ -521,18 +515,15 @@ export async function getOrderNotifications(storeId: number, limit = 20) {
       select: {
         id: true,
         orderId: true,
-        source: true,
-        title: true,
-        body: true,
-        readAt: true,
-        createdAt: true,
-        metadata: true
+        message: true,
+        type: true,
+        isRead: true,
+        createdAt: true
       }
     });
     return rows.map(r => ({
       ...r,
-      createdAt: r.createdAt.toISOString(),
-      readAt: r.readAt ? r.readAt.toISOString() : null
+      createdAt: r.createdAt.toISOString()
     }));
   } catch (error) {
     console.error("Error fetching order notifications:", error);
@@ -545,7 +536,7 @@ export async function markOrderNotificationRead(id: number) {
     await ensureOrderNotificationsSchema();
     await prisma.orderNotification.update({
       where: { id },
-      data: { readAt: new Date() }
+      data: { isRead: true }
     });
     return true;
   } catch (error) {
@@ -558,8 +549,8 @@ export async function markAllOrderNotificationsRead(storeId: number) {
   try {
     await ensureOrderNotificationsSchema();
     await prisma.orderNotification.updateMany({
-      where: { storeId, readAt: null },
-      data: { readAt: new Date() }
+      where: { storeId, isRead: false },
+      data: { isRead: true }
     });
     return true;
   } catch (error) {

@@ -47,10 +47,8 @@ async function processPendingPaymentReminders() {
       await createOrderNotification({
         storeId: order.storeId,
         orderId: order.id,
-        source: "UNPAID_RISK",
-        title: `Order #${order.id} belum dibayar >2 menit`,
-        body: `${order.customerPhone} • Rp ${new Intl.NumberFormat("id-ID").format(order.totalAmount)}`,
-        metadata: { ageMinutes: Math.floor((now.getTime() - order.createdAt.getTime()) / 60000) }
+        message: `Order #${order.id} sudah 30 menit belum dibayar (${order.customerPhone})`,
+        type: "PAYMENT_REMINDER"
       }).catch(() => null);
       merchantRiskAlerts += 1;
     }
@@ -84,10 +82,8 @@ async function processOrderSlaAlerts() {
     await createOrderNotification({
       storeId: order.storeId,
       orderId: order.id,
-      source: "SLA_ALERT",
-      title: `Order #${order.id} belum diproses melewati SLA`,
-      body: `Order berstatus PAID belum diproses selama ${slaMinutes}+ menit`,
-      metadata: { slaMinutes }
+      message: `Peringatan SLA: Order #${order.id} belum diproses selama ${slaMinutes}+ menit`,
+      type: "SLA_ALERT"
     }).catch(() => null);
     slaAlerts += 1;
   }
@@ -126,10 +122,8 @@ async function processCancellationSpikeAlerts() {
     await createOrderNotification({
       storeId,
       orderId: stat.latestOrderId,
-      source: "ANOMALY_ALERT",
-      title: "Lonjakan pembatalan/refund terdeteksi",
-      body: `${stat.bad}/${stat.total} in last 60 minutes`,
-      metadata: { bad: stat.bad, total: stat.total, ratio }
+      message: `Anomali Operasional: Lonjakan pembatalan (${stat.bad}/${stat.total} dalam 60 menit)`,
+      type: "ANOMALY_ALERT"
     }).catch(() => null);
     spikeAlerts += 1;
   }

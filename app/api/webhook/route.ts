@@ -867,16 +867,8 @@ export async function POST(req: NextRequest) {
         await createOrderNotification({
           storeId: targetStore.id,
           orderId: order.id,
-          source: "WHATSAPP",
-          title: `Order ${String((session.metadata as any)?.orderType || "DELIVERY").toLowerCase()} #${order.id} menunggu pembayaran`,
-          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}${selected?.provider === "STORE_COURIER" ? "\n🚀 Kirim dengan Kurir Toko" : ""}`,
-          metadata: { 
-            orderType: (session.metadata as any)?.orderType || "DELIVERY", 
-            shippingProvider: selected?.provider || null, 
-            shippingCost, 
-            shippingAddress: ctx.address,
-            isStoreCourier: selected?.provider === "STORE_COURIER"
-          }
+          message: `Order ${String((session.metadata as any)?.orderType || "DELIVERY").toLowerCase()} #${order.id} menunggu pembayaran: ${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+          type: "WHATSAPP_ORDER"
         }).catch(() => null);
 
             const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
@@ -1058,10 +1050,8 @@ export async function POST(req: NextRequest) {
         await createOrderNotification({
           storeId: targetStore.id,
           orderId: pendingOrder.id,
-          source: "CUSTOMER_CANCEL",
-          title: `Customer cancelled order #${pendingOrder.id}`,
-          body: `${from} cancelled before payment`,
-          metadata: { channel: "whatsapp" }
+          message: `Customer membatalkan order #${pendingOrder.id}: ${from} (via WhatsApp)`,
+          type: "CUSTOMER_CANCEL"
         }).catch(() => null);
         const storeContact = await prisma.store.findUnique({
           where: { id: targetStore.id },
@@ -1695,16 +1685,8 @@ export async function POST(req: NextRequest) {
         await createOrderNotification({
           storeId: targetStore.id,
           orderId: order.id,
-          source: "WHATSAPP",
-          title: `Order takeaway #${order.id} menunggu pembayaran`,
-          body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}${ctx.provider === "STORE_COURIER" ? "\n🚀 Kirim dengan Kurir Toko" : ""}`,
-          metadata: { 
-            orderType: "TAKEAWAY", 
-            shippingProvider: ctx.provider, 
-            shippingCost, 
-            shippingAddress: addressText,
-            isStoreCourier: ctx.provider === "STORE_COURIER"
-          }
+          message: `Order takeaway #${order.id} menunggu pembayaran: ${from} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+          type: "WHATSAPP_ORDER"
         }).catch(() => null);
 
         const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
@@ -1839,12 +1821,8 @@ export async function POST(req: NextRequest) {
             await createOrderNotification({
               storeId: targetStore.id,
               orderId: order.id,
-              source: "WHATSAPP",
-              title: `Order #${order.id} menunggu pembayaran`,
-              body: `${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
-              metadata: {
-                totalAmount: amount
-              }
+              message: `Order #${order.id} menunggu pembayaran: ${from} • Rp ${new Intl.NumberFormat('id-ID').format(amount)}`,
+              type: "WHATSAPP_ORDER"
             });
 
             const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
@@ -1940,17 +1918,8 @@ export async function POST(req: NextRequest) {
           await createOrderNotification({
             storeId: targetStore.id,
             orderId: order.id,
-            source: "WHATSAPP",
-            title: `Order #${order.id} menunggu pembayaran`,
-            body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
-            metadata: {
-              totalAmount: finalTotal,
-              taxAmount,
-              serviceCharge,
-              paymentFee: fee,
-              tableNumber: session.tableNumber || null,
-              items: cart.map(item => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
-            }
+            message: `Order #${order.id} menunggu pembayaran: ${from}${session.tableNumber ? ` (Meja ${session.tableNumber})` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+            type: "WHATSAPP_ORDER"
           });
 
           const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
@@ -2146,17 +2115,8 @@ export async function POST(req: NextRequest) {
                  await createOrderNotification({
                    storeId: targetStore.id,
                    orderId: order.id,
-                   source: "WHATSAPP",
-                  title: `Order #${order.id} menunggu pembayaran`,
-                   body: `${from}${session.tableNumber ? ` • Table ${session.tableNumber}` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
-                   metadata: {
-                     totalAmount: finalTotal,
-                     taxAmount,
-                     serviceCharge,
-                     paymentFee: fee,
-                     tableNumber: session.tableNumber || null,
-                     items: currentCart.map((item: any) => ({ productId: item.productId, name: item.name, qty: item.qty, price: item.price }))
-                   }
+                   message: `Order #${order.id} menunggu pembayaran: ${from}${session.tableNumber ? ` (Meja ${session.tableNumber})` : ""} • Rp ${new Intl.NumberFormat('id-ID').format(finalTotal)}`,
+                   type: "WHATSAPP_ORDER"
                  });
 
                  const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Pending");
