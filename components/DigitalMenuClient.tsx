@@ -709,10 +709,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    className={cn(
                      "w-full flex justify-between items-center p-5 rounded-3xl border-2 transition-all group",
                      selectedVariation?.name === v.name 
-                       ? "bg-gray-50 dark:bg-gray-800 border-primary" 
+                       ? "bg-gray-50 dark:bg-gray-800 border-primary dark:border-white dark:[--selected-border-color:white]" 
                        : "border-gray-50 dark:border-gray-800 hover:border-gray-100 dark:hover:border-gray-700"
                    )}
-                   style={selectedVariation?.name === v.name ? { borderColor: themeColor, backgroundColor: `${themeColor}08` } : {}}
+                   style={selectedVariation?.name === v.name ? { 
+                     borderColor: 'var(--selected-border-color, ' + themeColor + ')', 
+                     backgroundColor: `${themeColor}08` 
+                   } : {}}
                  >
                    <span className="font-black text-gray-900 dark:text-white">{v.name}</span>
                    <span className="font-black text-[var(--theme-color)] dark:text-white">{formatPrice(v.price)}</span>
