@@ -126,6 +126,8 @@ model Product {
   ingredients      ProductIngredient[]
 
   @@unique([storeId, name])
+  @@index([storeId])
+  @@index([category])
   @@index([externalId])
 }
 
@@ -192,6 +194,10 @@ model Order {
   store              Store               @relation(fields: [storeId], references: [id])
   items              OrderItem[]
   notifications      OrderNotification[]
+
+  @@index([storeId, createdAt])
+  @@index([status])
+  @@index([customerPhone])
 }
 
 model OrderItem {

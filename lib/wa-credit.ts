@@ -11,25 +11,13 @@ export async function ensureWaCreditSchema() {
     ensuredWaCreditSchema = (async () => {
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000;
-      `);
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
-        ALTER COLUMN "waBalance" SET DEFAULT 50000;
-      `);
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "waPricePerMessage" DOUBLE PRECISION NOT NULL DEFAULT 350;
-      `);
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ;
-      `);
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000,
+        ADD COLUMN IF NOT EXISTS "waPricePerMessage" DOUBLE PRECISION NOT NULL DEFAULT 350,
+        ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ,
         ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ;
-      `);
-      await prisma.$executeRawUnsafe(`
+
+        ALTER TABLE "Store" ALTER COLUMN "waBalance" SET DEFAULT 50000;
+
         CREATE TABLE IF NOT EXISTS "WaUsageLog" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -44,20 +32,11 @@ export async function ensureWaCreditSchema() {
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_storeId_createdAt_idx"
-        ON "WaUsageLog" ("storeId", "createdAt");
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_externalRef_idx"
-        ON "WaUsageLog" ("externalRef");
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx"
-        ON "WaUsageLog" ("messageId");
-      `);
-      await prisma.$executeRawUnsafe(`
+
+        CREATE INDEX IF NOT EXISTS "WaUsageLog_storeId_createdAt_idx" ON "WaUsageLog" ("storeId", "createdAt");
+        CREATE INDEX IF NOT EXISTS "WaUsageLog_externalRef_idx" ON "WaUsageLog" ("externalRef");
+        CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx" ON "WaUsageLog" ("messageId");
+
         CREATE TABLE IF NOT EXISTS "PlatformWaUsageLog" (
           "id" SERIAL PRIMARY KEY,
           "type" TEXT NOT NULL,
@@ -68,59 +47,51 @@ export async function ensureWaCreditSchema() {
           "metadata" JSONB,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_createdAt_idx"
-        ON "PlatformWaUsageLog" ("createdAt");
-      `);
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_relatedStoreId_idx"
-        ON "PlatformWaUsageLog" ("relatedStoreId");
+
+        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_createdAt_idx" ON "PlatformWaUsageLog" ("createdAt");
+        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_relatedStoreId_idx" ON "PlatformWaUsageLog" ("relatedStoreId");
       `);
 
+      // Initialize welcome credits for stores that haven't received them yet
       const eligibleStores = await prisma.store.findMany({
         where: {
           waBalance: { lte: 0 },
-          waUsageLogs: {
-            none: {}
-          }
+          waUsageLogs: { none: {} }
         },
-        select: {
-          id: true,
-          subscriptionPlan: true
-        }
+        select: { id: true, subscriptionPlan: true }
       }).catch(() => []);
 
-      for (const store of eligibleStores) {
-        await prisma.$transaction(async (tx) => {
-          let welcomeCredit = 0;
-          const plan = store.subscriptionPlan;
-          if (plan === 'PRO') welcomeCredit = 10000;
-          else if (plan === 'ENTERPRISE') welcomeCredit = 25000;
-          else if (plan === 'SOVEREIGN') welcomeCredit = 50000;
-          else if (plan === 'CORPORATE') welcomeCredit = 100000;
+      if (eligibleStores.length > 0) {
+        for (const store of eligibleStores) {
+          await prisma.$transaction(async (tx) => {
+            let welcomeCredit = 0;
+            const plan = store.subscriptionPlan;
+            if (plan === 'PRO') welcomeCredit = 10000;
+            else if (plan === 'ENTERPRISE') welcomeCredit = 25000;
+            else if (plan === 'SOVEREIGN') welcomeCredit = 50000;
 
-          if (welcomeCredit <= 0) return;
-
-          const updated = await tx.store.update({
-            where: { id: store.id },
-            data: { waBalance: welcomeCredit },
-            select: { waBalance: true }
-          });
-
-          await tx.waUsageLog.create({
-            data: {
-              storeId: store.id,
-              type: "WELCOME_CREDIT",
-              amount: welcomeCredit,
-              description: "Default WhatsApp credit",
-              balanceAfter: Number((updated.waBalance || 0).toFixed(2)),
-              externalRef: `WELCOME-${store.id}`
+            if (welcomeCredit > 0) {
+              await tx.store.update({
+                where: { id: store.id },
+                data: { waBalance: welcomeCredit }
+              });
+              await tx.waUsageLog.create({
+                data: {
+                  storeId: store.id,
+                  type: 'TOPUP',
+                  amount: welcomeCredit,
+                  description: `Welcome credit for ${plan} plan`,
+                  balanceAfter: welcomeCredit
+                }
+              });
             }
           });
-        }).catch(() => null);
+        }
       }
-    })().catch(() => {});
+    })().catch((err) => {
+      console.error("ensureWaCreditSchema error:", err);
+      ensuredWaCreditSchema = null;
+    });
   }
   await ensuredWaCreditSchema;
 }

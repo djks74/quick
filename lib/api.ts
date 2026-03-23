@@ -17,11 +17,8 @@ async function ensureRecipeSchema() {
   if (!ensuredRecipeSchema) {
     ensuredRecipeSchema = (async () => {
       await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Product"
-        ADD COLUMN IF NOT EXISTS "barcode" TEXT;
-      `);
-
-      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "barcode" TEXT;
+        
         CREATE TABLE IF NOT EXISTS "InventoryItem" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -34,14 +31,10 @@ async function ensureRecipeSchema() {
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-      `);
 
-      await prisma.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "InventoryItem_storeId_barcode_key"
         ON "InventoryItem" ("storeId", "barcode");
-      `);
 
-      await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "ProductIngredient" (
           "id" SERIAL PRIMARY KEY,
           "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -53,28 +46,19 @@ async function ensureRecipeSchema() {
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-      `);
 
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "ProductIngredient"
-        ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs';
-      `);
-
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "ProductIngredient"
-        ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs';
-      `);
-
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "ProductIngredient"
+        ALTER TABLE "ProductIngredient" 
+        ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs',
+        ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs',
         ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1;
-      `);
 
-      await prisma.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "ProductIngredient_productId_inventoryItemId_key"
         ON "ProductIngredient" ("productId", "inventoryItemId");
       `);
-    })().catch(() => {});
+    })().catch((err) => {
+      console.error("ensureRecipeSchema error:", err);
+      ensuredRecipeSchema = null; // Allow retry on failure
+    });
   }
 
   await ensuredRecipeSchema;
@@ -644,7 +628,7 @@ export async function deleteTable(id: number) {
 
 // --- Products ---
 
-export async function getProducts(storeId: number, categorySlug?: string): Promise<Product[]> {
+export async function getProducts(storeId: number, categorySlug?: string, limit: number = 100, offset: number = 0): Promise<Product[]> {
   try {
     await ensureRecipeSchema();
     const where: any = { 
@@ -660,6 +644,8 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
       products = await prisma.product.findMany({
         where,
         orderBy: { id: 'desc' },
+        take: limit,
+        skip: offset,
         select: {
           id: true,
           name: true,
@@ -693,6 +679,8 @@ export async function getProducts(storeId: number, categorySlug?: string): Promi
         products = await prisma.product.findMany({
           where,
           orderBy: { id: 'desc' },
+          take: limit,
+          skip: offset,
           select: {
             id: true,
             name: true,
@@ -1148,9 +1136,10 @@ export async function getDashboardStats(storeId: number) {
       prisma.order.count({
         where: { storeId }
       }),
-      prisma.order.groupBy({
-        by: ['customerPhone'],
-        where: { storeId }
+      prisma.order.findMany({
+        where: { storeId },
+        select: { customerPhone: true },
+        distinct: ['customerPhone']
       }),
       prisma.orderItem.aggregate({
         _sum: {
@@ -1181,11 +1170,13 @@ export async function getDashboardStats(storeId: number) {
   }
 }
 
-export async function getOrders(storeId: number) {
+export async function getOrders(storeId: number, limit: number = 50, offset: number = 0) {
   try {
     const orders = await prisma.order.findMany({
       where: { storeId },
       orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
       select: {
         id: true,
         customerPhone: true,
