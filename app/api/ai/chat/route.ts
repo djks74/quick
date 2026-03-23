@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import midtransClient from "midtrans-client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
@@ -210,6 +211,68 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       totalSales,
       outlets: stats
     };
+  },
+
+  async create_topup_payment_link({ storeId, amount, userId }: { storeId: number; amount: number; userId?: number }) {
+    await ensureStoreSettingsSchema();
+    const store = await prisma.store.findUnique({
+      where: { id: Number(storeId) },
+      include: { owner: true }
+    });
+    if (!store) return { error: "Store not found" };
+
+    if (userId && Number(store.ownerId) !== Number(userId)) {
+       // Only allow if the user is the owner (unless it's a super-admin, handled in the loop)
+       return { error: "Unauthorized access to this store for top-up." };
+    }
+
+    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
+    const topupRef = `AI-TOPUP-${store.id}-${Date.now()}`;
+
+    const midtransServerKey = store.paymentGatewaySecret || platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY;
+    const midtransClientKey = store.paymentGatewayClientKey || platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY;
+    
+    if (!midtransServerKey || !midtransClientKey) {
+      return { error: "Payment gateway (Midtrans) not configured for this platform." };
+    }
+
+    try {
+      const snap = new midtransClient.Snap({
+        isProduction: !midtransServerKey.startsWith("SB-"),
+        serverKey: midtransServerKey,
+        clientKey: midtransClientKey
+      });
+
+      const transaction = await snap.createTransaction({
+        transaction_details: {
+          order_id: topupRef,
+          gross_amount: amount
+        },
+        customer_details: {
+          email: store.owner.email || "merchant@example.com",
+          first_name: store.owner.name || store.name
+        },
+        item_details: [{
+          id: "WA_TOPUP_AI",
+          price: amount,
+          quantity: 1,
+          name: "WhatsApp Credit Top-up (via AI)"
+        }],
+        enabled_payments: ["gopay", "qris", "shopeepay", "other_qris"]
+      } as any);
+
+      return {
+        success: true,
+        provider: "midtrans",
+        reference: topupRef,
+        paymentUrl: transaction.redirect_url,
+        token: transaction.token,
+        message: `Top-up link generated for Rp ${new Intl.NumberFormat('id-ID').format(amount)}.`
+      };
+    } catch (e: any) {
+      console.error("[AI_TOPUP_ERROR]", e);
+      return { error: `Failed to create top-up payment: ${e.message}` };
+    }
   },
 
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
@@ -844,6 +907,8 @@ export async function POST(req: NextRequest) {
     let userContextInfo = "";
     let isMerchantUser = false;
     let corporateId: number | null = null;
+    let currentUserId: number | null = null;
+    let currentUserRole: string | null = null;
 
     if (session && (session as any).user) {
       const dbUser = await prisma.user.findUnique({
@@ -854,6 +919,8 @@ export async function POST(req: NextRequest) {
       if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER")) {
         isMerchantUser = true;
         corporateId = dbUser.id;
+        currentUserId = dbUser.id;
+        currentUserRole = dbUser.role;
         const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
         const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
         userContextInfo = ` The user is an authenticated ADMIN/MERCHANT (ID: ${dbUser.id}). They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
@@ -863,6 +930,7 @@ export async function POST(req: NextRequest) {
         }
       } else if (dbUser && dbUser.role === "SUPER_ADMIN") {
         isMerchantUser = true; // Super admin can do everything
+        currentUserRole = "SUPER_ADMIN";
         userContextInfo = " The user is a SUPER_ADMIN with full platform access.";
       }
     } else if (context?.phoneNumber) {
@@ -875,6 +943,8 @@ export async function POST(req: NextRequest) {
       if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER" || dbUser.role === "SUPER_ADMIN")) {
         isMerchantUser = true;
         corporateId = dbUser.id;
+        currentUserId = dbUser.id;
+        currentUserRole = dbUser.role;
         const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
         const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
         userContextInfo = ` The user is a registered ${dbUser.role} (ID: ${dbUser.id}) chatting via WhatsApp. They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
@@ -916,6 +986,14 @@ If the user is an ADMIN or MERCHANT (see userContextInfo):
 4. If they ask "bagaimana performa toko saya?", use stats tools.
 5. If they are a CORPORATE user, prioritize 'get_corporate_stats' to show them a summary of all their outlets.
 6. Always confirm changes before applying them if they involve data modification.
+7. WHATSAPP CREDIT TOP-UP:
+   - Only ADMIN, MERCHANT, or MANAGER can top up credits.
+   - If a user asks to "topup", "isi saldo", or "beli kredit WhatsApp", check their role.
+   - If they are a CORPORATE user (multi-outlet), you MUST ask: "Toko mana yang ingin di-topup?" and list their stores (slugs).
+   - If they manage only ONE store, you can proceed directly but confirm the store name.
+   - Suggest top-up amounts: Rp 50.000, Rp 100.000, or Rp 250.000 for convenience, but the user CAN fill ANY custom amount as long as it is at least Rp 10.000.
+   - Once the store and amount are confirmed, use 'create_topup_payment_link'.
+   - After calling the tool, provide the payment link to the user.
 
 CUSTOMER ASSISTANCE:
 1. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.
@@ -1012,6 +1090,18 @@ Once an order is created:
                   corporateId: { type: "number", description: "The ID of the corporate user/owner." }
                 },
                 required: ["corporateId"]
+              }
+            },
+            {
+              name: "create_topup_payment_link",
+              description: "Generate a Midtrans payment link for WhatsApp credit top-up. Only for admins/merchants.",
+              parameters: {
+                type: "object",
+                properties: {
+                  storeId: { type: "integer", description: "The numeric ID of the store to top up." },
+                  amount: { type: "number", description: "The top-up amount in Rupiah (min 10000)." }
+                },
+                required: ["storeId", "amount"]
               }
             },
             {
@@ -1188,6 +1278,12 @@ Once an order is created:
             if (call.name === "get_corporate_stats" && !args.corporateId && corporateId) {
               args.corporateId = corporateId;
             }
+            // For top-up, inject userId if NOT super-admin (super-admin skips ownership check)
+            if (call.name === "create_topup_payment_link" && currentUserId) {
+               if (currentUserRole !== "SUPER_ADMIN") {
+                 args.userId = currentUserId;
+               }
+            }
           }
 
           console.log(`[AI_CHAT] Calling tool: ${call.name}`, args);
@@ -1210,6 +1306,9 @@ Once an order is created:
           }
           if (call.name === "create_merchant_invoice" && data.success) {
             finalBreakdown = data.breakdown;
+            finalPaymentUrl = data.paymentUrl;
+          }
+          if (call.name === "create_topup_payment_link" && data.success) {
             finalPaymentUrl = data.paymentUrl;
           }
         }
