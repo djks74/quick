@@ -776,13 +776,13 @@ export async function POST(req: NextRequest) {
             optionCount++;
             optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
           }
-          if (targetStore.shippingEnableJne) {
-            optionCount++;
-            optionsMsg += `\n${optionCount}. JNE`;
-          }
           if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
             optionCount++;
             optionsMsg += `\n${optionCount}. GoSend`;
+          }
+          if (targetStore.shippingEnableJne) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. JNE`;
           }
           await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
           return NextResponse.json({ success: true });
@@ -1624,13 +1624,13 @@ export async function POST(req: NextRequest) {
           await updateSession(from, targetStore.id, { step: buildTakeawayDeliveryStep(ctx.method), cart });
           let optionsMsg = l(`Kurir tidak tersedia untuk alamat ini. Pilih pengiriman:\n1. Pickup (Ambil Sendiri)`, `Courier is not available for this address. Choose shipping:\n1. Pickup (Self-pickup)`);
           let optionCount = 1;
-          if (targetStore.shippingEnableJne) {
-            optionCount++;
-            optionsMsg += `\n${optionCount}. JNE`;
-          }
           if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
             optionCount++;
             optionsMsg += `\n${optionCount}. GoSend`;
+          }
+          if (targetStore.shippingEnableJne) {
+            optionCount++;
+            optionsMsg += `\n${optionCount}. JNE`;
           }
           await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
           return NextResponse.json({ success: true });

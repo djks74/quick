@@ -259,7 +259,23 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
       }
     }
 
-    return mapped.sort((a, b) => a.fee - b.fee);
+    return mapped.sort((a, b) => {
+      // 1. Prioritize Instant services (GoSend Instant, Store Courier)
+      const isInstant = (opt: ShippingOption) => 
+        opt.type === "instant" || 
+        String(opt.service).toLowerCase().includes("instant");
+      
+      if (isInstant(a) && !isInstant(b)) return -1;
+      if (!isInstant(a) && isInstant(b)) return 1;
+
+      // 2. Within same type, prioritize GOSEND or STORE_COURIER over others
+      const isPriorityProvider = (p: string) => p === "GOSEND" || p === "STORE_COURIER";
+      if (isPriorityProvider(a.provider) && !isPriorityProvider(b.provider)) return -1;
+      if (!isPriorityProvider(a.provider) && isPriorityProvider(b.provider)) return 1;
+
+      // 3. Finally sort by fee (cheapest first)
+      return a.fee - b.fee;
+    });
   } catch {
     return [];
   }
