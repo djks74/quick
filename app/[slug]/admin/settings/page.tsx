@@ -604,46 +604,6 @@ export default function AdminSettings() {
                  )}
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-              <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Integrations</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Connect third-party services.</p>
-              </div>
-              <div className="md:col-span-2 space-y-4">
-                {!isEnterprise && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 p-3 rounded-md text-sm mb-4 flex items-center border border-blue-100 dark:border-blue-800 transition-colors">
-                        <Lock className="w-4 h-4 mr-2" />
-                        Using Platform WhatsApp Config. Upgrade to Enterprise to use your own.
-                    </div>
-                )}
-                {isDemoStore && (
-                  <div className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 p-3 rounded-md text-sm mb-4 border dark:border-gray-700 transition-colors">
-                    Demo store always uses Platform WhatsApp config.
-                  </div>
-                )}
-                <div className={cn(!canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
-                    <div>
-                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Token (Meta)</label>
-                    <input 
-                        type="password" 
-                        className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
-                        value={settings.whatsappToken}
-                        onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
-                    />
-                    </div>
-                    <div className="mt-4">
-                    <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Phone Number ID</label>
-                    <input 
-                        type="text" 
-                        className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white" 
-                        value={settings.whatsappPhoneId}
-                        onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
-                    />
-                    </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -672,10 +632,10 @@ export default function AdminSettings() {
                    </div>
                    {settings.enableMidtrans && (
                      <div className="pl-6 space-y-3">
-                       {!isEnterprise && (
+                       {!canOverridePlatformConfig && (
                             <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-3 rounded-md text-xs mb-3 flex items-center border border-green-100 dark:border-green-800 transition-colors">
                                 <Check className="w-4 h-4 mr-2" />
-                                <span>Platform Midtrans Keys Active. Upgrade to Enterprise to use your own keys.</span>
+                                <span>Platform Midtrans Keys Active. Upgrade to Sovereign or Corporate to use your own keys.</span>
                             </div>
                        )}
                        {isDemoStore && (
@@ -704,110 +664,6 @@ export default function AdminSettings() {
                      </div>
                    )}
                 </div>
-
-                {/* WhatsApp Checkout */}
-                <div className="flex items-center space-x-2 border border-[#ccd0d4] dark:border-gray-800 p-4 rounded-lg bg-white dark:bg-gray-800 transition-colors">
-                  <input 
-                    type="checkbox" 
-                    checked={settings.enableWhatsApp}
-                    onChange={(e) => setSettings({ ...settings, enableWhatsApp: e.target.checked })}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                  />
-                  <label className="text-sm font-medium dark:text-gray-300">Enable Checkout via WhatsApp</label>
-                </div>
-
-                {(isSovereign || isCorporate) && (
-                  <div className="border border-[#ccd0d4] dark:border-gray-800 p-6 rounded-lg bg-white dark:bg-gray-800 space-y-6 transition-colors shadow-sm">
-                    <div className="flex items-center gap-3 border-b dark:border-gray-700 pb-4">
-                      <div className={cn(
-                        "p-2 rounded-lg",
-                        isCorporate ? "bg-purple-500/10 text-purple-500" : "bg-orange-500/10 text-orange-500"
-                      )}>
-                        {isCorporate ? <Building2 size={20} /> : <Sparkles size={20} />}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">
-                          {isCorporate ? "Corporate Configurations" : "Sovereign Configurations"}
-                        </h3>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
-                      </div>
-                      <button 
-                        onClick={() => setShowIntegrationGuide(!showIntegrationGuide)}
-                        className="text-gray-400 hover:text-primary transition-colors"
-                        title="Help / Documentation"
-                      >
-                        <HelpCircle size={18} />
-                      </button>
-                    </div>
-
-                    {showIntegrationGuide && (
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-widest">
-                           <Info size={14} /> Onboarding Guide
-                        </div>
-                        <ul className="text-[11px] text-blue-600 dark:text-blue-500 space-y-2 leading-relaxed list-disc pl-4">
-                           <li><strong>Meta App ID:</strong> Ensure you have a Meta App for your Business.</li>
-                           <li><strong>WhatsApp Cloud API:</strong> Go to Meta Business Suite to get your <b>Phone Number ID</b> and <b>WABA ID</b>.</li>
-                           <li><strong>Access Token:</strong> Use the <i>Embedded Signup</i> below or generate a permanent token in <b>App Settings &gt; WhatsApp &gt; Configuration</b>.</li>
-                           <li><strong>Gemini Key:</strong> Get your free API Key from <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold">Google AI Studio</a>.</li>
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="p-4 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 rounded-xl space-y-4 transition-colors">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div>
-                                <h4 className="text-xs font-bold dark:text-gray-200">WhatsApp Onboarding</h4>
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Connect your business WhatsApp number automatically via Meta.</p>
-                            </div>
-                            <button 
-                                onClick={launchWhatsAppSignup}
-                                className="w-full sm:w-auto px-4 py-2 bg-[#1877F2] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors shadow-sm"
-                            >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                                Connect with Facebook
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Token</label>
-                          <input 
-                            type="password" 
-                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
-                            placeholder="EAAG..."
-                            value={settings.whatsappToken}
-                            onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Phone ID</label>
-                          <input 
-                            type="text" 
-                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
-                            placeholder="123456789..."
-                            value={settings.whatsappPhoneId}
-                            onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
-                        <input 
-                          type="password" 
-                          className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
-                          placeholder="AIzaSy..."
-                          value={settings.customGeminiKey}
-                          onChange={(e) => setSettings({ ...settings, customGeminiKey: e.target.value })}
-                        />
-                        <p className="text-[10px] text-gray-500 italic">Your own Google Gemini Pro key for AI chat.</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
               </div>
             </div>
@@ -1048,19 +904,133 @@ export default function AdminSettings() {
 
         {activeTab === "Integrations" && (
           <div className="space-y-6">
-            {(!isSovereign && !isCorporate) && (
-              <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-[20px] space-y-3">
-                <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-                  <Lock size={18} />
-                  <h4 className="font-bold uppercase tracking-tight text-sm">Top Tier Feature Only</h4>
-                </div>
-                <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
-                  Integration tools and Product Sync API are exclusive to <strong>Corporate</strong> and <strong>Sovereign</strong> members. 
-                  Upgrade your plan to start syncing with WooCommerce, Shopify, or internal systems.
-                </p>
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">WhatsApp & AI Setup</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure your own Meta and Gemini credentials.</p>
               </div>
-            )}
-            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", (!isSovereign && !isCorporate) && "opacity-50 pointer-events-none")}>
+              <div className="md:col-span-2 space-y-4">
+                {!canOverridePlatformConfig && (
+                  <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-[20px] space-y-3">
+                    <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                      <Lock size={18} />
+                      <h4 className="font-bold uppercase tracking-tight text-sm">Sovereign & Corporate Only</h4>
+                    </div>
+                    <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
+                      Custom WhatsApp numbers and Gemini API Keys are exclusive to <strong>Sovereign</strong> and <strong>Corporate</strong> members. 
+                    </p>
+                  </div>
+                )}
+
+                {canOverridePlatformConfig && (
+                  <div className="border border-[#ccd0d4] dark:border-gray-800 p-6 rounded-lg bg-white dark:bg-gray-800 space-y-6 transition-colors shadow-sm">
+                    <div className="flex items-center gap-3 border-b dark:border-gray-700 pb-4">
+                      <div className={cn(
+                        "p-2 rounded-lg",
+                        isCorporate ? "bg-purple-500/10 text-purple-500" : "bg-orange-500/10 text-orange-500"
+                      )}>
+                        {isCorporate ? <Building2 size={20} /> : <Sparkles size={20} />}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">
+                          {isCorporate ? "Corporate Configurations" : "Sovereign Configurations"}
+                        </h3>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowIntegrationGuide(!showIntegrationGuide)}
+                        className="text-gray-400 hover:text-primary transition-colors"
+                        title="Help / Documentation"
+                      >
+                        <HelpCircle size={18} />
+                      </button>
+                    </div>
+
+                    {showIntegrationGuide && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-widest">
+                           <Info size={14} /> Onboarding Guide
+                        </div>
+                        <ul className="text-[11px] text-blue-600 dark:text-blue-500 space-y-2 leading-relaxed list-disc pl-4">
+                           <li><strong>Meta App ID:</strong> Ensure you have a Meta App for your Business.</li>
+                           <li><strong>WhatsApp Cloud API:</strong> Go to Meta Business Suite to get your <b>Phone Number ID</b> and <b>WABA ID</b>.</li>
+                           <li><strong>Access Token:</strong> Use the <i>Embedded Signup</i> below or generate a permanent token in <b>App Settings &gt; WhatsApp &gt; Configuration</b>.</li>
+                           <li><strong>Gemini Key:</strong> Get your free API Key from <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold text-blue-700 hover:underline">Google AI Studio</a>.</li>
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 rounded-xl space-y-4 transition-colors">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div>
+                                <h4 className="text-xs font-bold dark:text-gray-200">WhatsApp Onboarding</h4>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Connect your business WhatsApp number automatically via Meta.</p>
+                            </div>
+                            <button 
+                                onClick={launchWhatsAppSignup}
+                                className="w-full sm:w-auto px-4 py-2 bg-[#1877F2] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors shadow-sm"
+                            >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                Connect with Facebook
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Token</label>
+                          <input 
+                            type="password" 
+                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                            placeholder="EAAG..."
+                            value={settings.whatsappToken}
+                            onChange={(e) => setSettings({ ...settings, whatsappToken: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Phone ID</label>
+                          <input 
+                            type="text" 
+                            className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                            placeholder="123456789..."
+                            value={settings.whatsappPhoneId}
+                            onChange={(e) => setSettings({ ...settings, whatsappPhoneId: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
+                        <input 
+                          type="password" 
+                          className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
+                          placeholder="AIzaSy..."
+                          value={settings.customGeminiKey}
+                          onChange={(e) => setSettings({ ...settings, customGeminiKey: e.target.value })}
+                        />
+                        <p className="text-[10px] text-gray-500 italic">Your own Google Gemini Pro key for AI chat.</p>
+                      </div>
+
+                      <div className="flex items-center space-x-2 pt-2">
+                        <input 
+                          type="checkbox" 
+                          id="enableWhatsApp"
+                          checked={settings.enableWhatsApp}
+                          onChange={(e) => setSettings({ ...settings, enableWhatsApp: e.target.checked })}
+                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                        />
+                        <label htmlFor="enableWhatsApp" className="text-sm font-medium dark:text-gray-300 cursor-pointer">
+                          Enable Checkout via WhatsApp
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
               <div>
                 <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">API Access</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use this key to sync products from your internal systems.</p>
@@ -1143,7 +1113,7 @@ export default function AdminSettings() {
               </div>
             </div>
 
-            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", (!isSovereign && !isCorporate) && "opacity-50 pointer-events-none")}>
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
               <div>
                 <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">AI Chat Widget</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Embed your AI assistant into your own website.</p>

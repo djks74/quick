@@ -160,10 +160,6 @@ export default function BillingPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Billing Email</p>
                 <p className="text-sm font-bold text-[#1d2327]">{store.whatsapp || "N/A"}</p>
               </div>
-              <button className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
-                Edit Billing Details
-                <ArrowUpRight className="w-3 h-3" />
-              </button>
             </div>
           </div>
 
