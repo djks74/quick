@@ -10,17 +10,18 @@ export async function ensureWaCreditSchema() {
   if (!ensuredWaCreditSchemaV2) {
     ensuredWaCreditSchemaV2 = (async () => {
       console.log("[DB_PATCH] Running WaCredit schema check...");
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Store"
-        ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000,
-        ADD COLUMN IF NOT EXISTS "waPricePerMessage" DOUBLE PRECISION NOT NULL DEFAULT 350,
-        ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS "corporateName" TEXT;
+      
+      const commands = [
+        `ALTER TABLE "Store"
+         ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000,
+         ADD COLUMN IF NOT EXISTS "waPricePerMessage" DOUBLE PRECISION NOT NULL DEFAULT 350,
+         ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ,
+         ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ,
+         ADD COLUMN IF NOT EXISTS "corporateName" TEXT`,
 
-        ALTER TABLE "Store" ALTER COLUMN "waBalance" SET DEFAULT 50000;
+        `ALTER TABLE "Store" ALTER COLUMN "waBalance" SET DEFAULT 50000`,
 
-        CREATE TABLE IF NOT EXISTS "WaUsageLog" (
+        `CREATE TABLE IF NOT EXISTS "WaUsageLog" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "type" TEXT NOT NULL,
@@ -35,17 +36,17 @@ export async function ensureWaCreditSchema() {
           "refundedAt" TIMESTAMPTZ,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )`,
 
-        ALTER TABLE "WaUsageLog" 
-        ADD COLUMN IF NOT EXISTS "category" TEXT DEFAULT 'utility',
-        ADD COLUMN IF NOT EXISTS "estimatedMetaCost" DOUBLE PRECISION DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE};
+        `ALTER TABLE "WaUsageLog" 
+         ADD COLUMN IF NOT EXISTS "category" TEXT DEFAULT 'utility',
+         ADD COLUMN IF NOT EXISTS "estimatedMetaCost" DOUBLE PRECISION DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE}`,
 
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_storeId_createdAt_idx" ON "WaUsageLog" ("storeId", "createdAt");
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_externalRef_idx" ON "WaUsageLog" ("externalRef");
-        CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx" ON "WaUsageLog" ("messageId");
+        `CREATE INDEX IF NOT EXISTS "WaUsageLog_storeId_createdAt_idx" ON "WaUsageLog" ("storeId", "createdAt")`,
+        `CREATE INDEX IF NOT EXISTS "WaUsageLog_externalRef_idx" ON "WaUsageLog" ("externalRef")`,
+        `CREATE INDEX IF NOT EXISTS "WaUsageLog_messageId_idx" ON "WaUsageLog" ("messageId")`,
 
-        CREATE TABLE IF NOT EXISTS "PlatformWaUsageLog" (
+        `CREATE TABLE IF NOT EXISTS "PlatformWaUsageLog" (
           "id" SERIAL PRIMARY KEY,
           "type" TEXT NOT NULL,
           "toPhone" TEXT NOT NULL,
@@ -54,11 +55,17 @@ export async function ensureWaCreditSchema() {
           "estimatedCost" DOUBLE PRECISION NOT NULL DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE},
           "metadata" JSONB,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )`,
 
-        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_createdAt_idx" ON "PlatformWaUsageLog" ("createdAt");
-        CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_relatedStoreId_idx" ON "PlatformWaUsageLog" ("relatedStoreId");
-      `);
+        `CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_createdAt_idx" ON "PlatformWaUsageLog" ("createdAt")`,
+        `CREATE INDEX IF NOT EXISTS "PlatformWaUsageLog_relatedStoreId_idx" ON "PlatformWaUsageLog" ("relatedStoreId")`
+      ];
+
+      for (const cmd of commands) {
+        await prisma.$executeRawUnsafe(cmd).catch(err => {
+          if (!err.message.includes("already exists")) throw err;
+        });
+      }
 
       // Initialize welcome credits for stores that haven't received them yet
       const eligibleStores = await prisma.store.findMany({

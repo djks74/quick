@@ -16,16 +16,24 @@ export async function ensurePlatformSettingsSchema() {
   if (!ensuredPlatformSettingsSchemaV3) {
     ensuredPlatformSettingsSchemaV3 = (async () => {
       console.log("[DB_PATCH] Running PlatformSettings schema check...");
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "PlatformSettings"
-        ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
-        ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
-        ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT,
-        ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
-        ADD COLUMN IF NOT EXISTS "waRateUtility" DOUBLE PRECISION NOT NULL DEFAULT 350,
-        ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
-        ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0;
-      `);
+      
+      const commands = [
+        `ALTER TABLE "PlatformSettings"
+         ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
+         ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
+         ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT,
+         ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
+         ADD COLUMN IF NOT EXISTS "waRateUtility" DOUBLE PRECISION NOT NULL DEFAULT 350,
+         ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
+         ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0`
+      ];
+
+      for (const cmd of commands) {
+        await prisma.$executeRawUnsafe(cmd).catch(err => {
+          if (!err.message.includes("already exists")) throw err;
+        });
+      }
+
       console.log("[DB_PATCH] PlatformSettings schema patched successfully ✅");
     })().catch((error) => {
       console.error("[DB_PATCH_ERROR] PlatformSettings schema patch failed ❌", error);
