@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache';
 
 let ensuredPlatformSettingsSchema: Promise<void> | null = null;
 
-async function ensurePlatformSettingsSchema() {
+export async function ensurePlatformSettingsSchema() {
   if (!ensuredPlatformSettingsSchema) {
     ensuredPlatformSettingsSchema = (async () => {
       await prisma.$executeRawUnsafe(`

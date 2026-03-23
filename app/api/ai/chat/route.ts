@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from "@/lib/shipping-biteship";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
+import { ensurePlatformSettingsSchema } from "@/lib/super-admin";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
 import { processPayment } from "@/lib/payment";
@@ -230,6 +231,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
        return { error: "Unauthorized access to this store for top-up." };
     }
 
+    await ensurePlatformSettingsSchema().catch(() => null);
     const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
     const topupRef = `AI-TOPUP-${store.id}-${Date.now()}`;
 
@@ -894,7 +896,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!geminiKey) {
-      const settings = await prisma.platformSettings.findUnique({ where: { key: "default" } }) as any;
+      await ensurePlatformSettingsSchema().catch(() => null);
+      const settings = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null) as any;
       geminiKey = settings?.geminiApiKey;
     }
 

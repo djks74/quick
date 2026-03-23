@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensurePlatformSettingsSchema } from "@/lib/super-admin";
 
 export async function GET() {
   try {
+    await ensurePlatformSettingsSchema();
     const settings = await prisma.platformSettings.findUnique({
       where: { key: "default" },
       select: {
