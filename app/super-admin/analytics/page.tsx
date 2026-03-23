@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import SuperAdminNav from "../SuperAdminNav";
 import { getPlatformWaUsageSummary } from "@/lib/wa-credit";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { 
   TrendingUp, 
   Users, 
@@ -17,6 +18,8 @@ export default async function AnalyticsPage() {
   if (!session || (session as any).user?.role !== "SUPER_ADMIN") {
     redirect("/login");
   }
+
+  await ensureStoreSettingsSchema();
 
   // Aggregate Stats
   const [

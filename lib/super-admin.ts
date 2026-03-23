@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
+import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
@@ -46,6 +47,7 @@ async function requireSuperAdmin() {
 export async function getAllStores(limit: number = 200) {
   try {
     await requireSuperAdmin();
+    await ensureStoreSettingsSchema();
     await ensureWaCreditSchema();
     const stores = await prisma.store.findMany({
       select: {

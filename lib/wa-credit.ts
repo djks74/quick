@@ -4,11 +4,12 @@ export const WA_LOW_CREDIT_THRESHOLD = 10000;
 export const WA_BUNDLE_PLATFORM_FEE = 150000;
 export const WA_PLATFORM_COST_PER_MESSAGE = 150;
 
-let ensuredWaCreditSchema: Promise<void> | null = null;
+let ensuredWaCreditSchemaV2: Promise<void> | null = null;
 
 export async function ensureWaCreditSchema() {
-  if (!ensuredWaCreditSchema) {
-    ensuredWaCreditSchema = (async () => {
+  if (!ensuredWaCreditSchemaV2) {
+    ensuredWaCreditSchemaV2 = (async () => {
+      console.log("[DB_PATCH] Running WaCredit schema check...");
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
         ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000,
@@ -95,12 +96,14 @@ export async function ensureWaCreditSchema() {
           });
         }
       }
+      console.log("[DB_PATCH] WaCredit schema patched successfully ✅");
     })().catch((err) => {
-      console.error("ensureWaCreditSchema error:", err);
-      ensuredWaCreditSchema = null;
+      console.error("[DB_PATCH_ERROR] WaCredit schema patch failed ❌", err);
+      ensuredWaCreditSchemaV2 = null; // Allow retry on failure
     });
   }
-  await ensuredWaCreditSchema;
+
+  await ensuredWaCreditSchemaV2;
 }
 
 export async function reserveWaCreditForMessage(storeId: number, description: string, externalRef: string, options?: { amount?: number; category?: string; metaCost?: number }) {

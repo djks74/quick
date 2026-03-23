@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredStoreSettingsSchema: Promise<void> | null = null;
+let ensuredStoreSettingsSchemaV4: Promise<void> | null = null;
 
 export async function ensureStoreSettingsSchema() {
-  if (!ensuredStoreSettingsSchema) {
-    ensuredStoreSettingsSchema = (async () => {
+  if (!ensuredStoreSettingsSchemaV4) {
+    ensuredStoreSettingsSchemaV4 = (async () => {
+      console.log("[DB_PATCH] Running StoreSettings schema check...");
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "Store"
         ADD COLUMN IF NOT EXISTS "posPaymentMethods" JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -27,6 +28,7 @@ export async function ensureStoreSettingsSchema() {
         ADD COLUMN IF NOT EXISTS "webhookUrl" TEXT,
         ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT,
         ADD COLUMN IF NOT EXISTS "apiKey" TEXT,
+        ADD COLUMN IF NOT EXISTS "corporateName" TEXT,
         ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true;
 
         CREATE UNIQUE INDEX IF NOT EXISTS "Store_apiKey_key" ON "Store"("apiKey");
@@ -60,10 +62,11 @@ export async function ensureStoreSettingsSchema() {
         CREATE INDEX IF NOT EXISTS "Product_storeId_idx" ON "Product"("storeId");
         CREATE INDEX IF NOT EXISTS "Product_category_idx" ON "Product"("category");
       `);
+      console.log("[DB_PATCH] StoreSettings schema patched successfully ✅");
     })().catch((error) => {
-      console.error("ensureStoreSettingsSchema error:", error);
-      ensuredStoreSettingsSchema = null;
+      console.error("[DB_PATCH_ERROR] StoreSettings schema patch failed ❌", error);
+      ensuredStoreSettingsSchemaV4 = null;
     });
   }
-  await ensuredStoreSettingsSchema;
+  await ensuredStoreSettingsSchemaV4;
 }
