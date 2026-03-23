@@ -994,6 +994,10 @@ If the user is an ADMIN or MERCHANT (see userContextInfo):
    - Suggest top-up amounts: Rp 50.000, Rp 100.000, or Rp 250.000 for convenience, but the user CAN fill ANY custom amount as long as it is at least Rp 10.000.
    - Once the store and amount are confirmed, use 'create_topup_payment_link'.
    - After calling the tool, provide the payment link to the user.
+8. MERCHANT REGISTRATION:
+   - If a user asks "bagaimana cara mendaftar?", "saya mau jadi merchant", "how to register", or "i want to open a store", tell them they can register at the Gercep Platform.
+   - Provide the registration link: https://gercep.click/register.
+   - Explain that Gercep helps businesses automate orders via WhatsApp and Web with AI.
 
 CUSTOMER ASSISTANCE:
 1. If a user asks for a specific food (like 'nasi uduk'), use search_stores to find restaurants that sell it. If a user wants to order, first search_stores, then get_store_products.

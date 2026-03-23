@@ -69,6 +69,8 @@ export default function AdminSettings() {
   
   const [settings, setSettings] = useState({
     storeName: "",
+    slug: "",
+    name: "",
     whatsapp: "",
     themeColor: "",
     whatsappToken: "",
@@ -149,6 +151,8 @@ export default function AdminSettings() {
       if (data) {
         setSettings({
           storeName: data.name || "",
+          slug: data.slug || "",
+          name: data.name || "",
           whatsapp: data.whatsapp || "",
           themeColor: data.themeColor || "",
           whatsappToken: data.whatsappToken || "",
