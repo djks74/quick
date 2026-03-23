@@ -6,7 +6,7 @@ import { Edit, ExternalLink, MoreVertical, Trash2, Loader2, Power, PowerOff } fr
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive, updateStoreCorporate } from "@/lib/super-admin";
 
 export default function StoreTable({ stores, users }: { stores: any[], users?: any[] }) {
   const router = useRouter();
@@ -50,6 +50,7 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
     const form = e.target as HTMLFormElement;
     const plan = (form.elements.namedItem('plan') as HTMLSelectElement).value;
     const fee = parseFloat((form.elements.namedItem('fee') as HTMLInputElement).value);
+    const corporateName = (form.elements.namedItem('corporateName') as HTMLInputElement).value;
     const waBalanceRaw = (form.elements.namedItem('waBalance') as HTMLInputElement | null)?.value;
     const waReason = (form.elements.namedItem('waReason') as HTMLInputElement | null)?.value;
 
@@ -58,6 +59,10 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
       alert(res.error || "Failed to update plan");
       setLoading(false);
       return;
+    }
+
+    if (corporateName !== (editingStore.corporateName || "")) {
+      await updateStoreCorporate(editingStore.id, corporateName);
     }
 
     if (waBalanceRaw !== undefined) {
@@ -245,6 +250,17 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
                   step="0.1"
                   className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
                   defaultValue={editingStore.transactionFeePercent}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Corporate Name</label>
+                <input 
+                  name="corporateName"
+                  type="text" 
+                  className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
+                  defaultValue={editingStore.corporateName || ""}
+                  placeholder="e.g. PT. Global Food"
                 />
               </div>
 

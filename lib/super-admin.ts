@@ -18,7 +18,11 @@ export async function ensurePlatformSettingsSchema() {
         ALTER TABLE "PlatformSettings"
         ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
         ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
-        ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT;
+        ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT,
+        ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
+        ADD COLUMN IF NOT EXISTS "waRateUtility" DOUBLE PRECISION NOT NULL DEFAULT 350,
+        ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
+        ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0;
       `);
     })().catch((error) => {
       console.error("ensurePlatformSettingsSchema error:", error);
@@ -50,6 +54,7 @@ export async function getAllStores(limit: number = 200) {
         balance: true,
         waBalance: true,
         waPricePerMessage: true,
+        corporateName: true,
         createdAt: true,
         owner: {
           select: {
@@ -268,6 +273,10 @@ export async function updatePlatformSettings(data: {
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
   facebookAppId?: string;
+  waRateMarketing?: number;
+  waRateUtility?: number;
+  waRateAuthentication?: number;
+  waRateService?: number;
 }) {
   try {
     await requireSuperAdmin();
@@ -284,7 +293,11 @@ export async function updatePlatformSettings(data: {
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
-        facebookAppId: data.facebookAppId || null
+        facebookAppId: data.facebookAppId || null,
+        waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : undefined,
+        waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : undefined,
+        waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : undefined,
+        waRateService: data.waRateService !== undefined ? Number(data.waRateService) : undefined,
       } as any,
       create: {
         key: "default",
@@ -296,7 +309,11 @@ export async function updatePlatformSettings(data: {
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
-        facebookAppId: data.facebookAppId || null
+        facebookAppId: data.facebookAppId || null,
+        waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : 2000,
+        waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : 350,
+        waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : 300,
+        waRateService: data.waRateService !== undefined ? Number(data.waRateService) : 0,
       } as any
     });
     return { success: true, data: updated };
@@ -496,6 +513,22 @@ export async function deleteStore(storeId: number) {
   } catch (error) {
     console.error('Error deleting store:', error);
     return { success: false, error: 'Failed to delete store' };
+  }
+}
+
+export async function updateStoreCorporate(storeId: number, corporateName: string | null) {
+  try {
+    await requireSuperAdmin();
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { corporateName: corporateName || null }
+    });
+    revalidatePath('/super-admin');
+    revalidatePath('/super-admin/wa-usage');
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error updating store corporate:', error);
+    return { success: false, error: 'Failed to update corporate name' };
   }
 }
 

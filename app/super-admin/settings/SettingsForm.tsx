@@ -16,6 +16,10 @@ type PlatformSettings = {
   subscriptionClientKey?: string | null;
   geminiApiKey?: string | null;
   facebookAppId?: string | null;
+  waRateMarketing?: number;
+  waRateUtility?: number;
+  waRateAuthentication?: number;
+  waRateService?: number;
 };
 
 export default function SettingsForm({ 
@@ -42,7 +46,11 @@ export default function SettingsForm({
       subscriptionServerKey: initialSettings?.subscriptionServerKey || "",
       subscriptionClientKey: initialSettings?.subscriptionClientKey || "",
       geminiApiKey: initialSettings?.geminiApiKey || "",
-      facebookAppId: initialSettings?.facebookAppId || ""
+      facebookAppId: initialSettings?.facebookAppId || "",
+      waRateMarketing: initialSettings?.waRateMarketing ?? 2000,
+      waRateUtility: initialSettings?.waRateUtility ?? 350,
+      waRateAuthentication: initialSettings?.waRateAuthentication ?? 300,
+      waRateService: initialSettings?.waRateService ?? 0
     }),
     [initialSettings]
   );
@@ -148,6 +156,63 @@ export default function SettingsForm({
               </div>
               <p className="text-[10px] text-gray-500 mt-1">Approximate platform expense</p>
           </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Meta / WhatsApp Rates</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cost per message charged by Meta (in IDR). Used for profit calculations.</p>
+        </div>
+        <div className="md:col-span-2 grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1 dark:text-gray-400 uppercase tracking-widest">Marketing</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-400 text-sm">Rp</span>
+              <input
+                type="number"
+                className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 pl-10 pr-3 py-2 rounded-lg dark:text-white transition-colors"
+                value={form.waRateMarketing}
+                onChange={(e) => setForm({ ...form, waRateMarketing: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 dark:text-gray-400 uppercase tracking-widest">Utility</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-400 text-sm">Rp</span>
+              <input
+                type="number"
+                className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 pl-10 pr-3 py-2 rounded-lg dark:text-white transition-colors"
+                value={form.waRateUtility}
+                onChange={(e) => setForm({ ...form, waRateUtility: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 dark:text-gray-400 uppercase tracking-widest">Authentication</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-400 text-sm">Rp</span>
+              <input
+                type="number"
+                className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 pl-10 pr-3 py-2 rounded-lg dark:text-white transition-colors"
+                value={form.waRateAuthentication}
+                onChange={(e) => setForm({ ...form, waRateAuthentication: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 dark:text-gray-400 uppercase tracking-widest">Service (24h Window)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2 text-gray-400 text-sm">Rp</span>
+              <input
+                type="number"
+                className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 pl-10 pr-3 py-2 rounded-lg dark:text-white transition-colors"
+                value={form.waRateService}
+                onChange={(e) => setForm({ ...form, waRateService: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">

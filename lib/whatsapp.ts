@@ -167,7 +167,8 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
     const reserve = await reserveWaCreditForMessage(
       storeId,
       `Message to ${formattedTo}`,
-      externalRef
+      externalRef,
+      { category: "service", metaCost: 0 } // Free-form messages within 24h window are currently free by Meta, but we charge the platform fee or 0 depending on strategy. We'll set metaCost to 0 for service messages.
     );
     if (!reserve.ok) {
       if (reserve.reason === "INSUFFICIENT_BALANCE") {
@@ -287,7 +288,8 @@ export async function sendWhatsAppTemplateMessage(
     const reserve = await reserveWaCreditForMessage(
       storeId,
       `Template message to ${formattedTo}`,
-      externalRef
+      externalRef,
+      { category: "utility" } // Most of our templates are utility
     );
     if (!reserve.ok) {
       console.warn(`[WHATSAPP_CREDIT] Credit reservation failed for template for store ${storeId}.`);

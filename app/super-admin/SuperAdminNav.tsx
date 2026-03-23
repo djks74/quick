@@ -3,7 +3,7 @@
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Users, Store, Settings, Wallet, BarChart3, Globe, Sparkles } from "lucide-react";
+import { LogOut, Users, Store, Settings, Wallet, BarChart3, Globe, Sparkles, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -60,6 +60,18 @@ export default function SuperAdminNav({ totalStores }: { totalStores?: number })
         >
           <Globe className="w-3 h-3 mr-1.5" />
           Traffic
+        </Link>
+        <Link 
+          href="/super-admin/wa-usage" 
+          className={cn(
+            "px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider flex items-center transition-colors",
+            pathname === "/super-admin/wa-usage" 
+              ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" 
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
+          )}
+        >
+          <MessageSquare className="w-3 h-3 mr-1.5" />
+          WhatsApp
         </Link>
         <Link 
           href="/super-admin/withdrawals" 

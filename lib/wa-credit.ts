@@ -14,7 +14,8 @@ export async function ensureWaCreditSchema() {
         ADD COLUMN IF NOT EXISTS "waBalance" DOUBLE PRECISION NOT NULL DEFAULT 50000,
         ADD COLUMN IF NOT EXISTS "waPricePerMessage" DOUBLE PRECISION NOT NULL DEFAULT 350,
         ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ;
+        ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS "corporateName" TEXT;
 
         ALTER TABLE "Store" ALTER COLUMN "waBalance" SET DEFAULT 50000;
 
@@ -23,6 +24,8 @@ export async function ensureWaCreditSchema() {
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "type" TEXT NOT NULL,
           "amount" DOUBLE PRECISION NOT NULL,
+          "category" TEXT DEFAULT 'utility',
+          "estimatedMetaCost" DOUBLE PRECISION DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE},
           "description" TEXT NOT NULL,
           "balanceAfter" DOUBLE PRECISION NOT NULL,
           "externalRef" TEXT,
@@ -32,6 +35,10 @@ export async function ensureWaCreditSchema() {
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+
+        ALTER TABLE "WaUsageLog" 
+        ADD COLUMN IF NOT EXISTS "category" TEXT DEFAULT 'utility',
+        ADD COLUMN IF NOT EXISTS "estimatedMetaCost" DOUBLE PRECISION DEFAULT ${WA_PLATFORM_COST_PER_MESSAGE};
 
         CREATE INDEX IF NOT EXISTS "WaUsageLog_storeId_createdAt_idx" ON "WaUsageLog" ("storeId", "createdAt");
         CREATE INDEX IF NOT EXISTS "WaUsageLog_externalRef_idx" ON "WaUsageLog" ("externalRef");
@@ -96,7 +103,7 @@ export async function ensureWaCreditSchema() {
   await ensuredWaCreditSchema;
 }
 
-export async function reserveWaCreditForMessage(storeId: number, description: string, externalRef: string, amount?: number) {
+export async function reserveWaCreditForMessage(storeId: number, description: string, externalRef: string, options?: { amount?: number; category?: string; metaCost?: number }) {
   await ensureWaCreditSchema();
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -115,8 +122,20 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
     });
     if (!store) return { ok: false as const, reason: "STORE_NOT_FOUND" };
 
-    const resolvedAmount = amount ?? store.waPricePerMessage ?? 350;
+    const resolvedAmount = options?.amount ?? store.waPricePerMessage ?? 350;
     const cost = Math.max(1, Number(resolvedAmount.toFixed(2)));
+    
+    // Resolve Meta cost based on category and platform settings
+    let metaCost = options?.metaCost;
+    if (metaCost === undefined) {
+      const platform = await tx.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
+      const category = options?.category || "utility";
+      if (category === "marketing") metaCost = platform?.waRateMarketing ?? 2000;
+      else if (category === "authentication") metaCost = platform?.waRateAuthentication ?? 300;
+      else if (category === "service") metaCost = platform?.waRateService ?? 0;
+      else metaCost = platform?.waRateUtility ?? 350;
+    }
+    
     const changed = await tx.store.updateMany({
       where: { id: storeId, waBalance: { gte: cost } },
       data: { waBalance: { decrement: cost } }
@@ -152,6 +171,8 @@ export async function reserveWaCreditForMessage(storeId: number, description: st
         storeId,
         type: "DEDUCTION",
         amount: -cost,
+        category: options?.category || "utility",
+        estimatedMetaCost: metaCost,
         description,
         balanceAfter,
         externalRef,
@@ -204,12 +225,24 @@ export async function logPlatformWaUsage(input: {
   toPhone: string;
   description: string;
   relatedStoreId?: number | null;
+  category?: string;
   estimatedCost?: number;
   metadata?: any;
 }) {
   await ensureWaCreditSchema();
   const normalizedTo = String(input.toPhone || "").replace(/\D/g, "");
   if (!normalizedTo) return;
+  
+  let cost = input.estimatedCost;
+  if (cost === undefined) {
+    const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
+    const category = input.category || "utility";
+    if (category === "marketing") cost = platform?.waRateMarketing ?? 2000;
+    else if (category === "authentication") cost = platform?.waRateAuthentication ?? 300;
+    else if (category === "service") cost = platform?.waRateService ?? 0;
+    else cost = platform?.waRateUtility ?? 350;
+  }
+
   const payload = input.metadata ? JSON.stringify(input.metadata) : null;
   await prisma.$executeRawUnsafe(
     `INSERT INTO "PlatformWaUsageLog" ("type","toPhone","relatedStoreId","description","estimatedCost","metadata") VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
@@ -217,7 +250,7 @@ export async function logPlatformWaUsage(input: {
     normalizedTo,
     input.relatedStoreId ?? null,
     input.description,
-    Number(input.estimatedCost ?? WA_PLATFORM_COST_PER_MESSAGE),
+    Number(cost),
     payload
   ).catch(() => null);
 }
@@ -371,20 +404,20 @@ export async function getWaUsageDashboard(storeId: number) {
 
 export async function getGlobalWaUsage() {
   await ensureWaCreditSchema();
-  const [totalBalance, totalUsageCount, totalTopup] = await Promise.all([
+  const [totalBalance, totalUsageCount, totalTopup, metaCostStats] = await Promise.all([
     prisma.store.aggregate({ _sum: { waBalance: true } }),
     prisma.waUsageLog.count({ where: { type: "DEDUCTION" } }),
-    prisma.waUsageLog.aggregate({ _sum: { amount: true }, where: { type: "TOPUP" } })
+    prisma.waUsageLog.aggregate({ _sum: { amount: true }, where: { type: "TOPUP" } }),
+    prisma.waUsageLog.aggregate({ _sum: { estimatedMetaCost: true }, where: { type: "DEDUCTION" } })
   ]);
 
   const recentLogs = await prisma.waUsageLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 10,
-    include: { store: { select: { name: true, slug: true } } }
+    include: { store: { select: { name: true, slug: true, corporateName: true } } }
   });
 
-  // Meta cost estimate (approx 350 IDR per conversation/message)
-  const estimatedCost = totalUsageCount * 350;
+  const estimatedCost = metaCostStats._sum.estimatedMetaCost || (totalUsageCount * 150);
 
   return {
     totalBalance: totalBalance._sum.waBalance || 0,
@@ -393,4 +426,43 @@ export async function getGlobalWaUsage() {
     estimatedCost,
     recentLogs
   };
+}
+
+export async function getDetailedWaUsageByStore() {
+  await ensureWaCreditSchema();
+  const stores = await prisma.store.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      corporateName: true,
+      waBalance: true,
+      waUsageLogs: {
+        where: { type: "DEDUCTION" },
+        select: {
+          amount: true,
+          estimatedMetaCost: true
+        }
+      }
+    }
+  });
+
+  return stores.map(store => {
+    const usageCount = store.waUsageLogs.length;
+    const totalRevenue = store.waUsageLogs.reduce((acc, log) => acc + Math.abs(log.amount), 0);
+    const totalMetaCost = store.waUsageLogs.reduce((acc, log) => acc + (log.estimatedMetaCost || 150), 0);
+    const profit = totalRevenue - totalMetaCost;
+
+    return {
+      id: store.id,
+      name: store.name,
+      slug: store.slug,
+      corporateName: store.corporateName || "Independent",
+      balance: store.waBalance,
+      usageCount,
+      totalRevenue,
+      totalMetaCost,
+      profit
+    };
+  });
 }

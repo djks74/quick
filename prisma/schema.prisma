@@ -72,6 +72,7 @@ model Store {
   shippingStoreCourierFee     Float               @default(0.0)
   enableTakeawayDelivery      Boolean             @default(true)
   enableAiChatWidget          Boolean             @default(true)
+  corporateName               String?             // For grouping multiple stores under one corporate entity
   shippingSenderName          String?
   shippingSenderPhone         String?
   shippingSenderAddress       String?
@@ -265,8 +266,10 @@ model WaUsageLog {
   id            Int       @id @default(autoincrement())
   storeId       Int
   type          String
-  amount        Float
-  description   String
+  amount            Float
+  category          String?   @default("utility") // marketing, utility, authentication, service
+  estimatedMetaCost Float?    @default(150)
+  description       String
   balanceAfter  Float
   externalRef   String?
   messageId     String?
@@ -334,6 +337,10 @@ model PlatformSettings {
   biteshipApiKey        String?
   geminiApiKey          String?
   facebookAppId         String?
+  waRateMarketing       Float    @default(2000)
+  waRateUtility         Float    @default(350)
+  waRateAuthentication  Float    @default(300)
+  waRateService         Float    @default(0)
 }
 
 model WaUserPreference {
