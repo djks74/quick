@@ -23,11 +23,15 @@ export async function POST(req: NextRequest) {
     const orderItemsData = [];
 
     for (const item of items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId, storeId: store.id }
+      const product = await prisma.product.findFirst({
+        where: { 
+          id: item.productId, 
+          storeId: store.id,
+          category: { not: "_ARCHIVED_" }
+        }
       });
       if (!product) {
-        return NextResponse.json({ error: `Product ID ${item.productId} not found for this store` }, { status: 400 });
+        return NextResponse.json({ error: `Product ID ${item.productId} not found or archived for this store` }, { status: 400 });
       }
       itemsAmount += product.price * item.quantity;
       orderItemsData.push({

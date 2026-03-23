@@ -841,8 +841,12 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   // 2. List Products
   if (lowerText.includes('list product') || lowerText.includes('daftar produk')) {
     const products = await prisma.product.findMany({
-      where: { storeId: store.id },
-      take: 10
+      where: { 
+        storeId: store.id,
+        category: { not: "_ARCHIVED_" }
+      },
+      take: 20,
+      orderBy: { name: 'asc' }
     });
     let msg = `📦 *Produk (${store.name})*\n`;
     products.forEach(p => msg += `- ${p.name}: ${p.price}\n`);

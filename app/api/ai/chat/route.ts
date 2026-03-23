@@ -98,7 +98,11 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       where: { slug },
       include: {
         products: {
-          where: { category: { not: "System" } },
+          where: { 
+            category: { 
+              notIn: ["System", "_ARCHIVED_"] 
+            } 
+          },
           select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true }
         }
       }

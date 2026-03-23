@@ -121,7 +121,8 @@ function buildOrderingStep(category: string | null, searchIds?: number[] | null)
 async function getOrderableProducts(storeId: number, category: string | null, searchIds?: number[] | null) {
   const whereClause: any = {
     storeId,
-    stock: { gt: 0 }
+    stock: { gt: 0 },
+    category: { not: "_ARCHIVED_" }
   };
   if (category) {
     whereClause.category = { equals: category, mode: "insensitive" };
@@ -149,7 +150,11 @@ async function validateCartStock(storeId: number, cart: any[]) {
   const productIds = Array.from(requestedByProduct.keys());
   if (productIds.length === 0) return { ok: true, issues: [] as string[] };
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds }, storeId },
+    where: { 
+      id: { in: productIds }, 
+      storeId,
+      category: { not: "_ARCHIVED_" }
+    },
     select: { id: true, name: true, stock: true }
   });
   const stockMap = new Map(products.map((p) => [p.id, p]));
@@ -1166,7 +1171,8 @@ export async function POST(req: NextRequest) {
           where: {
             storeId: targetStore.id,
             name: { contains: query, mode: 'insensitive' },
-            stock: { gt: 0 }
+            stock: { gt: 0 },
+            category: { not: "_ARCHIVED_" }
           },
           take: 10,
           orderBy: { name: 'asc' }
@@ -1211,7 +1217,8 @@ export async function POST(req: NextRequest) {
           where: {
             storeId: targetStore.id,
             name: { contains: query, mode: 'insensitive' },
-            stock: { lte: 0 }
+            stock: { lte: 0 },
+            category: { not: "_ARCHIVED_" }
           },
           take: 5,
           orderBy: { name: 'asc' }
@@ -1279,7 +1286,11 @@ export async function POST(req: NextRequest) {
 
             await updateSession(from, targetStore.id, { step: 'ORDERING' });
             const products = await prisma.product.findMany({ 
-              where: { storeId: targetStore.id, stock: { gt: 0 } },
+              where: { 
+                storeId: targetStore.id, 
+                stock: { gt: 0 },
+                category: { not: "_ARCHIVED_" }
+              },
               take: 10,
               orderBy: { name: 'asc' }
             });
@@ -1321,7 +1332,8 @@ export async function POST(req: NextRequest) {
                  where: {
                    storeId: targetStore.id,
                    name: { contains: query, mode: 'insensitive' },
-                   stock: { gt: 0 }
+                   stock: { gt: 0 },
+                   category: { not: "_ARCHIVED_" }
                  },
                  take: 10,
                  orderBy: { name: 'asc' }
@@ -1369,7 +1381,11 @@ export async function POST(req: NextRequest) {
           }
 
           const products = await prisma.product.findMany({
-            where: { ...whereClause, stock: { gt: 0 } },
+            where: { 
+              ...whereClause, 
+              stock: { gt: 0 },
+              category: { not: "_ARCHIVED_" }
+            },
             take: 10,
             orderBy: { name: 'asc' }
           });

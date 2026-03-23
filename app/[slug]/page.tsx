@@ -42,7 +42,10 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   await logTraffic(store.id, "WEB");
 
   const productsData = await prisma.product.findMany({
-    where: { storeId: store.id },
+    where: { 
+      storeId: store.id,
+      category: { not: "_ARCHIVED_" }
+    },
     orderBy: { name: 'asc' },
     select: {
       id: true,

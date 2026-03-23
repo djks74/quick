@@ -84,7 +84,10 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
 
   // Fetch Products
   const products = await prisma.product.findMany({
-    where: { storeId: store.id },
+    where: { 
+      storeId: store.id,
+      category: { not: "_ARCHIVED_" }
+    },
     orderBy: { name: 'asc' }
   });
 
