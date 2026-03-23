@@ -15,6 +15,7 @@ type PlatformSettings = {
   subscriptionServerKey?: string | null;
   subscriptionClientKey?: string | null;
   geminiApiKey?: string | null;
+  facebookAppId?: string | null;
 };
 
 export default function SettingsForm({ 
@@ -40,7 +41,8 @@ export default function SettingsForm({
       biteshipApiKey: initialSettings?.biteshipApiKey || "",
       subscriptionServerKey: initialSettings?.subscriptionServerKey || "",
       subscriptionClientKey: initialSettings?.subscriptionClientKey || "",
-      geminiApiKey: initialSettings?.geminiApiKey || ""
+      geminiApiKey: initialSettings?.geminiApiKey || "",
+      facebookAppId: initialSettings?.facebookAppId || ""
     }),
     [initialSettings]
   );
@@ -289,6 +291,25 @@ export default function SettingsForm({
               className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.subscriptionClientKey}
               onChange={(e) => setForm({ ...form, subscriptionClientKey: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Meta / Facebook</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Required for Embedded Signup flow.</p>
+        </div>
+        <div className="md:col-span-2 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Facebook App ID</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
+              value={form.facebookAppId}
+              onChange={(e) => setForm({ ...form, facebookAppId: e.target.value })}
+              placeholder="e.g. 752112443422115"
             />
           </div>
         </div>

@@ -117,6 +117,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [shippingQuotes, setShippingQuotes] = useState<any[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
   const [isFetchingQuotes, setIsFetchingQuotes] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'qris' | 'bank'>('qris');
   
   useEffect(() => {
     setMounted(true);
@@ -777,6 +778,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                             ? "bg-gray-900 text-white border-gray-900"
                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
                         )}
+                        style={orderType === 'DINE_IN' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
                       >
                         Dine In
                       </button>
@@ -789,6 +791,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                             ? "bg-gray-900 text-white border-gray-900"
                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
                         )}
+                        style={orderType === 'TAKEAWAY' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
                       >
                         Takeaway
                       </button>
@@ -814,7 +817,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       </button>
                       {shippingQuotes.length > 0 && (
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Courier</label>
+                          <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Courier Service</label>
                           <div className="relative">
                             <select
                               value={selectedQuote ? `${selectedQuote.provider}|${selectedQuote.service}|${selectedQuote.fee || selectedQuote.price}` : ""}
@@ -842,6 +845,38 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       )}
                    </div>
                  )}
+
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Payment Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                       <button
+                         onClick={() => setPaymentMethod('qris')}
+                         className={cn(
+                           "py-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all",
+                           paymentMethod === 'qris'
+                             ? "bg-gray-900 text-white border-gray-900"
+                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                         )}
+                         style={paymentMethod === 'qris' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                       >
+                          <span className="text-[10px] font-black uppercase tracking-widest">QRIS</span>
+                          <span className="text-[8px] opacity-60 font-bold uppercase tracking-tighter">Auto-Verify</span>
+                       </button>
+                       <button
+                         onClick={() => setPaymentMethod('bank')}
+                         className={cn(
+                           "py-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all",
+                           paymentMethod === 'bank'
+                             ? "bg-gray-900 text-white border-gray-900"
+                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                         )}
+                         style={paymentMethod === 'bank' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                       >
+                          <span className="text-[10px] font-black uppercase tracking-widest">Bank Transfer</span>
+                          <span className="text-[8px] opacity-60 font-bold uppercase tracking-tighter">Manual / Virtual</span>
+                       </button>
+                    </div>
+                 </div>
 
                  <div className="space-y-2">
                     <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
@@ -874,26 +909,27 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
                  <div className="grid grid-cols-1 gap-4">
                     <button 
-                      onClick={() => handleWebCheckout('qris')}
+                      onClick={() => handleWebCheckout(paymentMethod)}
                       disabled={!store.isOpen || isProcessing}
                       className="py-3 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
+                      style={{ backgroundColor: themeColor }}
                     >
                        <div className="flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4" />
-                          <span className="text-xs">{isProcessing ? "Processing..." : "Pay via QRIS"}</span>
+                          <CreditCard className="w-4 h-4" />
+                          <span className="text-xs">{isProcessing ? "Processing..." : `Pay via ${paymentMethod === 'qris' ? 'QRIS' : 'Bank Transfer'}`}</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee('qris') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
                           </span>
-                          {calculatePlatformFee('qris') > 0 && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee('qris'))})</span>
+                          {calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') > 0 && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer'))})</span>
                           )}
                        </div>
                     </button>
                  </div>
                  <button
-                   onClick={() => handleWhatsAppCheckout('qris')}
+                   onClick={() => handleWhatsAppCheckout(paymentMethod)}
                    className="w-full py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400"
                  >
                    Fallback: Continue via WhatsApp

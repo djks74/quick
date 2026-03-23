@@ -14,7 +14,8 @@ import {
   Calendar,
   History,
   Settings,
-  ArrowUpRight
+  ArrowUpRight,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStoreBySlug } from "@/lib/api";
@@ -37,7 +38,26 @@ export default function BillingPage() {
     loadStore();
   }, [slug]);
 
-  if (isLoading) return <AdminSpinner label="Loading billing info..." />;
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+
+  useEffect(() => {
+    async function loadInvoices() {
+      if (!slug) return;
+      try {
+        const res = await fetch(`/api/wa/topup?storeId=${store?.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setInvoices(data.logs || []);
+        }
+      } catch (e) {
+        console.error("Failed to load invoices", e);
+      } finally {
+        setIsLoadingInvoices(false);
+      }
+    }
+    if (store) loadInvoices();
+  }, [slug, store]);
   if (!store) return <div>Store not found</div>;
 
   const plan = store.subscriptionPlan || "FREE";
@@ -167,21 +187,42 @@ export default function BillingPage() {
           <div className="bg-white border border-[#ccd0d4] rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-bold text-[#1d2327] flex items-center gap-2">
               <History className="w-4 h-4" />
-              Recent Invoices
+              Recent Top-ups
             </h3>
             <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex items-center justify-between group cursor-pointer">
-                  <div>
-                    <p className="text-xs font-bold text-[#1d2327]">INV-2026-00{i}</p>
-                    <p className="text-[10px] text-gray-500">March {21-i}, 2026</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
-                </div>
-              ))}
-              <button className="w-full py-2 border border-gray-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-50 transition-colors">
-                View All Invoices
-              </button>
+              {isLoadingInvoices ? (
+                 <div className="flex justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                 </div>
+              ) : invoices.length === 0 ? (
+                 <p className="text-[10px] text-gray-500 text-center py-4 uppercase font-black tracking-widest">No top-ups yet.</p>
+              ) : (
+                <>
+                  {invoices.slice(0, 5).map((log, idx) => (
+                    <div key={idx} className="flex items-center justify-between group cursor-pointer">
+                      <div>
+                        <p className="text-xs font-bold text-[#1d2327]">
+                           {log.type === 'TOPUP' ? 'Credit Top-up' : 'Usage Charge'}
+                        </p>
+                        <p className="text-[10px] text-gray-500">
+                           {new Date(log.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                         <p className={cn("text-xs font-black", log.type === 'TOPUP' ? "text-green-600" : "text-red-600")}>
+                            {log.type === 'TOPUP' ? '+' : '-'} Rp {log.amount.toLocaleString()}
+                         </p>
+                         <p className="text-[8px] text-gray-400 uppercase tracking-tighter">Balance: Rp {log.balanceAfter.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {invoices.length > 5 && (
+                    <button className="w-full py-2 border border-gray-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-50 transition-colors">
+                      View All Activity ({invoices.length})
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

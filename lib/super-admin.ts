@@ -17,7 +17,8 @@ async function ensurePlatformSettingsSchema() {
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "PlatformSettings"
         ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
-        ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT;
+        ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
+        ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT;
       `);
     })().catch((error) => {
       console.error("ensurePlatformSettingsSchema error:", error);
@@ -266,6 +267,7 @@ export async function updatePlatformSettings(data: {
   geminiApiKey?: string;
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
+  facebookAppId?: string;
 }) {
   try {
     await requireSuperAdmin();
@@ -281,7 +283,8 @@ export async function updatePlatformSettings(data: {
         biteshipApiKey: data.biteshipApiKey || null,
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
-        subscriptionClientKey: data.subscriptionClientKey || null
+        subscriptionClientKey: data.subscriptionClientKey || null,
+        facebookAppId: data.facebookAppId || null
       } as any,
       create: {
         key: "default",
@@ -292,7 +295,8 @@ export async function updatePlatformSettings(data: {
         biteshipApiKey: data.biteshipApiKey || null,
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
-        subscriptionClientKey: data.subscriptionClientKey || null
+        subscriptionClientKey: data.subscriptionClientKey || null,
+        facebookAppId: data.facebookAppId || null
       } as any
     });
     return { success: true, data: updated };

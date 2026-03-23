@@ -60,9 +60,8 @@ export default function AdminSettings() {
   const [subscriptionPlan, setSubscriptionPlan] = useState("FREE");
   const isSovereign = subscriptionPlan === "SOVEREIGN";
   const isCorporate = subscriptionPlan === "CORPORATE";
-  const isEnterprise = subscriptionPlan === "ENTERPRISE";
   const isDemoStore = slugValue === "demo";
-  const canOverridePlatformConfig = (isEnterprise || isSovereign || isCorporate) && !isDemoStore;
+  const canOverridePlatformConfig = (isSovereign || isCorporate) && !isDemoStore;
   const canOverrideWaAndGemini = (isSovereign || isCorporate) && !isDemoStore;
   const [newPosMethodName, setNewPosMethodName] = useState("");
   const [newPosMethodMode, setNewPosMethodMode] = useState<PosPaymentMethod["mode"]>("card");
@@ -124,29 +123,49 @@ export default function AdminSettings() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
+  const [platformSettings, setPlatformSettings] = useState<any>(null);
+
   // Meta SDK Initialization for Embedded Signup
   useEffect(() => {
-    if (typeof window !== "undefined" && !(window as any).fbAsyncInit) {
-      (window as any).fbAsyncInit = function() {
-        (window as any).FB.init({
-          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "752112443422115",
-          autoLogAppEvents: true,
-          xfbml: true,
-          version: 'v18.0'
-        });
-      };
+    async function initFB() {
+      // 1. Fetch platform settings for Facebook App ID
+      const platRes = await fetch('/api/super-admin/settings').catch(() => null);
+      let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "752112443422115";
       
-      const script = document.createElement("script");
-      script.src = "https://connect.facebook.net/en_US/sdk.js";
-      script.async = true;
-      script.defer = true;
-      script.crossOrigin = "anonymous";
-      document.body.appendChild(script);
+      if (platRes?.ok) {
+        const platData = await platRes.json();
+        setPlatformSettings(platData.settings);
+        if (platData.settings?.facebookAppId) {
+          appId = platData.settings.facebookAppId;
+        }
+      }
+
+      if (typeof window !== "undefined" && !(window as any).fbAsyncInit) {
+        (window as any).fbAsyncInit = function() {
+          (window as any).FB.init({
+            appId: appId,
+            autoLogAppEvents: true,
+            xfbml: true,
+            version: 'v18.0'
+          });
+        };
+        
+        const script = document.createElement("script");
+        script.src = "https://connect.facebook.net/en_US/sdk.js";
+        script.async = true;
+        script.defer = true;
+        script.crossOrigin = "anonymous";
+        document.body.appendChild(script);
+      }
     }
+    initFB();
   }, []);
 
   const launchWhatsAppSignup = () => {
-    if (!(window as any).FB) return;
+    if (!(window as any).FB) {
+      alert("Facebook SDK not loaded. Please ensure you have configured NEXT_PUBLIC_FACEBOOK_APP_ID.");
+      return;
+    }
     
     (window as any).FB.login((response: any) => {
       if (response.authResponse) {

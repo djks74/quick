@@ -327,6 +327,7 @@ model PlatformSettings {
   subscriptionClientKey String?
   biteshipApiKey        String?
   geminiApiKey          String?
+  facebookAppId         String?
 }
 
 model WaUserPreference {
