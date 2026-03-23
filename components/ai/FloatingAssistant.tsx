@@ -14,13 +14,31 @@ interface Message {
   productImage?: string;
 }
 
-export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOpen?: boolean; onOpenChange?: (open: boolean) => void }) {
+interface FloatingAssistantProps {
+  forceOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  title?: string;
+  greeting?: string;
+  storeSlug?: string;
+  themeColor?: string;
+  isEmbed?: boolean;
+}
+
+export default function FloatingAssistant({ 
+  forceOpen, 
+  onOpenChange,
+  title = "Gercep Assistant",
+  greeting = "Halo! Saya Asisten AI Gercep. Mau cari makan atau pesan sesuatu hari ini?",
+  storeSlug,
+  themeColor,
+  isEmbed = false
+}: FloatingAssistantProps) {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(isEmbed);
   
-  // Hide on Admin, Dashboard, and POS pages
-  const isAdminPage = pathname?.includes("/admin") || pathname?.includes("/dashboard") || pathname?.includes("/super-admin");
-  const isPosPage = pathname?.includes("/pos");
+  // Hide on Admin, Dashboard, and POS pages (only if not embedded)
+  const isAdminPage = !isEmbed && (pathname?.includes("/admin") || pathname?.includes("/dashboard") || pathname?.includes("/super-admin"));
+  const isPosPage = !isEmbed && pathname?.includes("/pos");
 
   useEffect(() => {
     if (forceOpen) {
@@ -29,11 +47,13 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
   }, [forceOpen]);
 
   const toggleOpen = (val: boolean) => {
+    if (isEmbed) return; // Cannot close in embed mode
     setIsOpen(val);
     if (onOpenChange) onOpenChange(val);
   };
+  
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", text: "Halo! Saya Asisten AI Gercep. Mau cari makan atau pesan sesuatu hari ini?" }
+    { role: "assistant", text: greeting }
   ]);
   const [history, setHistory] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -84,7 +104,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
               isPublic: true,
               context: {
                 channel: "WEB",
-                location: { latitude, longitude }
+                location: { latitude, longitude },
+                slug: storeSlug // Pass the store slug context
               }
             })
           });
@@ -126,7 +147,10 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
           message: userMsg, 
           history,
           isPublic: true,
-          context: { channel: "WEB" }
+          context: { 
+            channel: "WEB",
+            slug: storeSlug // Pass the store slug context
+          }
         })
       });
       const data = await res.json();
@@ -155,39 +179,46 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed inset-0 sm:inset-auto sm:bottom-24 sm:right-0 w-full sm:w-[400px] h-full sm:h-[550px] bg-white dark:bg-gray-900 sm:rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className={cn(
+          "bg-white dark:bg-gray-900 shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300",
+          isEmbed 
+            ? "relative w-full h-full rounded-none sm:rounded-none" 
+            : "fixed inset-0 sm:inset-auto sm:bottom-24 sm:right-0 w-full sm:w-[400px] h-full sm:h-[550px] sm:rounded-3xl"
+        )}>
           {/* Header */}
-          <div className="p-4 bg-primary text-white flex items-center justify-between shadow-lg">
+          <div className="p-4 flex items-center justify-between shadow-lg" style={{ backgroundColor: themeColor || '#f97316' }}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
                 <Sparkles size={20} className="text-white" />
               </div>
               <div>
-                <h2 className="text-sm font-black tracking-tight">Gercep Assistant</h2>
+                <h2 className="text-sm font-black tracking-tight text-white">{title}</h2>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Online</span>
+                  <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">Online</span>
                 </div>
               </div>
             </div>
-            <button onClick={() => toggleOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-              <X size={20} />
-            </button>
+            {!isEmbed && (
+              <button onClick={() => toggleOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-white">
+                <X size={20} />
+              </button>
+            )}
           </div>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide bg-gray-50/50 dark:bg-gray-900/50">
             {messages.map((m, idx) => (
               <div key={idx} className={cn("flex gap-3", m.role === "user" ? "flex-row-reverse" : "flex-start")}>
-                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm", m.role === "user" ? "bg-primary text-white" : "bg-white dark:bg-gray-800 text-primary border dark:border-gray-700")}>
+                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm", m.role === "user" ? "text-white" : "bg-white dark:bg-gray-800 text-primary border dark:border-gray-700")} style={m.role === 'user' ? { backgroundColor: themeColor || '#f97316' } : {}}>
                   {m.role === "user" ? <User size={16} /> : <Bot size={16} />}
                 </div>
                 <div className={cn("max-w-[80%] flex flex-col gap-1", m.role === "user" ? "items-end" : "items-start")}>
                   <div className={`p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
                     m.role === "user" 
-                      ? "bg-primary text-white rounded-tr-none" 
+                      ? "text-white rounded-tr-none" 
                       : "bg-white dark:bg-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700"
-                  }`}>
+                  }`} style={m.role === 'user' ? { backgroundColor: themeColor || '#f97316' } : {}}>
                     {m.breakdown && (
                       <div className="mb-3 p-3 bg-gray-50 dark:bg-black/40 rounded-xl font-mono text-[11px] border border-black/5 dark:border-white/5 whitespace-pre-wrap leading-tight text-gray-600 dark:text-gray-400">
                         {m.breakdown}
@@ -250,6 +281,7 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
                 <input
                   type="text"
                   className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 pr-10 text-xs focus:ring-2 focus:ring-primary outline-none dark:text-white transition-all shadow-sm"
+                  style={{ '--tw-ring-color': themeColor || '#f97316' } as any}
                   placeholder="Tanya apa saja..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -258,7 +290,8 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
                 <button 
                   onClick={handleSend}
                   disabled={isLoading}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+                  style={{ color: themeColor || '#f97316' }}
                 >
                   <Send size={16} />
                 </button>
@@ -269,15 +302,18 @@ export default function FloatingAssistant({ forceOpen, onOpenChange }: { forceOp
       )}
 
       {/* Floating Button */}
-      <button
-        onClick={() => toggleOpen(!isOpen)}
-        className={cn(
-          "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95",
-          isOpen ? "bg-white dark:bg-gray-800 text-primary rotate-90" : "bg-primary text-white"
-        )}
-      >
-        {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
-      </button>
+      {!isEmbed && (
+        <button
+          onClick={() => toggleOpen(!isOpen)}
+          className={cn(
+            "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95",
+            isOpen ? "bg-white dark:bg-gray-800 text-primary rotate-90" : "text-white"
+          )}
+          style={!isOpen ? { backgroundColor: themeColor || '#f97316' } : { color: themeColor || '#f97316' }}
+        >
+          {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
+        </button>
+      )}
     </div>
   );
 }

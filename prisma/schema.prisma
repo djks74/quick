@@ -71,6 +71,7 @@ model Store {
   shippingEnableStoreCourier  Boolean             @default(false)
   shippingStoreCourierFee     Float               @default(0.0)
   enableTakeawayDelivery      Boolean             @default(true)
+  enableAiChatWidget          Boolean             @default(true)
   shippingSenderName          String?
   shippingSenderPhone         String?
   shippingSenderAddress       String?

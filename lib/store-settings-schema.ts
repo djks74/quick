@@ -143,6 +143,10 @@ export async function ensureStoreSettingsSchema() {
       await prisma.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "Product_externalId_key" ON "Product"("externalId");
       `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true;
+      `);
     })().catch((error) => {
       console.error("ensureStoreSettingsSchema error:", error);
     });

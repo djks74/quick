@@ -226,6 +226,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
         shippingSenderPostalCode: data.shippingSenderPostalCode || null,
         webhookUrl: data.webhookUrl || null,
         customGeminiKey: data.customGeminiKey || null,
+        enableAiChatWidget: data.enableAiChatWidget ?? true,
         operatingHours: data.operatingHours || null,
         timezone: data.timezone || null,
         ...(canUseOwnIntegrationConfig

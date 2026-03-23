@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
-import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
+import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
 
@@ -94,6 +94,7 @@ export default function AdminSettings() {
     shippingEnableStoreCourier: false,
     shippingStoreCourierFee: "0",
     enableTakeawayDelivery: true,
+    enableAiChatWidget: true,
     biteshipApiKey: "",
     biteshipOriginAreaId: "",
     biteshipOriginLat: "",
@@ -190,6 +191,7 @@ export default function AdminSettings() {
           shippingSenderAddress: data.shippingSenderAddress || "",
           shippingSenderPostalCode: data.shippingSenderPostalCode || "",
           customGeminiKey: (data as any).customGeminiKey || "",
+          enableAiChatWidget: (data as any).enableAiChatWidget ?? true,
           webhookUrl: (data as any).webhookUrl || "",
           timezone: (data as any).timezone || "Asia/Jakarta",
           operatingHours: (data as any).operatingHours || {
@@ -241,6 +243,7 @@ export default function AdminSettings() {
         shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount,
         customGeminiKey: settings.customGeminiKey,
+        enableAiChatWidget: settings.enableAiChatWidget,
         webhookUrl: settings.webhookUrl,
         operatingHours: settings.operatingHours,
         timezone: settings.timezone
@@ -1051,6 +1054,79 @@ export default function AdminSettings() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                   </Link>
                 </div>
+              </div>
+            </div>
+
+            <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", (!isSovereign && !isCorporate) && "opacity-50 pointer-events-none")}>
+              <div>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">AI Chat Widget</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Embed your AI assistant into your own website.</p>
+              </div>
+              <div className="md:col-span-2 space-y-4">
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
+                  <p className="text-xs text-purple-700 dark:text-purple-400 leading-relaxed font-medium">
+                    ✨ <strong>White-Label Ready:</strong> Your embedded chat uses your custom theme color and Gemini API Key (if configured).
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2 p-4 bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-xl">
+                  <input 
+                    type="checkbox" 
+                    id="enableAiChatWidget"
+                    checked={settings.enableAiChatWidget}
+                    onChange={(e) => setSettings({ ...settings, enableAiChatWidget: e.target.checked })}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label htmlFor="enableAiChatWidget" className="text-sm font-bold dark:text-gray-300 cursor-pointer">
+                    Enable AI Chat Widget
+                  </label>
+                </div>
+
+                {settings.enableAiChatWidget && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium dark:text-gray-300 uppercase tracking-wider text-[10px] font-black text-gray-400">Embed Code (IFrame)</label>
+                      <div className="relative group">
+                        <textarea 
+                          readOnly
+                          className="w-full border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-3 font-mono text-[10px] dark:text-white outline-none rounded shadow-inner min-h-[100px]" 
+                          value={`<iframe src="${typeof window !== 'undefined' ? window.location.origin : 'https://gercep.click'}/embed/chat/${settings.slug}?title=${encodeURIComponent(settings.name)}&color=${(settings.themeColor || '#f97316').replace('#', '')}" width="400" height="600" style="border:none; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"></iframe>`}
+                        />
+                        <button 
+                          onClick={() => {
+                            const code = `<iframe src="${window.location.origin}/embed/chat/${settings.slug}?title=${encodeURIComponent(settings.name)}&color=${(settings.themeColor || '#f97316').replace('#', '')}" width="400" height="600" style="border:none; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"></iframe>`;
+                            navigator.clipboard.writeText(code);
+                            alert("Embed code copied!");
+                          }}
+                          className="absolute right-2 top-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-500 italic">Copy this code and paste it into your website's HTML to display the chat assistant.</p>
+                    </div>
+
+                    <div className="pt-4 border-t dark:border-gray-800">
+                      <label className="block text-sm font-medium dark:text-gray-300 uppercase tracking-wider text-[10px] font-black text-gray-400 mb-2">Direct Link</label>
+                      <div className="flex items-center gap-2">
+                          <input 
+                            type="text" 
+                            readOnly 
+                            className="flex-1 border border-[#ccd0d4] dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-1.5 text-xs dark:text-white outline-none rounded"
+                            value={`${typeof window !== 'undefined' ? window.location.origin : 'https://gercep.click'}/embed/chat/${settings.slug}`}
+                          />
+                          <a 
+                            href={`/embed/chat/${settings.slug}`} 
+                            target="_blank" 
+                            className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            title="Preview"
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
