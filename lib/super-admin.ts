@@ -52,6 +52,15 @@ async function requireSuperAdmin() {
   return user;
 }
 
+export async function getStoreCount() {
+  try {
+    await requireSuperAdmin();
+    return await prisma.store.count();
+  } catch (error) {
+    return 0;
+  }
+}
+
 export async function getAllStores(limit: number = 200) {
   try {
     await requireSuperAdmin();

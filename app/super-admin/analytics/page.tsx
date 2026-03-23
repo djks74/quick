@@ -76,18 +76,9 @@ export default async function AnalyticsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Platform Analytics</h1>
-            <p className="text-gray-500 dark:text-gray-400">Overview of system performance and growth.</p>
-          </div>
-          <SuperAdminNav />
-        </header>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, i) => (
             <div key={i} className="bg-white dark:bg-[#1A1D21] p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
               <div className="flex items-center gap-4">
@@ -196,7 +187,6 @@ export default async function AnalyticsPage() {
              </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
