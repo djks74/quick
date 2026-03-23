@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
     const body = await req.json();
-    const { storeId, items, total, customerInfo, paymentMethod, specificType } = body;
+    const { storeId, items, total, customerInfo, paymentMethod, specificType, orderType: providedOrderType } = body;
 
     if (!storeId) {
       return NextResponse.json({ error: 'Store ID is required' }, { status: 400 });
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         tableNumber: customerInfo?.tableNumber,
         totalAmount: total,
         status: 'PENDING',
-        orderType: shippingProvider && shippingAddress ? 'TAKEAWAY' : 'DINE_IN',
+        orderType: providedOrderType || (shippingProvider && shippingAddress ? 'DELIVERY' : 'DINE_IN'),
         shippingProvider: shippingProvider || undefined,
         shippingService: shippingService || undefined,
         shippingAddress: shippingAddress || undefined,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     });
 
     const store = await prisma.store.findUnique({ where: { id: parseInt(storeId) } });
-    if (store && order.orderType === "TAKEAWAY" && order.shippingProvider && order.shippingAddress) {
+    if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
       const draft = await createBiteshipDraftForPendingOrder({
         store,
         order,

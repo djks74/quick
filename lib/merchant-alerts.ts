@@ -161,10 +161,10 @@ export async function buildOrderMerchantSummary(orderId: number, title: string) 
     let msg = `🛒 *${title} #${order.id}*\n`;
     if (order.tableNumber) msg += `📍 Meja: *${order.tableNumber}*\n`;
     msg += `👤 Customer: ${order.customerPhone}\n`;
-    msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
+    msg += `🧾 Tipe: ${order.orderType === 'TAKEAWAY' ? 'Pickup' : (order.orderType === 'DELIVERY' ? 'Delivery' : 'Dine In')}\n`;
     msg += `💳 Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n`;
     
-    if (order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY') {
+    if (order.orderType === 'DELIVERY') {
       const pName = order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'));
       msg += `🚚 Kurir: ${pName}${order.shippingService ? ` ${order.shippingService}` : ''}\n`;
       msg += `📦 Ongkir: Rp ${formatIDR(order.shippingCost || 0)}\n`;

@@ -785,8 +785,8 @@ export default function AdminSettings() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8">
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Takeaway and Delivery</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable shipping flows after WhatsApp checkout.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Delivery</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enable shipping and driver flows for your store.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 <div className="flex items-center space-x-2">
@@ -796,7 +796,7 @@ export default function AdminSettings() {
                     onChange={(e) => setSettings({ ...settings, enableTakeawayDelivery: e.target.checked })}
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-                  <label className="text-sm font-medium dark:text-gray-300">Enable takeaway delivery flow</label>
+                  <label className="text-sm font-medium dark:text-gray-300">Enable delivery flow</label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <input

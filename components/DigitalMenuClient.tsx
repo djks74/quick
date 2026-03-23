@@ -112,7 +112,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkInFallbackUrl, setCheckInFallbackUrl] = useState("");
   const [checkoutPhone, setCheckoutPhone] = useState("");
-  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>(tableNumber ? 'DINE_IN' : 'TAKEAWAY');
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>(tableNumber ? 'DINE_IN' : 'TAKEAWAY');
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [shippingQuotes, setShippingQuotes] = useState<any[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
@@ -300,7 +300,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   };
 
   const fetchShippingQuotes = async () => {
-    if (!store.enableTakeawayDelivery || orderType !== 'TAKEAWAY') return;
+    if (!store.enableTakeawayDelivery || orderType !== 'DELIVERY') return;
     if (!deliveryAddress.trim()) {
       setShippingQuotes([]);
       setSelectedQuote(null);
@@ -335,7 +335,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }
   };
 
-  const currentShippingCost = orderType === 'TAKEAWAY' ? Number(selectedQuote?.fee || selectedQuote?.price || 0) : 0;
+  const currentShippingCost = orderType === 'DELIVERY' ? Number(selectedQuote?.fee || selectedQuote?.price || 0) : 0;
   const finalTotalAmount = totalPrice + (isCustomerPaysFee ? (calculatePlatformFee('qris') || calculatePlatformFee('transfer')) : 0) + currentShippingCost;
 
   const handleWebCheckout = async (method: 'qris' | 'bank') => {
@@ -349,9 +349,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
       return;
     }
 
-    if (orderType === 'TAKEAWAY') {
+    if (orderType === 'DELIVERY') {
       if (!store.enableTakeawayDelivery) {
-        alert("Takeaway delivery is not enabled for this store.");
+        alert("Delivery is not enabled for this store.");
         return;
       }
       if (!deliveryAddress.trim()) {
@@ -374,14 +374,15 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           price: item.price
         })),
         total: totalPrice + (isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0) + currentShippingCost,
+        orderType: orderType,
         customerInfo: {
           phone: checkoutPhone.trim(),
           tableNumber: tableNumber || undefined,
-          shippingProvider: orderType === 'TAKEAWAY' ? selectedQuote?.provider : undefined,
-          shippingService: orderType === 'TAKEAWAY' ? selectedQuote?.service : undefined,
-          shippingAddress: orderType === 'TAKEAWAY' ? deliveryAddress.trim() : undefined,
-          shippingCost: orderType === 'TAKEAWAY' ? currentShippingCost : 0,
-          shippingEta: orderType === 'TAKEAWAY' ? selectedQuote?.etd || selectedQuote?.eta : undefined
+          shippingProvider: orderType === 'DELIVERY' ? selectedQuote?.provider : undefined,
+          shippingService: orderType === 'DELIVERY' ? selectedQuote?.service : undefined,
+          shippingAddress: orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined,
+          shippingCost: orderType === 'DELIVERY' ? currentShippingCost : 0,
+          shippingEta: orderType === 'DELIVERY' ? selectedQuote?.etd || selectedQuote?.eta : undefined
         },
         paymentMethod: "midtrans",
         specificType: method === 'qris' ? 'qris' : 'bank_transfer'
@@ -769,13 +770,13 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
                  <div className="space-y-3">
                     <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Order Type</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setOrderType('DINE_IN')}
                         className={cn(
-                          "py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border",
+                          "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
                           orderType === 'DINE_IN'
-                            ? "bg-gray-900 text-white border-gray-900"
+                            ? "bg-gray-900 text-white border-gray-900 shadow-lg"
                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
                         )}
                         style={orderType === 'DINE_IN' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
@@ -784,21 +785,32 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       </button>
                       <button
                         onClick={() => setOrderType('TAKEAWAY')}
-                        disabled={!store.enableTakeawayDelivery}
                         className={cn(
-                          "py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border disabled:opacity-40",
+                          "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
                           orderType === 'TAKEAWAY'
-                            ? "bg-gray-900 text-white border-gray-900"
+                            ? "bg-gray-900 text-white border-gray-900 shadow-lg"
                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
                         )}
                         style={orderType === 'TAKEAWAY' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
                       >
                         Takeaway
                       </button>
+                      <button
+                        onClick={() => setOrderType('DELIVERY')}
+                        className={cn(
+                          "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
+                          orderType === 'DELIVERY'
+                            ? "bg-gray-900 text-white border-gray-900 shadow-lg"
+                            : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                        )}
+                        style={orderType === 'DELIVERY' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                      >
+                        Delivery
+                      </button>
                     </div>
                  </div>
 
-                 {orderType === 'TAKEAWAY' && (
+                 {orderType === 'DELIVERY' && (
                    <div className="space-y-3">
                       <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
                       <textarea
@@ -895,7 +907,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span>{formatPrice(serviceCharge)}</span>
                        </div>
                     )}
-                    {orderType === 'TAKEAWAY' && selectedQuote && (
+                    {orderType === 'DELIVERY' && selectedQuote && (
                        <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
                           <span>Shipping ({selectedQuote.provider} {selectedQuote.service})</span>
                           <span>{formatPrice(currentShippingCost)}</span>
@@ -903,7 +915,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     )}
                     <div className="flex justify-between items-end pt-4 border-t border-gray-100 dark:border-gray-800">
                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total Amount</span>
-                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}</span>
+                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'DELIVERY' ? currentShippingCost : 0))}</span>
                     </div>
                  </div>
 
@@ -920,7 +932,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') + (orderType === 'TAKEAWAY' ? currentShippingCost : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') + (orderType === 'DELIVERY' ? currentShippingCost : 0))}
                           </span>
                           {calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer'))})</span>
@@ -932,7 +944,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    onClick={() => handleWhatsAppCheckout(paymentMethod)}
                    className="w-full py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400"
                  >
-                   Fallback: Continue via WhatsApp
+                   Fallback: Checkout {orderType === 'DINE_IN' ? 'Dine In' : (orderType === 'TAKEAWAY' ? 'Pickup' : 'Delivery')} via WhatsApp
                  </button>
                  {!store.isOpen && (
                    <p className="text-[10px] text-red-500 font-black text-center uppercase tracking-widest">

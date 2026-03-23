@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
       const shouldAttemptBooking = !order.biteshipOrderId || !finalShippingStates.includes(shippingStatus);
       if (
         store &&
-        order.orderType === "TAKEAWAY" &&
+        order.orderType === "DELIVERY" &&
         isProviderBookable &&
         !!order.shippingAddress &&
         shouldAttemptBooking
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
             `⚠️ *Booking Pengiriman Gagal*\nOrder #${order.id}\nAlasan: ${bookingFailed.error || "unknown"}\n\nCek konfigurasi alamat pengirim dan API Biteship.`
           );
         }
-      } else if (store && order.orderType === "TAKEAWAY" && !order.biteshipOrderId) {
+      } else if (store && order.orderType === "DELIVERY" && !order.biteshipOrderId) {
         console.log("BITESHIP_BOOKING_SKIPPED", {
           orderId: order.id,
           provider: order.shippingProvider,
@@ -292,7 +292,7 @@ export async function POST(req: NextRequest) {
             `Bayar: ${order.paymentMethod === 'qris' ? 'QRIS' : (order.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : (order.paymentMethod || '-'))}\n\n` +
             `*Pesanan:*\n${itemsList}\n` +
             `${order.orderType === 'TAKEAWAY' || order.orderType === 'DELIVERY' 
-              ? `Tipe: ${order.orderType === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}\nKurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` 
+              ? `Tipe: ${order.orderType === 'TAKEAWAY' ? 'Pickup' : 'Delivery'}\n${order.orderType === 'DELIVERY' ? `Kurir: ${order.shippingProvider === 'STORE_COURIER' ? 'Kurir Toko' : (order.shippingProvider === 'GOSEND' ? 'Gosend' : (order.shippingProvider || '-'))}${order.shippingService ? ` ${order.shippingService}` : ''}\nOngkir: Rp ${new Intl.NumberFormat('id-ID').format(order.shippingCost || 0)}\nEstimasi: ${order.shippingEta || '-'}\nAlamat: ${order.shippingAddress || '-'}` : ''}`
               : `Tipe: Dine In`}` +
             `${order.biteshipOrderId ? `\nBiteship ID: ${order.biteshipOrderId}` : ``}` +
             `${order.shippingTrackingNo ? `\nResi: ${order.shippingTrackingNo}` : ``}` +
