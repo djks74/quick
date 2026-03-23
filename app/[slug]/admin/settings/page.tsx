@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
-import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe } from "lucide-react";
+import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe, HelpCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
 
@@ -119,9 +119,54 @@ export default function AdminSettings() {
     } as any
   });
 
+  const [showIntegrationGuide, setShowIntegrationGuide] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+
+  // Meta SDK Initialization for Embedded Signup
+  useEffect(() => {
+    if (typeof window !== "undefined" && !(window as any).fbAsyncInit) {
+      (window as any).fbAsyncInit = function() {
+        (window as any).FB.init({
+          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "752112443422115",
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v18.0'
+        });
+      };
+      
+      const script = document.createElement("script");
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = "anonymous";
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  const launchWhatsAppSignup = () => {
+    if (!(window as any).FB) return;
+    
+    (window as any).FB.login((response: any) => {
+      if (response.authResponse) {
+        const accessToken = response.authResponse.accessToken;
+        // The access token can be used to fetch the WABA ID and Phone Number ID
+        // In a real production app, you would send this to your backend
+        alert("Success! Connected to Facebook. Please copy your Token from the Facebook Developer Portal or use the one we just received (logged to console).");
+        console.log("Meta Access Token:", accessToken);
+        setSettings(prev => ({ ...prev, whatsappToken: accessToken }));
+      }
+    }, {
+      scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      extras: {
+        feature: 'whatsapp_embedded_signup',
+        setup: {
+          // Additional setup params can go here
+        }
+      }
+    });
+  };
 
   const [bankAccount, setBankAccount] = useState({
     bankName: "BCA",
@@ -680,12 +725,49 @@ export default function AdminSettings() {
                       )}>
                         {isCorporate ? <Building2 size={20} /> : <Sparkles size={20} />}
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">
                           {isCorporate ? "Corporate Configurations" : "Sovereign Configurations"}
                         </h3>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
                       </div>
+                      <button 
+                        onClick={() => setShowIntegrationGuide(!showIntegrationGuide)}
+                        className="text-gray-400 hover:text-primary transition-colors"
+                        title="Help / Documentation"
+                      >
+                        <HelpCircle size={18} />
+                      </button>
+                    </div>
+
+                    {showIntegrationGuide && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-widest">
+                           <Info size={14} /> Onboarding Guide
+                        </div>
+                        <ul className="text-[11px] text-blue-600 dark:text-blue-500 space-y-2 leading-relaxed list-disc pl-4">
+                           <li><strong>Meta App ID:</strong> Ensure you have a Meta App for your Business.</li>
+                           <li><strong>WhatsApp Cloud API:</strong> Go to Meta Business Suite to get your <b>Phone Number ID</b> and <b>WABA ID</b>.</li>
+                           <li><strong>Access Token:</strong> Use the <i>Embedded Signup</i> below or generate a permanent token in <b>App Settings &gt; WhatsApp &gt; Configuration</b>.</li>
+                           <li><strong>Gemini Key:</strong> Get your free API Key from <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold">Google AI Studio</a>.</li>
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 rounded-xl space-y-4 transition-colors">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div>
+                                <h4 className="text-xs font-bold dark:text-gray-200">WhatsApp Onboarding</h4>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">Connect your business WhatsApp number automatically via Meta.</p>
+                            </div>
+                            <button 
+                                onClick={launchWhatsAppSignup}
+                                className="w-full sm:w-auto px-4 py-2 bg-[#1877F2] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors shadow-sm"
+                            >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                Connect with Facebook
+                            </button>
+                        </div>
                     </div>
 
                     <div className="space-y-4">

@@ -1,4 +1,5 @@
 import { getAllStores, getPlatformSettings } from "@/lib/super-admin";
+import { getGlobalWaUsage } from "@/lib/wa-credit";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -12,7 +13,11 @@ export default async function SuperAdminSettingsPage() {
     redirect("/login");
   }
 
-  const [stores, settings] = await Promise.all([getAllStores(200), getPlatformSettings()]);
+  const [stores, settings, globalWaUsage] = await Promise.all([
+    getAllStores(200), 
+    getPlatformSettings(),
+    getGlobalWaUsage()
+  ]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F1113] p-8 transition-colors duration-300">
@@ -26,7 +31,7 @@ export default async function SuperAdminSettingsPage() {
         </header>
 
         <div className="bg-white dark:bg-[#1A1D21] rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 transition-colors">
-          <SettingsForm initialSettings={settings} />
+          <SettingsForm initialSettings={settings} waUsage={globalWaUsage} />
         </div>
       </div>
     </div>

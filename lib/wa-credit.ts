@@ -397,3 +397,29 @@ export async function getWaUsageDashboard(storeId: number) {
     recentLogs
   };
 }
+
+export async function getGlobalWaUsage() {
+  await ensureWaCreditSchema();
+  const [totalBalance, totalUsageCount, totalTopup] = await Promise.all([
+    prisma.store.aggregate({ _sum: { waBalance: true } }),
+    prisma.waUsageLog.count({ where: { type: "DEDUCTION" } }),
+    prisma.waUsageLog.aggregate({ _sum: { amount: true }, where: { type: "TOPUP" } })
+  ]);
+
+  const recentLogs = await prisma.waUsageLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    include: { store: { select: { name: true, slug: true } } }
+  });
+
+  // Meta cost estimate (approx 350 IDR per conversation/message)
+  const estimatedCost = totalUsageCount * 350;
+
+  return {
+    totalBalance: totalBalance._sum.waBalance || 0,
+    totalUsageCount,
+    totalTopup: totalTopup._sum.amount || 0,
+    estimatedCost,
+    recentLogs
+  };
+}

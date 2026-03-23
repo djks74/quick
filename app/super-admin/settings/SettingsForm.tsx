@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Send } from "lucide-react";
+import { Check, Loader2, Send, Activity, Wallet, MessageSquare } from "lucide-react";
 import { updatePlatformSettings, testWhatsAppConnection } from "@/lib/super-admin";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,19 @@ type PlatformSettings = {
   geminiApiKey?: string | null;
 };
 
-export default function SettingsForm({ initialSettings }: { initialSettings: PlatformSettings | null }) {
+export default function SettingsForm({ 
+  initialSettings, 
+  waUsage 
+}: { 
+  initialSettings: PlatformSettings | null;
+  waUsage: {
+    totalBalance: number;
+    totalUsageCount: number;
+    totalTopup: number;
+    estimatedCost: number;
+    recentLogs: any[];
+  };
+}) {
   const router = useRouter();
   const defaults = useMemo(
     () => ({
@@ -89,6 +101,53 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Pla
 
   return (
     <div className="space-y-10">
+      {/* Platform Usage Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-8 border-b dark:border-gray-800 transition-colors">
+          <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
+                  <MessageSquare size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Total Messages</span>
+              </div>
+              <div className="text-2xl font-bold dark:text-white">
+                  {waUsage.totalUsageCount.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Global conversation count</p>
+          </div>
+
+          <div className="p-4 bg-orange-50/50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/30">
+              <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 mb-2">
+                  <Wallet size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Global Balance</span>
+              </div>
+              <div className="text-2xl font-bold dark:text-white">
+                  Rp {waUsage.totalBalance.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Total credit across all stores</p>
+          </div>
+
+          <div className="p-4 bg-green-50/50 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-900/30">
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-2">
+                  <Activity size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Total Revenue</span>
+              </div>
+              <div className="text-2xl font-bold dark:text-white">
+                  Rp {waUsage.totalTopup.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Lifetime WhatsApp top-ups</p>
+          </div>
+
+          <div className="p-4 bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/30">
+              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 mb-2">
+                  <Activity size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Est. Meta Cost</span>
+              </div>
+              <div className="text-2xl font-bold dark:text-white text-purple-600">
+                  Rp {waUsage.estimatedCost.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Approximate platform expense</p>
+          </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
         <div>
           <h3 className="text-sm font-bold text-gray-900 dark:text-white">WhatsApp Cloud API</h3>
