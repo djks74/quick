@@ -9,11 +9,12 @@ import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
 
-let ensuredPlatformSettingsSchema: Promise<void> | null = null;
+let ensuredPlatformSettingsSchemaV3: Promise<void> | null = null;
 
 export async function ensurePlatformSettingsSchema() {
-  if (!ensuredPlatformSettingsSchema) {
-    ensuredPlatformSettingsSchema = (async () => {
+  if (!ensuredPlatformSettingsSchemaV3) {
+    ensuredPlatformSettingsSchemaV3 = (async () => {
+      console.log("[DB_PATCH] Running PlatformSettings schema check...");
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "PlatformSettings"
         ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
@@ -24,11 +25,13 @@ export async function ensurePlatformSettingsSchema() {
         ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
         ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0;
       `);
+      console.log("[DB_PATCH] PlatformSettings schema patched successfully ✅");
     })().catch((error) => {
-      console.error("ensurePlatformSettingsSchema error:", error);
+      console.error("[DB_PATCH_ERROR] PlatformSettings schema patch failed ❌", error);
+      ensuredPlatformSettingsSchemaV3 = null; // Reset on error to allow retry
     });
   }
-  await ensuredPlatformSettingsSchema;
+  await ensuredPlatformSettingsSchemaV3;
 }
 
 async function requireSuperAdmin() {
