@@ -128,9 +128,10 @@ export async function getShippingQuoteFromBiteship(input: BiteshipRateInput): Pr
     if (match) postal = match[1];
   }
 
-  const destinationAreaId = !postal ? await lookupBiteshipAreaIdFromInput(store, input.destinationAddress).catch(() => null) : null;
+  // Always try to get area ID for better GoSend/Instant reliability
+  const destinationAreaId = await lookupBiteshipAreaIdFromInput(store, input.destinationAddress).catch(() => null);
 
-  // Debug log for postal code
+  // Debug log for postal code and area
   console.log(
     `[BITESHIP_RATES] OriginPostal: ${originPostal || "-"}, OriginArea: ${store?.biteshipOriginAreaId || "-"}, OriginAddress: ${originAddress || "-"}, DestPostal: ${postal || "-"}, DestArea: ${destinationAreaId || "-"}, Address: ${input.destinationAddress}`
   );

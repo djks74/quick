@@ -815,7 +815,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                       <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
                       <textarea
                         value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        onChange={(e) => {
+                          setDeliveryAddress(e.target.value);
+                          setSelectedQuote(null); // Clear selected quote on address change
+                        }}
                         placeholder="Masukkan alamat lengkap + kode pos"
                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[84px]"
                       />
@@ -922,7 +925,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  <div className="grid grid-cols-1 gap-4">
                     <button 
                       onClick={() => handleWebCheckout(paymentMethod)}
-                      disabled={!store.isOpen || isProcessing}
+                      disabled={!store.isOpen || isProcessing || (orderType === 'DELIVERY' && !selectedQuote)}
                       className="py-3 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                       style={{ backgroundColor: themeColor }}
                     >
