@@ -140,7 +140,7 @@ export default function AdminUsers() {
           <Link href={`/${slug}/admin/users`} className="p-2 hover:bg-gray-100 rounded-full">
             <ArrowLeft className="w-5 h-5 text-gray-500" />
           </Link>
-          <h2 className="text-xl font-medium">Add New Cashier</h2>
+          <h2 className="text-xl font-medium">Add New {formData.role === 'CASHIER' ? 'Cashier' : 'Manager'}</h2>
         </div>
         
         <div className="max-w-2xl">
@@ -228,7 +228,7 @@ export default function AdminUsers() {
                 className="px-6 py-2 bg-[#2271b1] text-white font-medium hover:bg-[#135e96] transition-colors rounded shadow-sm disabled:opacity-50 flex items-center"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Create Cashier
+                {formData.role === 'CASHIER' ? 'Create Cashier' : 'Create Manager'}
               </button>
             </div>
           </form>
