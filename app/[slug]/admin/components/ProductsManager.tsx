@@ -57,7 +57,7 @@ export default function ProductsManager({
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState(50);
 
   const filteredProducts = useMemo(
     () =>
@@ -400,19 +400,38 @@ export default function ProductsManager({
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between mt-4 text-xs text-gray-500 dark:text-gray-400">
-              <span>
-                Showing{" "}
-                <span className="font-bold">
-                  {filteredProducts.length === 0
-                    ? 0
-                    : (currentPage - 1) * pageSize + 1}
-                  {"–"}
-                  {Math.min(currentPage * pageSize, filteredProducts.length)}
-                </span>{" "}
-                of <span className="font-bold">{filteredProducts.length}</span>{" "}
-                products
-              </span>
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-4">
+                <span>
+                  Showing{" "}
+                  <span className="font-bold">
+                    {filteredProducts.length === 0
+                      ? 0
+                      : (currentPage - 1) * pageSize + 1}
+                    {"–"}
+                    {Math.min(currentPage * pageSize, filteredProducts.length)}
+                  </span>{" "}
+                  of <span className="font-bold">{filteredProducts.length}</span>{" "}
+                  products
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Show:</span>
+                  <select 
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-[11px] font-bold outline-none focus:border-primary transition-colors"
+                  >
+                    {[10, 20, 50, 100].map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
