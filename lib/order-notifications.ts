@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredOrderNotificationsSchemaV3: Promise<void> | null = null;
+let ensuredOrderNotificationsSchemaV4: Promise<void> | null = null;
 
 export async function ensureOrderNotificationsSchema() {
-  if (!ensuredOrderNotificationsSchemaV3) {
-    ensuredOrderNotificationsSchemaV3 = (async () => {
-      console.log("[DB_PATCH] Running OrderNotification schema check V3...");
+  if (!ensuredOrderNotificationsSchemaV4) {
+    ensuredOrderNotificationsSchemaV4 = (async () => {
+      console.log("[DB_PATCH] Running OrderNotification schema check V4...");
       
       const commands = [
         `CREATE TABLE IF NOT EXISTS "OrderNotification" (
@@ -21,6 +21,7 @@ export async function ensureOrderNotificationsSchema() {
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "message" TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'NEW_ORDER'`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT false`,
+        `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
         `CREATE INDEX IF NOT EXISTS "OrderNotification_storeId_isRead_idx" ON "OrderNotification" ("storeId", "isRead")`,
         `CREATE INDEX IF NOT EXISTS "OrderNotification_orderId_idx" ON "OrderNotification" ("orderId")`
       ];
@@ -36,10 +37,10 @@ export async function ensureOrderNotificationsSchema() {
       console.log("[DB_PATCH] OrderNotification schema patched successfully ✅");
     })().catch((err) => {
       console.error("[DB_PATCH_ERROR] OrderNotification schema patch failed ❌", err);
-      ensuredOrderNotificationsSchemaV3 = null;
+      ensuredOrderNotificationsSchemaV4 = null;
     });
   }
-  await ensuredOrderNotificationsSchemaV3;
+  await ensuredOrderNotificationsSchemaV4;
 }
 
 export async function createOrderNotification(input: {
