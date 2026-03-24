@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { GuardError, requireStoreAccessBySlug } from "@/lib/guards";
 
 let ensuredSchema: Promise<void> | null = null;
 
@@ -120,8 +121,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
 
-    const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    const { store } = await requireStoreAccessBySlug(slug);
 
     await ensureInventorySchema();
 
@@ -149,6 +149,9 @@ export async function GET(req: NextRequest) {
       throw dbError;
     }
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[INVENTORY_API_GET]", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
@@ -167,11 +170,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
 
-    const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) {
-      console.error("[INVENTORY_POST] Store not found for slug:", slug);
-      return NextResponse.json({ error: "Store not found" }, { status: 404 });
-    }
+    const { store } = await requireStoreAccessBySlug(slug);
 
     await ensureInventorySchema();
 
@@ -258,6 +257,9 @@ export async function POST(req: NextRequest) {
     console.log("[INVENTORY_POST] Item created successfully:", newItem.id);
     return NextResponse.json(newItem);
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[INVENTORY_API_POST_ERROR]", error);
     // Provide a more descriptive error if it's a unique constraint violation
     if (error.code === 'P2002') {
@@ -278,8 +280,7 @@ export async function PUT(req: NextRequest) {
     if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     if (!id) return NextResponse.json({ error: "Missing item ID" }, { status: 400 });
 
-    const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    const { store } = await requireStoreAccessBySlug(slug);
 
     await ensureInventorySchema();
 
@@ -340,6 +341,9 @@ export async function PUT(req: NextRequest) {
     console.log("[INVENTORY_PUT] Item updated successfully:", updated.id);
     return NextResponse.json(updated);
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[INVENTORY_API_PUT_ERROR]", error);
     if (error.code === 'P2002') {
       return NextResponse.json({ error: "Barcode already exists for this store" }, { status: 400 });
@@ -357,8 +361,7 @@ export async function DELETE(req: NextRequest) {
 
     if (!slug) return NextResponse.json({ error: "Missing slug" }, { status: 400 });
 
-    const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    const { store } = await requireStoreAccessBySlug(slug);
 
     await ensureInventorySchema();
 
@@ -367,6 +370,9 @@ export async function DELETE(req: NextRequest) {
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[INVENTORY_API_DELETE]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

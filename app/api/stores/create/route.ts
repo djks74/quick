@@ -63,6 +63,19 @@ export async function POST(req: Request) {
       // Copy menu if requested
       if (sourceStoreId) {
         const sourceId = parseInt(sourceStoreId);
+        if (Number.isNaN(sourceId)) {
+          throw new Error("Invalid source store ID");
+        }
+        const sourceStore = await tx.store.findUnique({
+          where: { id: sourceId },
+          select: { id: true, ownerId: true }
+        });
+        if (!sourceStore) {
+          throw new Error("Source store not found");
+        }
+        if (!isSuperAdmin && sourceStore.ownerId !== dbUser.id) {
+          throw new Error("Unauthorized source store access");
+        }
         
         // Copy Categories
         const categories = await tx.category.findMany({
@@ -114,6 +127,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, slug: newStore.slug });
   } catch (error) {
     console.error("Error creating store:", error);
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    if (message.includes("Unauthorized source store access")) {
+      return NextResponse.json({ error: "Unauthorized source store access" }, { status: 403 });
+    }
+    if (message.includes("Source store not found") || message.includes("Invalid source store ID")) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

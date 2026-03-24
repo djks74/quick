@@ -26,7 +26,8 @@ function normalizePhoneNumber(phone: string) {
   return clean;
 }
 
-const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
+const AI_API_KEY = process.env.AI_API_KEY;
+const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
@@ -867,6 +868,12 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
+    const internalContextHeader = req.headers.get("x-internal-context-key");
+    const isTrustedInternalContext = Boolean(
+      AI_INTERNAL_CONTEXT_KEY &&
+      internalContextHeader &&
+      internalContextHeader === AI_INTERNAL_CONTEXT_KEY
+    );
     const { message, history, isPublic, context } = await req.json();
 
     if (!message) {
@@ -942,11 +949,16 @@ export async function POST(req: NextRequest) {
     let corporateId: number | null = null;
     let currentUserId: number | null = null;
     let currentUserRole: string | null = null;
+    const allowedStoreSlugs = new Set<string>();
+    const allowedStoreIds = new Set<number>();
 
     if (session && (session as any).user) {
       const dbUser = await prisma.user.findUnique({
         where: { email: (session as any).user.email! },
-        include: { stores: true }
+        include: {
+          stores: true,
+          workedAt: { select: { id: true, slug: true } }
+        }
       }) as any;
       
       if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER")) {
@@ -957,6 +969,12 @@ export async function POST(req: NextRequest) {
         const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
         const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
         userContextInfo = ` The user is an authenticated ADMIN/MERCHANT (ID: ${dbUser.id}). They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
+        for (const s of dbUser.stores || []) {
+          if (s?.slug) allowedStoreSlugs.add(String(s.slug));
+          if (s?.id) allowedStoreIds.add(Number(s.id));
+        }
+        if (dbUser.workedAt?.slug) allowedStoreSlugs.add(String(dbUser.workedAt.slug));
+        if (dbUser.workedAt?.id) allowedStoreIds.add(Number(dbUser.workedAt.id));
         
         if (userPlan === "CORPORATE") {
            userContextInfo += " They are a CORPORATE user with multi-outlet access.";
@@ -966,11 +984,14 @@ export async function POST(req: NextRequest) {
         currentUserRole = "SUPER_ADMIN";
         userContextInfo = " The user is a SUPER_ADMIN with full platform access.";
       }
-    } else if (context?.phoneNumber) {
+    } else if (isTrustedInternalContext && context?.phoneNumber) {
       const cleanPhone = context.phoneNumber.replace(/\D/g, "");
       const dbUser = await prisma.user.findFirst({
         where: { phoneNumber: { contains: cleanPhone } },
-        include: { stores: true }
+        include: {
+          stores: true,
+          workedAt: { select: { id: true, slug: true } }
+        }
       }) as any;
       
       if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER" || dbUser.role === "SUPER_ADMIN")) {
@@ -981,6 +1002,12 @@ export async function POST(req: NextRequest) {
         const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
         const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
         userContextInfo = ` The user is a registered ${dbUser.role} (ID: ${dbUser.id}) chatting via WhatsApp. They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
+        for (const s of dbUser.stores || []) {
+          if (s?.slug) allowedStoreSlugs.add(String(s.slug));
+          if (s?.id) allowedStoreIds.add(Number(s.id));
+        }
+        if (dbUser.workedAt?.slug) allowedStoreSlugs.add(String(dbUser.workedAt.slug));
+        if (dbUser.workedAt?.id) allowedStoreIds.add(Number(dbUser.workedAt.id));
         
         if (userPlan === "CORPORATE") {
            userContextInfo += " They are a CORPORATE user with multi-outlet access.";
@@ -1324,6 +1351,45 @@ Once an order is created:
                if (currentUserRole !== "SUPER_ADMIN") {
                  args.userId = currentUserId;
                }
+            }
+          }
+
+          const sensitiveTools = new Set([
+            "update_product_price",
+            "add_new_product",
+            "toggle_store_active",
+            "toggle_store_open",
+            "create_topup_payment_link",
+            "get_store_stats",
+            "get_store_products"
+          ]);
+          if (sensitiveTools.has(call.name) && !isMerchantUser) {
+            toolResponses.push({
+              functionResponse: {
+                name: call.name,
+                response: { error: "Unauthorized tool access" }
+              }
+            });
+            continue;
+          }
+          if (currentUserRole !== "SUPER_ADMIN") {
+            if (args.slug && allowedStoreSlugs.size > 0 && !allowedStoreSlugs.has(String(args.slug))) {
+              toolResponses.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { error: "Unauthorized store access" }
+                }
+              });
+              continue;
+            }
+            if (args.storeId && allowedStoreIds.size > 0 && !allowedStoreIds.has(Number(args.storeId))) {
+              toolResponses.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { error: "Unauthorized store access" }
+                }
+              });
+              continue;
             }
           }
 

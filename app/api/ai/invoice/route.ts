@@ -1,27 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { processPayment } from "@/lib/payment";
-
-const AI_API_KEY = process.env.AI_API_KEY || "gercep_ai_secret_123";
-
-async function validateRequest(req: NextRequest) {
-  const apiKey = req.headers.get("x-api-key");
-  return apiKey === AI_API_KEY;
-}
+import { GuardError, requireAiStoreAccessBySlug } from "@/lib/guards";
 
 export async function POST(req: NextRequest) {
-  if (!(await validateRequest(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { slug, customer_phone, amount, payment_method } = await req.json();
     if (!slug || !customer_phone || !amount || !payment_method) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-
-    const store = await prisma.store.findUnique({ where: { slug } });
-    if (!store) return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    const store = await requireAiStoreAccessBySlug(req.headers, slug);
 
     // Find or create "Tagihan Manual" product
     let product = await prisma.product.findFirst({
@@ -91,6 +79,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[AI_INVOICE_ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
