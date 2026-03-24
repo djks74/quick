@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import { 
   Plus, 
@@ -9,12 +9,13 @@ import {
   Trash2, 
   Copy,
   Image as ImageIcon,
-  RefreshCcw
+  RefreshCcw,
+  Upload
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "@/app/[slug]/admin/products/ProductForm";
 import CategoryForm from "@/app/[slug]/admin/products/CategoryForm";
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, resetAllProductsForStore, createCategory, updateCategory, deleteCategory } from "@/lib/api";
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, resetAllProductsForStore, createCategory, updateCategory, deleteCategory, importProductsFromCsvRows } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type IngredientUOM = "gram" | "kg" | "pcs";
@@ -58,8 +59,10 @@ export default function ProductsManager({
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const totalProductsCount = products.length;
   const activeProductsCount = products.filter(p => p.category !== "_ARCHIVED_").length;
@@ -223,6 +226,125 @@ export default function ProductsManager({
     await refreshData();
   };
 
+  const parseCsvRows = (text: string) => {
+    const firstLine = text.split(/\r?\n/).find((line) => line.trim().length > 0) || "";
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const delimiter = semicolonCount > commaCount ? ";" : ",";
+    const table: string[][] = [];
+    let row: string[] = [];
+    let value = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const next = text[i + 1];
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          value += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (char === delimiter && !inQuotes) {
+        row.push(value);
+        value = "";
+        continue;
+      }
+      if ((char === "\n" || char === "\r") && !inQuotes) {
+        if (char === "\r" && next === "\n") i += 1;
+        row.push(value);
+        if (row.some((cell) => String(cell || "").trim().length > 0)) {
+          table.push(row.map((cell) => String(cell || "").trim()));
+        }
+        row = [];
+        value = "";
+        continue;
+      }
+      value += char;
+    }
+    row.push(value);
+    if (row.some((cell) => String(cell || "").trim().length > 0)) {
+      table.push(row.map((cell) => String(cell || "").trim()));
+    }
+    if (table.length < 2) return [];
+
+    const normalizeKey = (input: string) => input.toLowerCase().replace(/[\s_-]/g, "");
+    const headers = table[0].map(normalizeKey);
+    const dataRows = table.slice(1);
+    const getValue = (record: Record<string, string>, aliases: string[]) => {
+      for (const alias of aliases) {
+        const key = normalizeKey(alias);
+        if (record[key] !== undefined) return record[key];
+      }
+      return "";
+    };
+
+    return dataRows
+      .map((cells) => {
+        const record: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          record[header] = String(cells[index] || "").trim();
+        });
+        return {
+          name: getValue(record, ["name", "productname", "title"]),
+          price: getValue(record, ["price", "harga"]),
+          category: getValue(record, ["category", "kategori"]),
+          stock: getValue(record, ["stock", "stok", "qty", "quantity"]),
+          barcode: getValue(record, ["barcode", "sku"]),
+          image: getValue(record, ["image", "imageurl", "thumbnail"]),
+          description: getValue(record, ["description", "desc"]),
+          shortDescription: getValue(record, ["shortdescription", "shortdesc"]),
+          subCategory: getValue(record, ["subcategory", "subkategori"]),
+          rating: getValue(record, ["rating"]),
+          type: getValue(record, ["type"])
+        };
+      })
+      .filter((item) => String(item.name || "").trim().length > 0);
+  };
+
+  const handleImportCsvFile = async (file?: File | null) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      alert("Please upload a CSV file.");
+      return;
+    }
+
+    setIsImportingCsv(true);
+    try {
+      const csvText = await file.text();
+      const rows = parseCsvRows(csvText);
+      if (!rows.length) {
+        alert("No valid rows found. Please ensure CSV has headers and at least one product row.");
+        return;
+      }
+
+      const result = await importProductsFromCsvRows(storeId, rows);
+      if (!result?.success) {
+        alert(result?.error || "CSV import failed.");
+        return;
+      }
+
+      await refreshData();
+      const summary = `CSV import finished. Created: ${result.created || 0}, Updated: ${result.updated || 0}, Failed: ${result.failed || 0}.`;
+      if (Array.isArray(result.errors) && result.errors.length > 0) {
+        alert(`${summary}\n\nFirst errors:\n${result.errors.join("\n")}`);
+      } else {
+        alert(summary);
+      }
+    } catch (err) {
+      console.error("[CSV_IMPORT_CLIENT_ERROR]", err);
+      alert("Failed to import CSV. Please check your file format.");
+    } finally {
+      setIsImportingCsv(false);
+      if (csvInputRef.current) {
+        csvInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
@@ -311,6 +433,23 @@ export default function ProductsManager({
             </button>
           )}
           {activeTab === 'products' && (
+            <>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => handleImportCsvFile(e.target.files?.[0] || null)}
+              />
+              <button
+                type="button"
+                onClick={() => csvInputRef.current?.click()}
+                disabled={isImportingCsv}
+                className="bg-blue-50 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-blue-100 dark:border-blue-900/20 disabled:opacity-50"
+              >
+                <Upload className={cn("w-4 h-4", isImportingCsv && "animate-pulse")} />
+                <span>{isImportingCsv ? "Importing..." : "Import CSV"}</span>
+              </button>
             <button 
                 onClick={handleAdd}
                 className="bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider shadow-lg shadow-primary/20"
@@ -318,6 +457,7 @@ export default function ProductsManager({
                 <Plus className="w-4 h-4" />
                 <span>Add Product</span>
             </button>
+            </>
           )}
         </div>
       </div>

@@ -121,46 +121,66 @@ export default function AdminSettings() {
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
 
   const [platformSettings, setPlatformSettings] = useState<any>(null);
+  const [facebookAppIdError, setFacebookAppIdError] = useState<string | null>(null);
 
   // Meta SDK Initialization for Embedded Signup
   useEffect(() => {
     async function initFB() {
-      // 1. Fetch platform settings for Facebook App ID
       const platRes = await fetch('/api/super-admin/settings').catch(() => null);
-      let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "752112443422115";
+      let appIdCandidate = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "";
       
       if (platRes?.ok) {
         const platData = await platRes.json();
         setPlatformSettings(platData.settings);
         if (platData.settings?.facebookAppId) {
-          appId = platData.settings.facebookAppId;
+          appIdCandidate = String(platData.settings.facebookAppId);
         }
       }
 
-      if (typeof window !== "undefined" && !(window as any).fbAsyncInit) {
-        (window as any).fbAsyncInit = function() {
-          (window as any).FB.init({
-            appId: appId,
-            autoLogAppEvents: true,
-            xfbml: true,
-            version: 'v18.0'
-          });
-        };
-        
-        const script = document.createElement("script");
-        script.src = "https://connect.facebook.net/en_US/sdk.js";
-        script.async = true;
-        script.defer = true;
-        script.crossOrigin = "anonymous";
-        document.body.appendChild(script);
+      const appId = appIdCandidate.trim();
+      if (!/^\d{5,30}$/.test(appId)) {
+        setFacebookAppIdError("Facebook App ID is missing or invalid. Please update it in Super Admin settings.");
+        return;
+      }
+
+      setFacebookAppIdError(null);
+      const initSdk = () => {
+        (window as any).FB.init({
+          appId,
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v18.0'
+        });
+      };
+
+      if (typeof window !== "undefined" && (window as any).FB) {
+        initSdk();
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        (window as any).fbAsyncInit = initSdk;
+        const existingScript = document.querySelector('script[src="https://connect.facebook.net/en_US/sdk.js"]');
+        if (!existingScript) {
+          const script = document.createElement("script");
+          script.src = "https://connect.facebook.net/en_US/sdk.js";
+          script.async = true;
+          script.defer = true;
+          script.crossOrigin = "anonymous";
+          document.body.appendChild(script);
+        }
       }
     }
     initFB();
   }, []);
 
   const launchWhatsAppSignup = () => {
+    if (facebookAppIdError) {
+      alert(facebookAppIdError);
+      return;
+    }
     if (!(window as any).FB) {
-      alert("Facebook SDK not loaded. Please ensure you have configured NEXT_PUBLIC_FACEBOOK_APP_ID.");
+      alert("Facebook SDK not loaded. Please ensure a valid Facebook App ID is configured.");
       return;
     }
     
@@ -990,6 +1010,9 @@ export default function AdminSettings() {
                                 Connect with Facebook
                             </button>
                         </div>
+                        {facebookAppIdError && (
+                          <p className="text-[11px] text-red-600 dark:text-red-400">{facebookAppIdError}</p>
+                        )}
                     </div>
 
                     <div className="space-y-4">

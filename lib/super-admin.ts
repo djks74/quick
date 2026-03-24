@@ -303,6 +303,10 @@ export async function updatePlatformSettings(data: {
   try {
     await requireSuperAdmin();
     await ensurePlatformSettingsSchema();
+    const cleanedFacebookAppId = (data.facebookAppId || "").trim();
+    if (cleanedFacebookAppId && !/^\d{5,30}$/.test(cleanedFacebookAppId)) {
+      return { success: false, error: "Facebook App ID must contain digits only." };
+    }
     
     const updated = await prisma.platformSettings.upsert({
       where: { key: "default" },
@@ -315,7 +319,7 @@ export async function updatePlatformSettings(data: {
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
-        facebookAppId: data.facebookAppId || null,
+        facebookAppId: cleanedFacebookAppId || null,
         waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : undefined,
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : undefined,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : undefined,
@@ -331,7 +335,7 @@ export async function updatePlatformSettings(data: {
         geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
-        facebookAppId: data.facebookAppId || null,
+        facebookAppId: cleanedFacebookAppId || null,
         waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : 2000,
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : 350,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : 300,

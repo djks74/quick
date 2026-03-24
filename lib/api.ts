@@ -1080,6 +1080,147 @@ export async function resetAllProductsForStore(storeId: number) {
   }
 }
 
+export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
+  try {
+    await ensureRecipeSchema();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { success: false, error: "No CSV rows to import." };
+    }
+
+    const existingCategories = await prisma.category.findMany({
+      where: { storeId },
+      select: { id: true, name: true, slug: true }
+    });
+    const categoryKeys = new Set(
+      existingCategories.flatMap((c) => [
+        String(c.name || "").trim().toLowerCase(),
+        String(c.slug || "").trim().toLowerCase()
+      ])
+    );
+
+    const existingProducts = await prisma.product.findMany({
+      where: { storeId },
+      select: { id: true, name: true }
+    });
+    const existingProductNameSet = new Set(existingProducts.map((p) => String(p.name || "").trim().toLowerCase()));
+
+    const toSlug = (value: string) =>
+      value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "uncategorized";
+
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || {};
+      const line = i + 2;
+      const name = String(row.name || "").trim();
+      const rawPrice = String(row.price ?? "").trim();
+      const price = Number.parseFloat(rawPrice);
+      const categoryName = String(row.category || "").trim();
+      const categorySlug = toSlug(categoryName);
+      const stock = Number.parseInt(String(row.stock ?? "0"), 10) || 0;
+      const barcode = String(row.barcode || "").trim();
+      const image = String(row.image || "").trim();
+      const description = String(row.description || "").trim();
+      const shortDescription = String(row.shortDescription || "").trim();
+      const subCategory = String(row.subCategory || "").trim();
+      const rating = Number.parseFloat(String(row.rating ?? "0")) || 0;
+      const typeRaw = String(row.type || "").trim().toLowerCase();
+      const type = typeRaw === "variable" ? "variable" : "simple";
+
+      if (!name) {
+        failed += 1;
+        errors.push(`Row ${line}: name is required`);
+        continue;
+      }
+      if (!Number.isFinite(price)) {
+        failed += 1;
+        errors.push(`Row ${line}: price must be a valid number`);
+        continue;
+      }
+
+      try {
+        if (categoryName && !categoryKeys.has(categoryName.toLowerCase()) && !categoryKeys.has(categorySlug)) {
+          await prisma.category.create({
+            data: {
+              storeId,
+              name: categoryName,
+              slug: categorySlug,
+              subCategories: []
+            }
+          }).catch(() => null);
+          categoryKeys.add(categoryName.toLowerCase());
+          categoryKeys.add(categorySlug);
+        }
+
+        const existedBefore = existingProductNameSet.has(name.toLowerCase());
+        const product = await prisma.product.upsert({
+          where: { storeId_name: { storeId, name } },
+          update: {
+            price,
+            category: categoryName || null,
+            stock,
+            barcode: barcode || null,
+            image: image || null,
+            description: description || null,
+            shortDescription: shortDescription || null,
+            subCategory: subCategory || null,
+            rating,
+            type
+          },
+          create: {
+            storeId,
+            name,
+            price,
+            category: categoryName || null,
+            stock,
+            barcode: barcode || null,
+            image: image || null,
+            description: description || null,
+            shortDescription: shortDescription || null,
+            subCategory: subCategory || null,
+            rating,
+            type
+          }
+        });
+
+        if (existedBefore) {
+          updated += 1;
+          triggerReverseSync(product.id, "upsert").catch(() => null);
+        } else {
+          created += 1;
+          existingProductNameSet.add(name.toLowerCase());
+          triggerReverseSync(product.id, "create").catch(() => null);
+        }
+      } catch (err: any) {
+        failed += 1;
+        errors.push(`Row ${line}: ${err?.message || "failed to import"}`);
+      }
+    }
+
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { slug: true } });
+    if (store?.slug) revalidatePath(`/${store.slug}`);
+
+    return {
+      success: true,
+      created,
+      updated,
+      failed,
+      total: rows.length,
+      errors: errors.slice(0, 20)
+    };
+  } catch (error: any) {
+    console.error("[CSV_IMPORT_ERROR]", error);
+    return { success: false, error: error?.message || "Failed to import CSV products." };
+  }
+}
+
 // --- Categories ---
 
 export async function getCategories(storeId: number): Promise<Category[]> {

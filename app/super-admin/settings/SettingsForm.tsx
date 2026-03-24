@@ -93,6 +93,12 @@ export default function SettingsForm({
     setIsSaving(true);
     setSaveMessage(null);
     try {
+      const cleanedFacebookAppId = (form.facebookAppId || "").trim();
+      if (cleanedFacebookAppId && !/^\d{5,30}$/.test(cleanedFacebookAppId)) {
+        setSaveMessage("Failed: Facebook App ID must contain digits only.");
+        setTimeout(() => setSaveMessage(null), 3000);
+        return;
+      }
       const res = await updatePlatformSettings(form);
       if (res.success) {
         setSaveMessage("Settings saved successfully.");
@@ -375,6 +381,7 @@ export default function SettingsForm({
               value={form.facebookAppId}
               onChange={(e) => setForm({ ...form, facebookAppId: e.target.value })}
               placeholder="e.g. 752112443422115"
+              inputMode="numeric"
             />
           </div>
         </div>
