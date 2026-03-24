@@ -655,23 +655,26 @@ export async function POST(req: NextRequest) {
       let targetStore = null;
       let isSharedNumber = false;
 
-      // 1. Try finding store by Phone ID
-      const store = await prisma.store.findFirst({
-        where: { whatsappPhoneId: phoneNumberId }
-      });
-
-      if (store) {
-        targetStore = store;
-        console.log(`[WHATSAPP] Found target store by PhoneID: ${targetStore.name}`);
-      } 
+      // 1. Try finding store by Phone ID (ONLY if it's not the shared platform number)
+      const isPlatformNumber = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
       
-      // 1. Force Shared Number logic
-      if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
-         console.log('[WHATSAPP] Received message on Shared Platform Number');
+      if (!isPlatformNumber) {
+        const store = await prisma.store.findFirst({
+          where: { whatsappPhoneId: String(phoneNumberId) }
+        });
+
+        if (store) {
+          targetStore = store;
+          console.log(`[WHATSAPP] Found target store by PhoneID: ${targetStore.name}`);
+        }
+      }
+      
+      // 2. Force Shared Number logic
+      if (!targetStore || isPlatformNumber) {
+         console.log(`[WHATSAPP] Processing on ${isPlatformNumber ? 'Shared Platform' : 'Unknown'} Number`);
          isSharedNumber = true;
          
          // If a merchant is in USER_MODE, DO NOT auto-resolve to their own store.
-         // They should be treated as a guest until they scan a QR or search.
          const isMerchantInUserMode = isMerchant && merchantSession?.step === 'USER_MODE';
 
          if (!targetStore && !isMerchantInUserMode) {
