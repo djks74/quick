@@ -418,20 +418,37 @@ export async function POST(req: NextRequest) {
       if (isAICommand || aiSession) {
         // Switch to AI Mode if command used
         if (isAICommand && !aiSession) {
+          const existing = await prisma.whatsAppSession.findUnique({
+            where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } }
+          });
+
           aiSession = await prisma.whatsAppSession.upsert({
             where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
-            update: { step: "AI_MODE", cart: [] },
+            update: { 
+              step: "AI_MODE", 
+              cart: [],
+              metadata: {
+                ...(existing?.metadata as any || {}),
+                prevStep: existing?.step || "START"
+              }
+            },
             create: { phoneNumber: from, storeId: 0, step: "AI_MODE", cart: [] }
           });
         }
 
         // Handle "exit" to leave AI mode
         if (lowerText === "exit" || lowerText === "stop" || lowerText === "keluar" || lowerText === "menu") {
+          const prevStep = (aiSession?.metadata as any)?.prevStep || "START";
           await prisma.whatsAppSession.update({
             where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
-            data: { step: "START" }
+            data: { step: prevStep }
           });
-          await sendWhatsAppMessage(from, "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu utama.", 0);
+          
+          let exitMsg = "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu utama.";
+          if (prevStep === 'MERCHANT_MODE') exitMsg = "✅ Keluar dari mode AI. Kamu kembali ke **Mode Admin**. Balas 'Menu' untuk menu admin.";
+          if (prevStep === 'USER_MODE') exitMsg = "✅ Keluar dari mode AI. Kamu kembali ke **Mode User**. Balas 'Menu' untuk menu belanja.";
+
+          await sendWhatsAppMessage(from, exitMsg, 0);
           return NextResponse.json({ success: true });
         }
 
@@ -611,8 +628,10 @@ export async function POST(req: NextRequest) {
         // Logic to bypass merchant handler
         const forceMerchantMode = isStoreWhatsappNumber && !forceUserMode;
         
-        // If command is help/menu/report/balance, force merchant mode for merchants
-        const isMerchantAdminCommand = ["help", "menu", "report", "balance", "wa balance", "saldo", "saldo wa"].includes(lowerText || "");
+        // If command is report/balance, it's always for merchant admin.
+        // BUT if command is help/menu, only treat as merchant command if NOT in USER_MODE.
+        const isMerchantAdminCommand = ["report", "balance", "wa balance", "saldo", "saldo wa"].includes(lowerText || "") || 
+                                       ((lowerText === "help" || lowerText === "menu") && merchantSession.step !== 'USER_MODE' && !forceUserMode);
         
         if ((merchantSession.step === 'USER_MODE' || forceUserMode) && !forceMerchantMode && !isMerchantAdminCommand) {
             // Proceed to User Logic (below)
