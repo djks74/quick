@@ -162,23 +162,24 @@ export default function ProductsManager({
 
     setIsDeletingBulk(true);
     try {
-      let successCount = 0;
-      for (const id of selectedProductIds) {
-        const ok = await deleteProduct(id);
-        if (ok) successCount++;
-      }
+      // Run deletions in parallel for maximum speed
+      const results = await Promise.all(selectedProductIds.map(id => deleteProduct(id)));
+      const successCount = results.filter(ok => ok).length;
       
       if (successCount > 0) {
-        setProducts(prev => prev.filter(p => !selectedProductIds.includes(p.id)));
-        setSelectedProductIds([]);
+        // Identify which IDs were successfully processed
+        const processedIds = selectedProductIds.filter((_, index) => results[index]);
+        
+        setProducts(prev => prev.filter(p => !processedIds.includes(p.id)));
+        setSelectedProductIds(prev => prev.filter(id => !processedIds.includes(id)));
       }
       
       if (successCount < selectedProductIds.length) {
-        alert(`Deleted ${successCount} products. Some products could not be deleted (likely because they have order history).`);
+        alert(`Successfully processed ${successCount} products. ${selectedProductIds.length - successCount} products could not be deleted.`);
       }
     } catch (err) {
-      console.error(err);
-      alert("An error occurred during bulk deletion.");
+      console.error("[BULK_DELETE_ERROR]", err);
+      alert("An error occurred during bulk deletion. Please refresh and try again.");
     } finally {
       setIsDeletingBulk(false);
     }

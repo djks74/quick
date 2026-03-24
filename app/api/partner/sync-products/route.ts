@@ -20,15 +20,17 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ 
     success: true, 
     store: store.name,
-    products: store.products.map(p => ({
-      id: p.id,
-      externalId: p.externalId,
-      name: p.name,
-      price: p.price,
-      stock: p.stock,
-      category: p.category,
-      image: p.image
-    }))
+    products: store.products
+      .filter(p => p.category !== "_ARCHIVED_")
+      .map(p => ({
+        id: p.id,
+        externalId: p.externalId,
+        name: p.name,
+        price: p.price,
+        stock: p.stock,
+        category: p.category,
+        image: p.image
+      }))
   });
 }
 
@@ -108,6 +110,14 @@ export async function POST(req: NextRequest) {
           });
 
           if (existingByExt) {
+            // CRITICAL FIX: If the product is archived on our platform, 
+            // DO NOT let the incoming sync restore it.
+            if (existingByExt.category === "_ARCHIVED_") {
+              console.log(`[SYNC] Ignoring archived product from sync: ${existingByExt.name} (ExtID: ${externalId})`);
+              results.push({ name: name, status: "ignored", message: "Product is archived/deleted on platform" });
+              continue;
+            }
+
             updated = await prisma.product.update({
               where: { id: existingByExt.id },
               data: {
