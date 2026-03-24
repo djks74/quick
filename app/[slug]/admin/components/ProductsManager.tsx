@@ -198,7 +198,7 @@ export default function ProductsManager({
     setIsRefreshing(true);
     try {
       const [freshProducts, freshCategories] = await Promise.all([
-        getProducts(storeId),
+        getProducts(storeId, undefined, 5000, 0),
         getCategories(storeId)
       ]);
       setProducts(freshProducts);

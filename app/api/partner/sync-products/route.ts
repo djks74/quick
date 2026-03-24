@@ -64,80 +64,58 @@ export async function POST(req: NextRequest) {
     const syncedCategories = new Set<string>();
 
     for (const prod of products) {
-      if (action === "upsert") {
-        const externalId = prod.externalId ? String(prod.externalId) : null;
-        const name = prod.name ? String(prod.name).trim() : null;
-        const price = prod.price !== undefined ? Number(prod.price) : undefined;
-        const category = prod.category ? String(prod.category).trim() : "General";
-        const description = prod.description ? String(prod.description) : "";
-        const stock = prod.stock !== undefined ? Number(prod.stock) : 999999;
-        const image = prod.image || null;
+      try {
+        if (action === "upsert") {
+          const externalId = prod.externalId ? String(prod.externalId) : null;
+          const name = prod.name ? String(prod.name).trim() : null;
+          const price = prod.price !== undefined ? Number(prod.price) : undefined;
+          const category = prod.category ? String(prod.category).trim() : "General";
+          const description = prod.description ? String(prod.description) : "";
+          const stock = prod.stock !== undefined ? Number(prod.stock) : 999999;
+          const image = prod.image || null;
 
-        if (!name || price === undefined) {
-          results.push({ name: name || externalId || "unknown", status: "error", message: "Missing name or price" });
-          continue;
-        }
+          if (!name || price === undefined) {
+            results.push({ name: name || externalId || "unknown", status: "error", message: "Missing name or price" });
+            continue;
+          }
 
-        // Sync category to Store's Category table if it exists
-        if (category && !syncedCategories.has(category)) {
-          const categorySlug = String(category).toLowerCase().replace(/[^a-z0-9]/g, "-");
-          await prisma.category.upsert({
-            where: {
-              storeId_slug: {
+          if (category && !syncedCategories.has(category)) {
+            const categorySlug = String(category).toLowerCase().replace(/[^a-z0-9]/g, "-");
+            await prisma.category.upsert({
+              where: {
+                storeId_slug: {
+                  storeId: store.id,
+                  slug: categorySlug
+                }
+              },
+              update: {
+                name: String(category)
+              },
+              create: {
                 storeId: store.id,
+                name: String(category),
                 slug: categorySlug
               }
-            },
-            update: {
-              name: String(category)
-            },
-            create: {
-              storeId: store.id,
-              name: String(category),
-              slug: categorySlug
-            }
-          }).catch(() => null);
-          syncedCategories.add(category);
-        }
+            }).catch(() => null);
+            syncedCategories.add(category);
+          }
 
-        // If externalId is provided, we use it as the primary identifier (scoped to store).
-        // Otherwise we fallback to storeId_name.
-        let updated;
-        if (externalId) {
-          // 1. Try to find by externalId first
-          const existingByExt = await prisma.product.findUnique({
-            where: { storeId_externalId: { storeId: store.id, externalId: String(externalId) } }
-          });
+          let updated;
+          if (externalId) {
+            const existingByExt = await prisma.product.findUnique({
+              where: { storeId_externalId: { storeId: store.id, externalId: String(externalId) } }
+            });
 
-          if (existingByExt) {
-            if (existingByExt.category === "_ARCHIVED_") {
-              console.log(`[SYNC] Ignoring archived product from sync: ${existingByExt.name} (ExtID: ${externalId})`);
-              results.push({ name: name, status: "ignored", message: "Product is archived/deleted on platform" });
-              continue;
-            }
-
-            updated = await prisma.product.update({
-              where: { id: existingByExt.id },
-              data: {
-                name: name,
-                price: Number(price),
-                category: category || "General",
-                description: description || "",
-                image: image || null,
-                stock: stock !== undefined ? Number(stock) : 999999,
-                updatedAt: new Date()
+            if (existingByExt) {
+              if (existingByExt.category === "_ARCHIVED_") {
+                results.push({ name: name, status: "ignored", message: "Product is archived/deleted on platform" });
+                continue;
               }
-            });
-          } else {
-            const existingByName = await prisma.product.findUnique({
-              where: { storeId_name: { storeId: store.id, name: name } }
-            });
 
-            if (existingByName) {
               updated = await prisma.product.update({
-                where: { id: existingByName.id },
+                where: { id: existingByExt.id },
                 data: {
-                  externalId: String(externalId), // Link it!
+                  name: name,
                   price: Number(price),
                   category: category || "General",
                   description: description || "",
@@ -147,62 +125,100 @@ export async function POST(req: NextRequest) {
                 }
               });
             } else {
-              // 3. Create new
-              updated = await prisma.product.create({
-                data: {
-                  storeId: store.id,
-                  externalId: String(externalId),
-                  name: name,
-                  price: Number(price),
-                  category: category || "General",
-                  description: description || "",
-                  image: image || null,
-                  stock: stock !== undefined ? Number(stock) : 999999
-                }
+              const existingByName = await prisma.product.findUnique({
+                where: { storeId_name: { storeId: store.id, name: name } }
               });
+
+              if (existingByName) {
+                const conflict = await prisma.product.findUnique({
+                  where: { storeId_externalId: { storeId: store.id, externalId: String(externalId) } }
+                });
+                if (conflict && conflict.id !== existingByName.id) {
+                  await prisma.product.update({
+                    where: { id: conflict.id },
+                    data: {
+                      externalId: null,
+                      category: "_ARCHIVED_",
+                      name: `[ARCHIVED] ${new Date().toISOString().split("T")[0]} - ID ${conflict.id} - ${Math.random().toString(36).slice(2, 8)}`
+                    }
+                  }).catch(() => null);
+                }
+
+                updated = await prisma.product.update({
+                  where: { id: existingByName.id },
+                  data: {
+                    externalId: String(externalId),
+                    price: Number(price),
+                    category: category || "General",
+                    description: description || "",
+                    image: image || null,
+                    stock: stock !== undefined ? Number(stock) : 999999,
+                    updatedAt: new Date()
+                  }
+                });
+              } else {
+                updated = await prisma.product.create({
+                  data: {
+                    storeId: store.id,
+                    externalId: String(externalId),
+                    name: name,
+                    price: Number(price),
+                    category: category || "General",
+                    description: description || "",
+                    image: image || null,
+                    stock: stock !== undefined ? Number(stock) : 999999
+                  }
+                });
+              }
             }
+          } else {
+            updated = await prisma.product.upsert({
+              where: {
+                storeId_name: {
+                  storeId: store.id,
+                  name: name
+                }
+              },
+              update: {
+                price: Number(price),
+                category: category || "General",
+                description: description || "",
+                image: image || null,
+                stock: stock !== undefined ? Number(stock) : 999999,
+                updatedAt: new Date()
+              },
+              create: {
+                storeId: store.id,
+                name: name,
+                price: Number(price),
+                category: category || "General",
+                description: description || "",
+                image: image || null,
+                stock: stock !== undefined ? Number(stock) : 999999
+              }
+            });
           }
-        } else {
-          updated = await prisma.product.upsert({
-            where: { 
-              storeId_name: { 
-                storeId: store.id, 
-                name: name 
-              } 
-            },
-            update: {
-              price: Number(price),
-              category: category || "General",
-              description: description || "",
-              image: image || null,
-              stock: stock !== undefined ? Number(stock) : 999999,
-              updatedAt: new Date()
-            },
-            create: {
-              storeId: store.id,
-              name: name,
-              price: Number(price),
-              category: category || "General",
-              description: description || "",
-              image: image || null,
-              stock: stock !== undefined ? Number(stock) : 999999
-            }
-          });
+          results.push({ name: updated.name, status: "success", id: updated.id, externalId: updated.externalId });
+        } else if (action === "delete") {
+          const externalId = prod.externalId ? String(prod.externalId) : null;
+          const name = prod.name ? String(prod.name).trim() : null;
+
+          if (externalId) {
+            await prisma.product.deleteMany({
+              where: { storeId: store.id, externalId: String(externalId) }
+            });
+            results.push({ externalId, status: "deleted" });
+          } else if (name) {
+            await prisma.product.deleteMany({
+              where: { storeId: store.id, name: name }
+            });
+            results.push({ name, status: "deleted" });
+          }
         }
-        results.push({ name: updated.name, status: "success", id: updated.id, externalId: updated.externalId });
-      } else if (action === "delete") {
-        const { externalId, name } = prod;
-        if (externalId) {
-          await prisma.product.deleteMany({
-            where: { storeId: store.id, externalId: String(externalId) }
-          });
-          results.push({ externalId, status: "deleted" });
-        } else if (name) {
-          await prisma.product.deleteMany({
-            where: { storeId: store.id, name: name }
-          });
-          results.push({ name, status: "deleted" });
-        }
+      } catch (err: any) {
+        const externalId = prod?.externalId ? String(prod.externalId) : null;
+        const name = prod?.name ? String(prod.name).trim() : null;
+        results.push({ name: name || externalId || "unknown", status: "error", message: err?.message || "Unknown error" });
       }
     }
 
@@ -217,10 +233,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       count: results.filter(r => r.status === "success").length,
+      errors: results.filter(r => r.status === "error").length,
       results 
     });
   } catch (error: any) {
     console.error("[API_SYNC_ERROR]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message }, { status: 200 });
   }
 }
