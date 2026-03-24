@@ -181,12 +181,13 @@ export async function updateStoreSettings(storeId: number, data: any) {
     // 1. Fetch store to get ownerId
     const store = await prisma.store.findUnique({
       where: { id: storeId },
-      select: { ownerId: true, subscriptionPlan: true, slug: true }
+      select: { ownerId: true, subscriptionPlan: true, slug: true, webhookUrl: true }
     });
 
     if (!store) return null;
 
     const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
+    const prevWebhookUrl = String(store.webhookUrl || "").trim();
 
     // 2. Update Store and User
     const updatedStore = await prisma.store.update({
@@ -260,6 +261,29 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     if (data?.posUsername || data?.posPassword) {
       await upsertPosCashier(storeId, store.slug, data.posUsername, data.posPassword);
+    }
+
+    const nextWebhookUrl = String((updatedStore as any)?.webhookUrl || "").trim();
+    const shouldPushExistingProducts = !prevWebhookUrl && !!nextWebhookUrl;
+    if (shouldPushExistingProducts) {
+      void (async () => {
+        const rows = await prisma.product.findMany({
+          where: {
+            storeId,
+            category: { not: "_ARCHIVED_" },
+            OR: [{ externalId: null }, { externalId: "" }]
+          },
+          select: { id: true },
+          take: 5000
+        });
+
+        const ids = rows.map((r) => r.id);
+        const batchSize = 10;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          await Promise.all(batch.map((id) => triggerReverseSync(id, "create")));
+        }
+      })().catch(() => null);
     }
     
     // Revalidate paths to ensure fresh data

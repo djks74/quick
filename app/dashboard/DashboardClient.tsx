@@ -272,6 +272,12 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                         <div className={cn("w-2 h-2 rounded-full", store.isOpen ? "bg-green-500" : "bg-red-500")} />
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{store.isOpen ? "Open" : "Closed"}</span>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500/70" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          {Number(store.productCount || 0)} Products
+                        </span>
+                      </div>
                       <button
                         onClick={(e) => handleToggleActive(e, store.id, store.isActive)}
                         disabled={togglingId === store.id}

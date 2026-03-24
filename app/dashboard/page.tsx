@@ -20,5 +20,28 @@ export default async function DashboardPage() {
 
   if (!dbUser) redirect("/login");
 
-  return <DashboardClient stores={dbUser.stores} user={user} />;
+  const storeIds = dbUser.stores.map((s) => s.id);
+
+  const productCounts = storeIds.length
+    ? await prisma.product.groupBy({
+        by: ["storeId"],
+        where: {
+          storeId: { in: storeIds },
+          category: { not: "_ARCHIVED_" }
+        },
+        _count: { _all: true }
+      })
+    : [];
+
+  const countMap = new Map<number, number>();
+  for (const row of productCounts) {
+    countMap.set(row.storeId, row._count._all);
+  }
+
+  const storesWithCounts = dbUser.stores.map((s) => ({
+    ...s,
+    productCount: countMap.get(s.id) || 0
+  }));
+
+  return <DashboardClient stores={storesWithCounts} user={user} />;
 }
