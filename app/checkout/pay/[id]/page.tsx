@@ -17,13 +17,12 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
 
   // Get store settings for WhatsApp number
   const settings = await prisma.store.findUnique({ where: { id: order.storeId } });
-  const whatsappNumber = settings?.whatsapp || "628123456789";
-
+  const platformNumber = "62882003961609";
   const hasExternalPaymentUrl = Boolean(order.paymentUrl);
 
   // Construct message
   const message = `Hello, I have paid for Order #${order.id} with total amount ${formatCurrency(order.totalAmount, "IDR")}. Please process my order.`;
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+  const whatsappUrl = `https://wa.me/${platformNumber}?text=${encodeURIComponent(message)}`;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

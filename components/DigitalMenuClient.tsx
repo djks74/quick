@@ -126,6 +126,21 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   
   useEffect(() => {
     setMounted(true);
+
+    // Auto-login from WhatsApp button (?phone=xxx)
+    const phoneParam = searchParams.get('phone');
+    if (phoneParam) {
+      const storePhoneKey = `customerPhone:${store.id}`;
+      localStorage.setItem(storePhoneKey, phoneParam);
+      localStorage.setItem('customerPhone', phoneParam);
+      setCustomerPhone(phoneParam);
+      if (tableNumber) {
+        localStorage.setItem(`checkin:${store.id}:${tableNumber}`, JSON.stringify({ phone: phoneParam, at: Date.now() }));
+      }
+      setShowCheckIn(false);
+      return;
+    }
+
     // Check-In Logic
     if (tableNumber) {
         const checkinKey = `checkin:${store.id}:${tableNumber}`;
@@ -198,11 +213,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           });
           
           const data = await res.json();
-          const fallbackPhone = data.fallbackPhone || store.whatsapp || siteConfig.whatsappNumber;
-          const fallbackText = tableNumber ? "Menu" : "Menu";
+          const platformNumber = "62882003961609";
+          const fallbackText = "Menu";
           const whatsappUrl = data?.messageSent
-            ? `https://wa.me/${fallbackPhone}`
-            : `https://wa.me/${fallbackPhone}?text=${encodeURIComponent(fallbackText)}`;
+            ? `https://wa.me/${platformNumber}`
+            : `https://wa.me/${platformNumber}?text=${encodeURIComponent(fallbackText)}`;
           setCheckInFallbackUrl(whatsappUrl);
 
           if (choice === 'whatsapp') {
@@ -215,7 +230,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           console.error("Check-in trigger failed:", e);
           // Fallback if API fails
           if (choice === 'whatsapp') {
-              const whatsappUrl = `https://wa.me/${store.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent("Menu")}`;
+              const platformNumber = "62882003961609";
+              const whatsappUrl = `https://wa.me/${platformNumber}?text=${encodeURIComponent("Menu")}`;
               setCheckInFallbackUrl(whatsappUrl);
               setCheckInStep('success');
               return;
@@ -293,7 +309,8 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
     let message = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
     message += method === "qris" ? `\n\nsaya mau bayar qris` : `\n\nsaya mau bayar bank`;
-    const whatsappUrl = `https://wa.me/${store?.whatsapp || siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    const platformNumber = "62882003961609";
+    const whatsappUrl = `https://wa.me/${platformNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 

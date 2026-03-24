@@ -52,7 +52,8 @@ export async function POST(req: Request) {
     // NOTE: Sending free-form text as the first message will FAIL if not within 24h window.
     // If this fails, we will need to implement a fallback to redirect the user to WhatsApp.
     
-    const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${store.slug}${tableNumber ? `?table=${tableNumber}` : ''}`;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click';
+    const menuUrl = `${baseUrl}/${store.slug}?phone=${phone}${tableNumber ? `&table=${tableNumber}` : ''}`;
     let message = `👋 Welcome to *${store.name}*`;
     if (tableNumber) {
         message += ` at *${tableNumber}*`;
@@ -85,14 +86,14 @@ export async function POST(req: Request) {
           success: false,
           messageSent: false,
           reason: "WHATSAPP_SEND_FAILED",
-          fallbackPhone: store.whatsapp || null
+          fallbackPhone: "62882003961609"
         }, { status: 202 });
       }
       return NextResponse.json({
         success: true,
         messageSent: true,
         templateUsed: !sent && templateSent,
-        fallbackPhone: store.whatsapp || null
+        fallbackPhone: "62882003961609"
       });
     }
     return NextResponse.json({

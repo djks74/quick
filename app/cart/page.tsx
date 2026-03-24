@@ -40,9 +40,9 @@ export default function CartPage() {
   const total = subtotal + shipping;
 
   const handleWhatsAppCheckout = () => {
-    const phone = settings?.whatsapp || "628123456789";
+    const platformNumber = "62882003961609";
     const message = `menu`;
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${platformNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
 
