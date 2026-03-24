@@ -59,6 +59,16 @@ export default function ProductsManager({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
+  const totalProductsCount = products.length;
+  const activeProductsCount = products.filter(p => p.category !== "_ARCHIVED_").length;
+  const categoriesCount = categories.length;
+
+  // Find last sync time from any product if not on store (better would be from store)
+  const lastSync = products.reduce((latest, p) => {
+    const date = new Date(p.updatedAt).getTime();
+    return date > latest ? date : latest;
+  }, 0);
+
   const filteredProducts = useMemo(
     () =>
       products.filter((p) => {
@@ -186,35 +196,63 @@ export default function ProductsManager({
 
   return (
     <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-[#1A1D21] p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Total Products</p>
+          <h3 className="text-xl font-black text-gray-900 dark:text-white">{totalProductsCount}</h3>
+        </div>
+        <div className="bg-white dark:bg-[#1A1D21] p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Active Menu</p>
+          <h3 className="text-xl font-black text-green-600 dark:text-green-400">{activeProductsCount}</h3>
+        </div>
+        <div className="bg-white dark:bg-[#1A1D21] p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Categories</p>
+          <h3 className="text-xl font-black text-blue-600 dark:text-blue-400">{categoriesCount}</h3>
+        </div>
+        <div className="bg-white dark:bg-[#1A1D21] p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Out of Stock</p>
+          <h3 className="text-xl font-black text-red-600 dark:text-red-400">{products.filter(p => p.stock <= 0).length}</h3>
+        </div>
+      </div>
+
       {/* Header Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center space-x-4">
-           {/* Tabs */}
-           <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-              <button 
-                onClick={() => setActiveTab('products')} 
-                className={cn(
-                  "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
-                  activeTab === 'products' 
-                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" 
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                )}
-              >
-                Products
-              </button>
-              <button 
-                onClick={() => setActiveTab('categories')} 
-                className={cn(
-                  "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
-                  activeTab === 'categories' 
-                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" 
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                )}
-              >
-                Categories
-              </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-4">
+             {/* Tabs */}
+             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                <button 
+                  onClick={() => setActiveTab('products')} 
+                  className={cn(
+                    "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+                    activeTab === 'products' 
+                      ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" 
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  )}
+                >
+                  Products
+                </button>
+                <button 
+                  onClick={() => setActiveTab('categories')} 
+                  className={cn(
+                    "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+                    activeTab === 'categories' 
+                      ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" 
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  )}
+                >
+                  Categories
+                </button>
+             </div>
            </div>
-        </div>
+           {lastSync > 0 && (
+             <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tight bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-800">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Last Sync: {new Date(lastSync).toLocaleString('id-ID', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+             </div>
+           )}
+         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
           {isSuperAdmin && (

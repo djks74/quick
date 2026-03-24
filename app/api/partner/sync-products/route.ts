@@ -56,12 +56,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing action or products array" }, { status: 400 });
     }
 
+    console.log(`[API_SYNC] Starting sync for store "${store.name}" (ID: ${store.id}). Action: ${action}, Products: ${products.length}`);
+
     const results = [];
     const syncedCategories = new Set<string>();
 
     for (const prod of products) {
       if (action === "upsert") {
-        const { externalId, name, price, category, description, stock, image } = prod;
+        const externalId = prod.externalId ? String(prod.externalId) : null;
+        const name = prod.name ? String(prod.name).trim() : null;
+        const price = prod.price !== undefined ? Number(prod.price) : undefined;
+        const category = prod.category ? String(prod.category).trim() : "General";
+        const description = prod.description ? String(prod.description) : "";
+        const stock = prod.stock !== undefined ? Number(prod.stock) : 999999;
+        const image = prod.image || null;
+
         if (!name || price === undefined) {
           results.push({ name: name || externalId || "unknown", status: "error", message: "Missing name or price" });
           continue;
@@ -192,7 +201,18 @@ export async function POST(req: NextRequest) {
     }
 
     revalidatePath(`/${store.slug}`);
-    return NextResponse.json({ success: true, results });
+
+    // Update last sync time
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { lastSyncAt: new Date() }
+    }).catch(() => null);
+
+    return NextResponse.json({ 
+      success: true, 
+      count: results.filter(r => r.status === "success").length,
+      results 
+    });
   } catch (error: any) {
     console.error("[API_SYNC_ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

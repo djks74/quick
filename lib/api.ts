@@ -1025,7 +1025,7 @@ export async function getCategories(storeId: number): Promise<Category[]> {
     }
 
     // Count products per category
-    const products = await prisma.product.groupBy({
+    const productGroups = await prisma.product.groupBy({
       by: ['category'],
       where: { 
         storeId,
@@ -1034,8 +1034,12 @@ export async function getCategories(storeId: number): Promise<Category[]> {
       _count: { category: true }
     });
 
-    const countMap = products.reduce((acc, p) => {
-      if (p.category) acc[p.category] = p._count.category;
+    const countMap = productGroups.reduce((acc, p) => {
+      if (p.category) {
+        // Map by both name and slug to be safe
+        acc[p.category] = p._count.category;
+        acc[p.category.toLowerCase().replace(/ /g, '-')] = p._count.category;
+      }
       return acc;
     }, {} as Record<string, number>);
 
@@ -1043,7 +1047,7 @@ export async function getCategories(storeId: number): Promise<Category[]> {
       id: c.id.toString(),
       name: c.name,
       slug: c.slug,
-      count: countMap[c.slug] || 0,
+      count: countMap[c.name] || countMap[c.slug] || 0,
       subCategories: c.subCategories ? JSON.parse(JSON.stringify(c.subCategories)) : []
     }));
   } catch (error) {

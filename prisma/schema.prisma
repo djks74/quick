@@ -27,8 +27,9 @@ model Store {
   name                        String
   ownerId                     Int
   apiKey                      String?             @unique
-  webhookUrl                  String?
-  customGeminiKey             String?
+  webhookUrl            String?
+  lastSyncAt            DateTime?
+  customGeminiKey       String?
   whatsapp                    String?
   themeColor                  String              @default("#000000")
   whatsappToken               String?

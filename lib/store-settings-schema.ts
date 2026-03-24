@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredStoreSettingsSchemaV4: Promise<void> | null = null;
+let ensuredStoreSettingsSchemaV5: Promise<void> | null = null;
 
 export async function ensureStoreSettingsSchema() {
-  if (!ensuredStoreSettingsSchemaV4) {
-    ensuredStoreSettingsSchemaV4 = (async () => {
-      console.log("[DB_PATCH] Running StoreSettings schema check...");
+  if (!ensuredStoreSettingsSchemaV5) {
+    ensuredStoreSettingsSchemaV5 = (async () => {
+      console.log("[DB_PATCH] Running StoreSettings schema check V5...");
       
       const commands = [
         `ALTER TABLE "Store"
@@ -27,6 +27,7 @@ export async function ensureStoreSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "waLowCreditAlertSentAt" TIMESTAMP(3),
          ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMP(3),
          ADD COLUMN IF NOT EXISTS "webhookUrl" TEXT,
+         ADD COLUMN IF NOT EXISTS "lastSyncAt" TIMESTAMP(3),
          ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "apiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "corporateName" TEXT,

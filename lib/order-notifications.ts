@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredOrderNotificationsSchemaV2: Promise<void> | null = null;
+let ensuredOrderNotificationsSchemaV3: Promise<void> | null = null;
 
 export async function ensureOrderNotificationsSchema() {
-  if (!ensuredOrderNotificationsSchemaV2) {
-    ensuredOrderNotificationsSchemaV2 = (async () => {
-      console.log("[DB_PATCH] Running OrderNotification schema check...");
+  if (!ensuredOrderNotificationsSchemaV3) {
+    ensuredOrderNotificationsSchemaV3 = (async () => {
+      console.log("[DB_PATCH] Running OrderNotification schema check V3...");
       
       const commands = [
         `CREATE TABLE IF NOT EXISTS "OrderNotification" (
