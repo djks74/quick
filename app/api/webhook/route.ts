@@ -665,12 +665,16 @@ export async function POST(req: NextRequest) {
         console.log(`[WHATSAPP] Found target store by PhoneID: ${targetStore.name}`);
       } 
       
-      // Force Shared Number logic
+      // 1. Force Shared Number logic
       if (!targetStore || (platformPhoneNumberId && phoneNumberId === platformPhoneNumberId)) {
          console.log('[WHATSAPP] Received message on Shared Platform Number');
          isSharedNumber = true;
          
-         if (!targetStore) {
+         // If a merchant is in USER_MODE, DO NOT auto-resolve to their own store.
+         // They should be treated as a guest until they scan a QR or search.
+         const isMerchantInUserMode = isMerchant && merchantSession?.step === 'USER_MODE';
+
+         if (!targetStore && !isMerchantInUserMode) {
            const storeBySender = await prisma.store.findFirst({
              where: { whatsapp: { in: senderPhoneVariants } },
              orderBy: { updatedAt: "desc" }
@@ -689,7 +693,13 @@ export async function POST(req: NextRequest) {
            
            if (recentSession && recentSession.storeId) {
               const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
-              if (s) {
+              
+              // If merchant in user mode, only use this session if it's not their own store
+              // OR if it's recent (< 30m)
+              const isOwnStore = s && isMerchant && Array.isArray((user as any).stores) && (user as any).stores.some((ms: any) => ms.id === s.id);
+              const isRecent = recentSession.updatedAt && (Date.now() - new Date(recentSession.updatedAt).getTime()) < 30 * 60 * 1000;
+
+              if (s && (!isMerchantInUserMode || !isOwnStore || isRecent)) {
                   targetStore = s;
                   console.log(`[WHATSAPP] Resolved target store from session: ${targetStore.name}`);
               }
@@ -1255,9 +1265,12 @@ export async function POST(req: NextRequest) {
         const lastUpdated = session.updatedAt ? new Date(session.updatedAt).getTime() : 0;
         const isSessionRecent = (Date.now() - lastUpdated) < 30 * 60 * 1000;
         const hasCartItems = Array.isArray(session.cart) && session.cart.length > 0;
-        const isActivelyOrdering = session.step !== 'START' || hasCartItems;
         
-        if (isSharedNumber && lowerText === 'help' && (!isSessionRecent || !isActivelyOrdering)) {
+        // If merchant in user mode, we are even more strict: only show store menu if they actually have a cart or very recent scan
+        const isMerchantInUserMode = isMerchant && merchantSession?.step === 'USER_MODE';
+        const isActivelyOrdering = (session.step !== 'START' || hasCartItems) && (isSessionRecent || !isMerchantInUserMode);
+        
+        if (isSharedNumber && lowerText === 'help' && !isActivelyOrdering) {
           const platformHelp = l(
             `👋 *Selamat datang di Gercep!* ⚡\n\n` +
             `Cara pesan di restoran/toko favoritmu:\n` +
