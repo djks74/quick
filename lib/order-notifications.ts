@@ -49,12 +49,31 @@ export async function createOrderNotification(input: {
   type?: string;
 }) {
   await ensureOrderNotificationsSchema();
+  
+  const type = input.type ?? "NEW_ORDER";
+  
+  // Prevent duplicate notifications for the same order and type within the last 5 minutes
+  const recentThreshold = new Date(Date.now() - 5 * 60 * 1000);
+  const existing = await prisma.orderNotification.findFirst({
+    where: {
+      storeId: input.storeId,
+      orderId: input.orderId,
+      type: type,
+      createdAt: { gte: recentThreshold }
+    }
+  });
+
+  if (existing) {
+    console.log(`[NOTIF] Skipping duplicate notification for Order #${input.orderId} (${type})`);
+    return existing;
+  }
+
   return await prisma.orderNotification.create({
     data: {
       storeId: input.storeId,
       orderId: input.orderId,
       message: input.message,
-      type: input.type ?? "NEW_ORDER"
+      type: type
     }
   });
 }

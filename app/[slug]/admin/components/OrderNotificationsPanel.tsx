@@ -48,8 +48,17 @@ export default function OrderNotificationsPanel({
   };
 
   const markAllRead = async () => {
+    // Optimistic UI update
+    setItems((prev) => prev.map((p) => ({ ...p, isRead: true })));
+    
     const ok = await markAllOrderNotificationsRead(storeId);
-    if (ok) setItems((prev) => prev.map((p) => ({ ...p, isRead: true })));
+    if (!ok) {
+      // Rollback on failure
+      refresh();
+    } else {
+      // Small delay to ensure DB consistency before refresh
+      setTimeout(refresh, 500);
+    }
   };
 
   return (
@@ -94,7 +103,9 @@ export default function OrderNotificationsPanel({
                       {formatIsoHourMinute(n.createdAt)}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{n.message}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                    {n.message || (n.type === 'NEW_ORDER' ? 'Ada pesanan baru masuk.' : 'Silakan cek detail pesanan.')}
+                  </div>
                   <div className="mt-2 flex items-center justify-between">
                     <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                       Order #{n.orderId}
