@@ -1247,10 +1247,17 @@ export async function POST(req: NextRequest) {
       }
 
       if (lowerText === 'menu' || lowerText === 'help' || lowerText === 'bantuan') {
-        // --- PLATFORM HELP (Shared Number & No active store session) ---
-        const hasActiveStoreSession = !!session.tableNumber || (session.metadata as any)?.orderType || (Array.isArray(session.cart) && session.cart.length > 0);
+        // --- PLATFORM HELP (Shared Number context) ---
+        // We show platform help if:
+        // 1. User is on the Shared Number AND
+        // 2. They typed 'help' AND
+        // 3. They don't have a RECENT active session (scanned < 30m ago) OR they are at START step
+        const lastUpdated = session.updatedAt ? new Date(session.updatedAt).getTime() : 0;
+        const isSessionRecent = (Date.now() - lastUpdated) < 30 * 60 * 1000;
+        const hasCartItems = Array.isArray(session.cart) && session.cart.length > 0;
+        const isActivelyOrdering = session.step !== 'START' || hasCartItems;
         
-        if (isSharedNumber && !hasActiveStoreSession && lowerText === 'help') {
+        if (isSharedNumber && lowerText === 'help' && (!isSessionRecent || !isActivelyOrdering)) {
           const platformHelp = l(
             `👋 *Selamat datang di Gercep!* ⚡\n\n` +
             `Cara pesan di restoran/toko favoritmu:\n` +
