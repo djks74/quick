@@ -626,18 +626,19 @@ export async function POST(req: NextRequest) {
         }
 
         // Logic to bypass merchant handler
-        const forceMerchantMode = isStoreWhatsappNumber && !forceUserMode;
+        const isInUserMode = merchantSession.step === 'USER_MODE' || forceUserMode;
         
         // If command is report/balance, it's always for merchant admin.
         // BUT if command is help/menu, only treat as merchant command if NOT in USER_MODE.
         const isMerchantAdminCommand = ["report", "balance", "wa balance", "saldo", "saldo wa"].includes(lowerText || "") || 
-                                       ((lowerText === "help" || lowerText === "menu") && merchantSession.step !== 'USER_MODE' && !forceUserMode);
+                                       ((lowerText === "help" || lowerText === "menu") && !isInUserMode);
         
-        if ((merchantSession.step === 'USER_MODE' || forceUserMode) && !forceMerchantMode && !isMerchantAdminCommand) {
+        if (isInUserMode && !isMerchantAdminCommand) {
             // Proceed to User Logic (below)
         } else {
             // Default: Merchant Handler
             if (user) {
+              console.log(`[WHATSAPP] Routing to Merchant Handler for ${from}. Mode: ${merchantSession.step}`);
               if (preferredMerchantStoreId && Array.isArray((user as any).stores)) {
                 const stores = (user as any).stores as any[];
                 const idx = stores.findIndex((s) => Number(s?.id) === Number(preferredMerchantStoreId));
@@ -1245,7 +1246,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      if (lowerText === 'menu') {
+      if (lowerText === 'menu' || lowerText === 'help' || lowerText === 'bantuan') {
         if (session.step === 'START' && isShippingConfigured(targetStore)) {
           const onSite = !!session.tableNumber;
           if (onSite) {
