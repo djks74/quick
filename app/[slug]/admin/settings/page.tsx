@@ -24,21 +24,18 @@ export default function AdminSettings() {
   const { data: session, status } = useSession();
   const isSuperAdmin = (session as any)?.user?.role === "SUPER_ADMIN";
   const slugValue = (Array.isArray(slug) ? slug[0] : slug) as string | undefined;
-  const sessionStoreSlug = (session as any)?.user?.storeSlug as string | null | undefined;
-  const canAccess = Boolean(isSuperAdmin || (sessionStoreSlug && slugValue && sessionStoreSlug === slugValue));
+  // For SUPER_ADMIN and MERCHANT owners, access is already validated by the server-side AdminLayout.
+  // We only do a basic sanity check here to ensure the user is logged in.
+  const canAccess = status === "authenticated";
 
-  // Redirect users without access
+  // Redirect users without session
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
       router.push(`/login?callbackUrl=/${slugValue || ""}/admin/settings`);
       return;
     }
-    if (!canAccess) {
-      if (sessionStoreSlug) router.push(`/${sessionStoreSlug}/admin`);
-      else router.push(`/`);
-    }
-  }, [session, canAccess, slug, router, status, sessionStoreSlug, slugValue]);
+  }, [session, router, status, slugValue]);
   
   // Hooks must be called unconditionally
   const { headerSettings, setHeaderSettings } = useShop();
