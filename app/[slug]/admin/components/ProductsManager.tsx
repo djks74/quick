@@ -125,7 +125,10 @@ export default function ProductsManager({
     headers: string[];
     mapped: string[];
     unknown: string[];
+    totalRows: number;
+    multiCategoryRows: number;
   } | null>(null);
+  const [pendingImportRows, setPendingImportRows] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
@@ -345,7 +348,7 @@ export default function ProductsManager({
         })
         .filter((v): v is string => Boolean(v));
       const unknownHeaders = onlyHeaders.filter((header) => !resolveCsvSystemField(header));
-      return { rows: [], headers: onlyHeaders, mappedHeaders, unknownHeaders };
+      return { rows: [], headers: onlyHeaders, mappedHeaders, unknownHeaders, multiCategoryRows: 0, totalRows: 0 };
     }
 
     const rawHeaders = table[0].map((h) => String(h || "").trim());
@@ -390,8 +393,12 @@ export default function ProductsManager({
         };
       })
       .filter((item) => String(item.name || "").trim().length > 0);
+    const multiCategoryRows = rows.filter((item) => {
+      const raw = String(item.category || "");
+      return raw.split(",").map((x) => x.trim()).filter(Boolean).length > 1;
+    }).length;
 
-    return { rows, headers: rawHeaders, mappedHeaders, unknownHeaders };
+    return { rows, headers: rawHeaders, mappedHeaders, unknownHeaders, multiCategoryRows, totalRows: rows.length };
   };
 
   const handleImportCsvFile = async (file?: File | null) => {
@@ -401,42 +408,67 @@ export default function ProductsManager({
       return;
     }
 
-    setIsImportingCsv(true);
     try {
       const csvText = await file.text();
-      const { rows, headers, mappedHeaders, unknownHeaders } = parseCsvRows(csvText);
+      const { rows, headers, mappedHeaders, unknownHeaders, multiCategoryRows, totalRows } = parseCsvRows(csvText);
+      setPendingImportRows(rows);
       setCsvPreview({
         headers,
         mapped: mappedHeaders,
-        unknown: unknownHeaders
+        unknown: unknownHeaders,
+        totalRows,
+        multiCategoryRows
       });
       setShowCsvMapping(true);
       if (!rows.length) {
         alert("No valid rows found. Please ensure CSV has headers and at least one product row.");
         return;
       }
+      alert("CSV loaded. Please review mapping and click Confirm Import.");
+    } catch (err) {
+      console.error("[CSV_IMPORT_CLIENT_ERROR]", err);
+      alert("Failed to import CSV. Please check your file format.");
+    } finally {
+      if (csvInputRef.current) {
+        csvInputRef.current.value = "";
+      }
+    }
+  };
 
-      const result = await importProductsFromCsvRows(storeId, rows);
+  const handleConfirmImport = async () => {
+    if (!pendingImportRows.length) {
+      alert("No pending CSV rows. Please upload a CSV file first.");
+      return;
+    }
+    const multiCategoryRows = csvPreview?.multiCategoryRows || 0;
+    const confirmMessage = multiCategoryRows > 0
+      ? `Continue import ${pendingImportRows.length} rows?\n\n${multiCategoryRows} rows contain multiple categories and ONLY the first category will be used.`
+      : `Continue import ${pendingImportRows.length} rows?`;
+    if (!confirm(confirmMessage)) return;
+
+    setIsImportingCsv(true);
+    try {
+      const result = await importProductsFromCsvRows(storeId, pendingImportRows);
       if (!result?.success) {
         alert(result?.error || "CSV import failed.");
         return;
       }
 
       await refreshData();
-      const summary = `CSV import finished. Created: ${result.created || 0}, Updated: ${result.updated || 0}, Failed: ${result.failed || 0}.`;
+      const summary = `CSV import finished. Created: ${result.created || 0}, Updated: ${result.updated || 0}, Failed: ${result.failed || 0}, Multi-category normalized: ${result.multiCategoryRows || 0}.`;
       if (Array.isArray(result.errors) && result.errors.length > 0) {
         alert(`${summary}\n\nFirst errors:\n${result.errors.join("\n")}`);
       } else {
         alert(summary);
       }
+      setPendingImportRows([]);
+      setCsvPreview(null);
+      setShowCsvMapping(false);
     } catch (err) {
       console.error("[CSV_IMPORT_CLIENT_ERROR]", err);
       alert("Failed to import CSV. Please check your file format.");
     } finally {
       setIsImportingCsv(false);
-      if (csvInputRef.current) {
-        csvInputRef.current.value = "";
-      }
     }
   };
 
@@ -572,6 +604,9 @@ export default function ProductsManager({
                 <div className="text-[11px] text-gray-600 dark:text-gray-300">
                   Variations format: <span className="font-bold">Small:10000|Large:15000</span>
                 </div>
+                <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                  Multi-category rule: for values like <span className="font-bold">Bumbu Dapur, Lain Lain</span>, only <span className="font-bold">Bumbu Dapur</span> is used.
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
                   {Object.entries(CSV_FIELD_ALIASES).map(([field, aliases]) => (
                     <div key={field} className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
@@ -585,11 +620,37 @@ export default function ProductsManager({
                     <div className="text-[11px] text-gray-500 dark:text-gray-400">
                       Detected headers: {csvPreview.headers.join(", ")}
                     </div>
+                    <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                      Ready rows: {csvPreview.totalRows}
+                    </div>
+                    <div className="text-[11px] text-blue-700 dark:text-blue-400">
+                      Multi-category rows: {csvPreview.multiCategoryRows}
+                    </div>
                     <div className="text-[11px] text-green-700 dark:text-green-400">
                       Mapped: {csvPreview.mapped.length ? csvPreview.mapped.join(" | ") : "-"}
                     </div>
                     <div className="text-[11px] text-amber-700 dark:text-amber-400">
                       Unmapped: {csvPreview.unknown.length ? csvPreview.unknown.join(", ") : "None"}
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmImport}
+                        disabled={isImportingCsv || pendingImportRows.length === 0}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-[11px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {isImportingCsv ? "Importing..." : "Confirm Import"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingImportRows([]);
+                          setCsvPreview(null);
+                        }}
+                        className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded text-[11px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-700"
+                      >
+                        Clear
+                      </button>
                     </div>
                   </div>
                 )}

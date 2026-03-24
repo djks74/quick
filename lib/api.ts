@@ -1114,6 +1114,7 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
     let created = 0;
     let updated = 0;
     let failed = 0;
+    let multiCategoryRows = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -1122,7 +1123,15 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
       const name = String(row.name || "").trim();
       const rawPrice = String(row.price ?? "").trim();
       const price = Number.parseFloat(rawPrice);
-      const categoryName = String(row.category || "").trim();
+      const rawCategory = String(row.category || "").trim();
+      const categoryParts = rawCategory
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const categoryName = categoryParts[0] || "";
+      if (categoryParts.length > 1) {
+        multiCategoryRows += 1;
+      }
       const categorySlug = toSlug(categoryName);
       const stock = Number.parseInt(String(row.stock ?? "0"), 10) || 0;
       const barcode = String(row.barcode || "").trim();
@@ -1225,6 +1234,7 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
       created,
       updated,
       failed,
+      multiCategoryRows,
       total: rows.length,
       errors: errors.slice(0, 20)
     };
