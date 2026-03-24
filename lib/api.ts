@@ -1132,14 +1132,25 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
       const subCategory = String(row.subCategory || "").trim();
       const rating = Number.parseFloat(String(row.rating ?? "0")) || 0;
       const typeRaw = String(row.type || "").trim().toLowerCase();
-      const type = typeRaw === "variable" ? "variable" : "simple";
+      const parsedVariations = Array.isArray(row.variations)
+        ? row.variations
+            .map((item: any) => ({
+              name: String(item?.name || "").trim(),
+              price: Number.parseFloat(String(item?.price ?? ""))
+            }))
+            .filter((item: any) => item.name && Number.isFinite(item.price))
+        : [];
+      const hasVariations = parsedVariations.length > 0;
+      const resolvedType = typeRaw === "variable" || hasVariations ? "variable" : "simple";
+      const derivedPrice = hasVariations ? Math.min(...parsedVariations.map((v: any) => v.price)) : NaN;
+      const resolvedPrice = Number.isFinite(price) ? price : derivedPrice;
 
       if (!name) {
         failed += 1;
         errors.push(`Row ${line}: name is required`);
         continue;
       }
-      if (!Number.isFinite(price)) {
+      if (!Number.isFinite(resolvedPrice)) {
         failed += 1;
         errors.push(`Row ${line}: price must be a valid number`);
         continue;
@@ -1163,7 +1174,7 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
         const product = await prisma.product.upsert({
           where: { storeId_name: { storeId, name } },
           update: {
-            price,
+            price: resolvedPrice,
             category: categoryName || null,
             stock,
             barcode: barcode || null,
@@ -1172,12 +1183,13 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
             shortDescription: shortDescription || null,
             subCategory: subCategory || null,
             rating,
-            type
+            type: resolvedType,
+            variations: hasVariations ? parsedVariations : null
           },
           create: {
             storeId,
             name,
-            price,
+            price: resolvedPrice,
             category: categoryName || null,
             stock,
             barcode: barcode || null,
@@ -1186,7 +1198,8 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
             shortDescription: shortDescription || null,
             subCategory: subCategory || null,
             rating,
-            type
+            type: resolvedType,
+            variations: hasVariations ? parsedVariations : null
           }
         });
 

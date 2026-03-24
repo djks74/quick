@@ -35,6 +35,66 @@ const toBaseQuantity = (quantity: number, quantityUnit: IngredientUOM, baseUnit:
   return Number(baseQty.toFixed(6));
 };
 
+const normalizeCsvKey = (input: string) =>
+  String(input || "")
+    .replace(/\uFEFF/g, "")
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+
+const CSV_FIELD_ALIASES: Record<string, string[]> = {
+  name: ["name", "productname", "title", "nama"],
+  price: ["price", "regularprice", "saleprice", "harga", "hargareguler"],
+  category: ["category", "categories", "kategori"],
+  subCategory: ["subcategory", "subkategori", "subcategoryname"],
+  stock: ["stock", "stok", "qty", "quantity"],
+  barcode: ["barcode", "sku"],
+  image: ["image", "images", "imageurl", "thumbnail"],
+  description: ["description", "deskripsi", "desc"],
+  shortDescription: ["shortdescription", "shortdesc", "deskripsisingkat", "excerpt"],
+  rating: ["rating"],
+  type: ["type", "producttype", "jenis"],
+  variations: ["variation", "variations", "variasi", "variationoptions"]
+};
+
+const CSV_FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  price: "Price",
+  category: "Category",
+  subCategory: "Sub Category",
+  stock: "Stock",
+  barcode: "Barcode/SKU",
+  image: "Image URL",
+  description: "Description",
+  shortDescription: "Short Description",
+  rating: "Rating",
+  type: "Type",
+  variations: "Variations"
+};
+
+const resolveCsvSystemField = (header: string) => {
+  const normalized = normalizeCsvKey(header);
+  for (const [field, aliases] of Object.entries(CSV_FIELD_ALIASES)) {
+    if (aliases.map(normalizeCsvKey).includes(normalized)) return field;
+  }
+  return null;
+};
+
+const parseVariationsCell = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  return raw
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [name, priceRaw] = part.split(":").map((x) => x.trim());
+      const parsedPrice = Number.parseFloat((priceRaw || "").replace(",", "."));
+      if (!name || !Number.isFinite(parsedPrice)) return null;
+      return { name, price: parsedPrice };
+    })
+    .filter((item): item is { name: string; price: number } => Boolean(item));
+};
+
 export default function ProductsManager({ 
   initialProducts, 
   initialCategories, 
@@ -60,6 +120,12 @@ export default function ProductsManager({
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [showCsvMapping, setShowCsvMapping] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<{
+    headers: string[];
+    mapped: string[];
+    unknown: string[];
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
@@ -269,40 +335,63 @@ export default function ProductsManager({
     if (row.some((cell) => String(cell || "").trim().length > 0)) {
       table.push(row.map((cell) => String(cell || "").trim()));
     }
-    if (table.length < 2) return [];
+    if (table.length < 2) {
+      const onlyHeaders = table[0]?.map((h) => String(h || "").trim()) || [];
+      const mappedHeaders = onlyHeaders
+        .map((header) => {
+          const field = resolveCsvSystemField(header);
+          if (!field) return null;
+          return `${header} → ${CSV_FIELD_LABELS[field] || field}`;
+        })
+        .filter((v): v is string => Boolean(v));
+      const unknownHeaders = onlyHeaders.filter((header) => !resolveCsvSystemField(header));
+      return { rows: [], headers: onlyHeaders, mappedHeaders, unknownHeaders };
+    }
 
-    const normalizeKey = (input: string) => input.toLowerCase().replace(/[\s_-]/g, "");
-    const headers = table[0].map(normalizeKey);
+    const rawHeaders = table[0].map((h) => String(h || "").trim());
+    const headers = rawHeaders.map(normalizeCsvKey);
     const dataRows = table.slice(1);
+    const mappedHeaders = rawHeaders
+      .map((header) => {
+        const field = resolveCsvSystemField(header);
+        if (!field) return null;
+        return `${header} → ${CSV_FIELD_LABELS[field] || field}`;
+      })
+      .filter((v): v is string => Boolean(v));
+    const unknownHeaders = rawHeaders.filter((header) => !resolveCsvSystemField(header));
+
     const getValue = (record: Record<string, string>, aliases: string[]) => {
       for (const alias of aliases) {
-        const key = normalizeKey(alias);
+        const key = normalizeCsvKey(alias);
         if (record[key] !== undefined) return record[key];
       }
       return "";
     };
 
-    return dataRows
+    const rows = dataRows
       .map((cells) => {
         const record: Record<string, string> = {};
         headers.forEach((header, index) => {
           record[header] = String(cells[index] || "").trim();
         });
         return {
-          name: getValue(record, ["name", "productname", "title"]),
-          price: getValue(record, ["price", "harga"]),
-          category: getValue(record, ["category", "kategori"]),
-          stock: getValue(record, ["stock", "stok", "qty", "quantity"]),
-          barcode: getValue(record, ["barcode", "sku"]),
-          image: getValue(record, ["image", "imageurl", "thumbnail"]),
-          description: getValue(record, ["description", "desc"]),
-          shortDescription: getValue(record, ["shortdescription", "shortdesc"]),
-          subCategory: getValue(record, ["subcategory", "subkategori"]),
-          rating: getValue(record, ["rating"]),
-          type: getValue(record, ["type"])
+          name: getValue(record, CSV_FIELD_ALIASES.name),
+          price: getValue(record, CSV_FIELD_ALIASES.price),
+          category: getValue(record, CSV_FIELD_ALIASES.category),
+          stock: getValue(record, CSV_FIELD_ALIASES.stock),
+          barcode: getValue(record, CSV_FIELD_ALIASES.barcode),
+          image: getValue(record, CSV_FIELD_ALIASES.image),
+          description: getValue(record, CSV_FIELD_ALIASES.description),
+          shortDescription: getValue(record, CSV_FIELD_ALIASES.shortDescription),
+          subCategory: getValue(record, CSV_FIELD_ALIASES.subCategory),
+          rating: getValue(record, CSV_FIELD_ALIASES.rating),
+          type: getValue(record, CSV_FIELD_ALIASES.type),
+          variations: parseVariationsCell(getValue(record, CSV_FIELD_ALIASES.variations))
         };
       })
       .filter((item) => String(item.name || "").trim().length > 0);
+
+    return { rows, headers: rawHeaders, mappedHeaders, unknownHeaders };
   };
 
   const handleImportCsvFile = async (file?: File | null) => {
@@ -315,7 +404,13 @@ export default function ProductsManager({
     setIsImportingCsv(true);
     try {
       const csvText = await file.text();
-      const rows = parseCsvRows(csvText);
+      const { rows, headers, mappedHeaders, unknownHeaders } = parseCsvRows(csvText);
+      setCsvPreview({
+        headers,
+        mapped: mappedHeaders,
+        unknown: unknownHeaders
+      });
+      setShowCsvMapping(true);
       if (!rows.length) {
         alert("No valid rows found. Please ensure CSV has headers and at least one product row.");
         return;
@@ -450,6 +545,13 @@ export default function ProductsManager({
                 <Upload className={cn("w-4 h-4", isImportingCsv && "animate-pulse")} />
                 <span>{isImportingCsv ? "Importing..." : "Import CSV"}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setShowCsvMapping((v) => !v)}
+                className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-gray-200 dark:border-gray-700"
+              >
+                <span>{showCsvMapping ? "Hide Mapping" : "Show Mapping"}</span>
+              </button>
             <button 
                 onClick={handleAdd}
                 className="bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider shadow-lg shadow-primary/20"
@@ -464,6 +566,35 @@ export default function ProductsManager({
 
       {activeTab === 'products' && (
         <>
+            {showCsvMapping && (
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1A1D21] space-y-3">
+                <div className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">CSV Mapping Guide</div>
+                <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                  Variations format: <span className="font-bold">Small:10000|Large:15000</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  {Object.entries(CSV_FIELD_ALIASES).map(([field, aliases]) => (
+                    <div key={field} className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+                      <div className="font-bold text-gray-800 dark:text-gray-100">{CSV_FIELD_LABELS[field] || field}</div>
+                      <div className="text-gray-500 dark:text-gray-400">{aliases.join(", ")}</div>
+                    </div>
+                  ))}
+                </div>
+                {csvPreview && (
+                  <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Detected headers: {csvPreview.headers.join(", ")}
+                    </div>
+                    <div className="text-[11px] text-green-700 dark:text-green-400">
+                      Mapped: {csvPreview.mapped.length ? csvPreview.mapped.join(" | ") : "-"}
+                    </div>
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                      Unmapped: {csvPreview.unknown.length ? csvPreview.unknown.join(", ") : "None"}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
               <div className="relative w-full sm:w-96">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
