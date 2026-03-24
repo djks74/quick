@@ -54,6 +54,8 @@ export default function ProductsManager({
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
@@ -130,6 +132,48 @@ export default function ProductsManager({
     setIsCategoryFormOpen(true);
   };
 
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === paginatedProducts.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(paginatedProducts.map(p => p.id));
+    }
+  };
+
+  const toggleSelectProduct = (id: number) => {
+    setSelectedProductIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProductIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedProductIds.length} selected products?`)) return;
+
+    setIsDeletingBulk(true);
+    try {
+      let successCount = 0;
+      for (const id of selectedProductIds) {
+        const ok = await deleteProduct(id);
+        if (ok) successCount++;
+      }
+      
+      if (successCount > 0) {
+        setProducts(prev => prev.filter(p => !selectedProductIds.includes(p.id)));
+        setSelectedProductIds([]);
+      }
+      
+      if (successCount < selectedProductIds.length) {
+        alert(`Deleted ${successCount} products. Some products could not be deleted (likely because they have order history).`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred during bulk deletion.");
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
+
   const handleAdd = () => {
     setEditingProduct(null);
     setIsFormOpen(true);
@@ -196,15 +240,39 @@ export default function ProductsManager({
 
       {activeTab === 'products' && (
         <>
-            <div className="relative w-full sm:w-96 mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-            <input 
-                type="text"
-                placeholder="Search products..."
-                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white dark:placeholder:text-gray-500"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <div className="relative w-full sm:w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
+                <input 
+                    type="text"
+                    placeholder="Search products..."
+                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white dark:placeholder:text-gray-500"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {selectedProductIds.length > 0 && (
+                <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/10 px-4 py-2 rounded-lg border border-red-100 dark:border-red-900/20 animate-in fade-in slide-in-from-top-2">
+                  <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">
+                    {selectedProductIds.length} Selected
+                  </span>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isDeletingBulk}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                  >
+                    {isDeletingBulk ? <div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin rounded-full" /> : <Trash2 size={12} />}
+                    Delete All
+                  </button>
+                  <button
+                    onClick={() => setSelectedProductIds([])}
+                    className="text-[10px] font-black text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 uppercase tracking-widest"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Products Table */}
@@ -212,6 +280,14 @@ export default function ProductsManager({
                 <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                    <th className="px-6 py-4 w-10">
+                      <input 
+                        type="checkbox"
+                        className="rounded border-gray-300 dark:border-gray-700 text-primary focus:ring-primary cursor-pointer"
+                        checked={paginatedProducts.length > 0 && selectedProductIds.length === paginatedProducts.length}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Product</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Barcode</th>
                     <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Category</th>
@@ -235,7 +311,18 @@ export default function ProductsManager({
                         const margin = product.price > 0 ? ((product.price - productCost) / product.price) * 100 : 0;
 
                         return (
-                        <tr key={product.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                        <tr key={product.id} className={cn(
+                          "hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors",
+                          selectedProductIds.includes(product.id) && "bg-blue-50/50 dark:bg-blue-900/10"
+                        )}>
+                            <td className="px-6 py-4">
+                              <input 
+                                type="checkbox"
+                                className="rounded border-gray-300 dark:border-gray-700 text-primary focus:ring-primary cursor-pointer"
+                                checked={selectedProductIds.includes(product.id)}
+                                onChange={() => toggleSelectProduct(product.id)}
+                              />
+                            </td>
                             <td className="px-6 py-4">
                             <div className="flex items-center space-x-3">
                                 <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-gray-700 relative">

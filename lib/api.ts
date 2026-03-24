@@ -16,10 +16,12 @@ let ensuredRecipeSchema: Promise<void> | null = null;
 async function ensureRecipeSchema() {
   if (!ensuredRecipeSchema) {
     ensuredRecipeSchema = (async () => {
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "barcode" TEXT;
+      console.log("[DB_PATCH] Running Recipe/Inventory schema check...");
+      
+      const commands = [
+        `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "barcode" TEXT`,
         
-        CREATE TABLE IF NOT EXISTS "InventoryItem" (
+        `CREATE TABLE IF NOT EXISTS "InventoryItem" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "name" TEXT NOT NULL,
@@ -30,12 +32,12 @@ async function ensureRecipeSchema() {
           "costPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )`,
 
-        CREATE UNIQUE INDEX IF NOT EXISTS "InventoryItem_storeId_barcode_key"
-        ON "InventoryItem" ("storeId", "barcode");
+        `CREATE UNIQUE INDEX IF NOT EXISTS "InventoryItem_storeId_barcode_key"
+         ON "InventoryItem" ("storeId", "barcode")`,
 
-        CREATE TABLE IF NOT EXISTS "ProductIngredient" (
+        `CREATE TABLE IF NOT EXISTS "ProductIngredient" (
           "id" SERIAL PRIMARY KEY,
           "productId" INTEGER NOT NULL REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "inventoryItemId" INTEGER NOT NULL REFERENCES "InventoryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -45,18 +47,27 @@ async function ensureRecipeSchema() {
           "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
+        )`,
 
-        ALTER TABLE "ProductIngredient" 
-        ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs',
-        ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs',
-        ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1;
+        `ALTER TABLE "ProductIngredient" ADD COLUMN IF NOT EXISTS "quantityUnit" TEXT NOT NULL DEFAULT 'pcs'`,
+        `ALTER TABLE "ProductIngredient" ADD COLUMN IF NOT EXISTS "baseUnit" TEXT NOT NULL DEFAULT 'pcs'`,
+        `ALTER TABLE "ProductIngredient" ADD COLUMN IF NOT EXISTS "conversionFactor" DOUBLE PRECISION NOT NULL DEFAULT 1`,
 
-        CREATE UNIQUE INDEX IF NOT EXISTS "ProductIngredient_productId_inventoryItemId_key"
-        ON "ProductIngredient" ("productId", "inventoryItemId");
-      `);
+        `CREATE UNIQUE INDEX IF NOT EXISTS "ProductIngredient_productId_inventoryItemId_key"
+         ON "ProductIngredient" ("productId", "inventoryItemId")`
+      ];
+
+      for (const cmd of commands) {
+        await prisma.$executeRawUnsafe(cmd).catch(err => {
+          if (!err.message.includes("already exists")) {
+            console.error("[DB_PATCH_ERROR] Recipe failed command:", cmd, err);
+          }
+        });
+      }
+
+      console.log("[DB_PATCH] Recipe schema patched successfully ✅");
     })().catch((err) => {
-      console.error("ensureRecipeSchema error:", err);
+      console.error("[DB_PATCH_ERROR] ensureRecipeSchema error:", err);
       ensuredRecipeSchema = null; // Allow retry on failure
     });
   }
