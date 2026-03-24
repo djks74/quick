@@ -193,25 +193,28 @@ export default function AdminSettings() {
     accountName: ""
   });
 
-  // Fetch Store ID
+  // Reset and Load Data when slug changes
   useEffect(() => {
-    async function loadStore() {
+    async function loadAll() {
       if (!slugValue) return;
-      const store = await getStoreBySlug(slugValue);
-      if (store) {
-        setStoreId(store.id);
-      } else {
-        setIsDataLoading(false);
-      }
-    }
-    loadStore();
-  }, [slugValue]);
+      
+      setIsDataLoading(true);
+      setSaveMessage(null);
+      setApiKey(null);
+      setShowApiKey(false);
 
-  // Load Settings
-  useEffect(() => {
-    async function loadSettings() {
-      if (!storeId) return;
-      const data = await getStoreSettings(storeId);
+      const store = await getStoreBySlug(slugValue);
+      if (!store) {
+        setIsDataLoading(false);
+        return;
+      }
+
+      setStoreId(store.id);
+      setSubscriptionPlan(store.subscriptionPlan || "FREE");
+      setApiKey(store.apiKey || null);
+      if (store.name) setSiteName(store.name);
+
+      const data = await getStoreSettings(store.id);
       if (data) {
         setSettings({
           storeName: data.name || "",
@@ -281,18 +284,15 @@ export default function AdminSettings() {
                 accountName: bank.accountName || ""
             });
         }
-
-        if (data.name) setSiteName(data.name);
-        setSubscriptionPlan(data.subscriptionPlan || "FREE");
-        setApiKey(data.apiKey || null);
       }
 
-      const posUsername = await getPosCashierUsername(storeId);
+      const posUsername = await getPosCashierUsername(store.id);
       setSettings(prev => ({ ...prev, posUsername: posUsername || "" }));
+      
       setIsDataLoading(false);
     }
-    loadSettings();
-  }, [storeId, setSiteName]);
+    loadAll();
+  }, [slugValue, setSiteName]);
 
   const handleSave = async () => {
     if (!storeId) return;
