@@ -93,33 +93,60 @@ export async function POST(req: NextRequest) {
         // Otherwise we fallback to storeId_name.
         let updated;
         if (externalId) {
-          updated = await prisma.product.upsert({
-            where: { 
-              storeId_externalId: {
-                storeId: store.id,
-                externalId: String(externalId)
-              }
-            },
-            update: {
-              name: name,
-              price: Number(price),
-              category: category || "General",
-              description: description || "",
-              image: image || null,
-              stock: stock !== undefined ? Number(stock) : 999999,
-              updatedAt: new Date()
-            },
-            create: {
-              storeId: store.id,
-              externalId: String(externalId),
-              name: name,
-              price: Number(price),
-              category: category || "General",
-              description: description || "",
-              image: image || null,
-              stock: stock !== undefined ? Number(stock) : 999999
-            }
+          // 1. Try to find by externalId first
+          const existingByExt = await prisma.product.findUnique({
+            where: { storeId_externalId: { storeId: store.id, externalId: String(externalId) } }
           });
+
+          if (existingByExt) {
+            updated = await prisma.product.update({
+              where: { id: existingByExt.id },
+              data: {
+                name: name,
+                price: Number(price),
+                category: category || "General",
+                description: description || "",
+                image: image || null,
+                stock: stock !== undefined ? Number(stock) : 999999,
+                updatedAt: new Date()
+              }
+            });
+          } else {
+            // 2. Try to find by name to avoid unique constraint conflict (storeId, name)
+            // This handles cases where a product was created manually but now we want to link it to WCFM
+            const existingByName = await prisma.product.findUnique({
+              where: { storeId_name: { storeId: store.id, name: name } }
+            });
+
+            if (existingByName) {
+              updated = await prisma.product.update({
+                where: { id: existingByName.id },
+                data: {
+                  externalId: String(externalId), // Link it!
+                  price: Number(price),
+                  category: category || "General",
+                  description: description || "",
+                  image: image || null,
+                  stock: stock !== undefined ? Number(stock) : 999999,
+                  updatedAt: new Date()
+                }
+              });
+            } else {
+              // 3. Create new
+              updated = await prisma.product.create({
+                data: {
+                  storeId: store.id,
+                  externalId: String(externalId),
+                  name: name,
+                  price: Number(price),
+                  category: category || "General",
+                  description: description || "",
+                  image: image || null,
+                  stock: stock !== undefined ? Number(stock) : 999999
+                }
+              });
+            }
+          }
         } else {
           updated = await prisma.product.upsert({
             where: { 
