@@ -53,7 +53,8 @@ export async function ensureStoreSettingsSchema() {
 
         `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "externalId" TEXT`,
 
-        `CREATE UNIQUE INDEX IF NOT EXISTS "Product_externalId_key" ON "Product"("externalId")`,
+        `DROP INDEX IF EXISTS "Product_externalId_key"`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS "Product_storeId_externalId_key" ON "Product"("storeId", "externalId")`,
 
         `CREATE INDEX IF NOT EXISTS "Order_storeId_createdAt_idx" ON "Order"("storeId", "createdAt")`,
         `CREATE INDEX IF NOT EXISTS "Order_status_idx" ON "Order"("status")`,

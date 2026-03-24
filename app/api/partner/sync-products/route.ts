@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     const results = [];
+    const syncedCategories = new Set<string>();
 
     for (const prod of products) {
       if (action === "upsert") {
@@ -66,14 +67,40 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // If externalId is provided, we use it as the primary identifier.
+        // Sync category to Store's Category table if it exists
+        if (category && !syncedCategories.has(category)) {
+          const categorySlug = String(category).toLowerCase().replace(/[^a-z0-9]/g, "-");
+          await prisma.category.upsert({
+            where: {
+              storeId_slug: {
+                storeId: store.id,
+                slug: categorySlug
+              }
+            },
+            update: {
+              name: String(category)
+            },
+            create: {
+              storeId: store.id,
+              name: String(category),
+              slug: categorySlug
+            }
+          }).catch(() => null);
+          syncedCategories.add(category);
+        }
+
+        // If externalId is provided, we use it as the primary identifier (scoped to store).
         // Otherwise we fallback to storeId_name.
         let updated;
         if (externalId) {
           updated = await prisma.product.upsert({
-            where: { externalId: String(externalId) },
+            where: { 
+              storeId_externalId: {
+                storeId: store.id,
+                externalId: String(externalId)
+              }
+            },
             update: {
-              storeId: store.id,
               name: name,
               price: Number(price),
               category: category || "General",
