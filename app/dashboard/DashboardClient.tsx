@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -34,8 +34,15 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!navigatingTo) return;
+    const t = setTimeout(() => setNavigatingTo(null), 12000);
+    return () => clearTimeout(t);
+  }, [navigatingTo]);
 
   const filteredStores = stores.filter(store => {
     const query = searchQuery.toLowerCase();
@@ -217,9 +224,25 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                 <Link 
                   key={store.id} 
                   href={`/${store.slug}/admin`}
-                  className="group p-6 rounded-3xl bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all space-y-6 relative overflow-hidden"
+                  prefetch
+                  onMouseEnter={() => router.prefetch(`/${store.slug}/admin`)}
+                  onClick={() => setNavigatingTo(store.slug)}
+                  className={cn(
+                    "group p-6 rounded-3xl bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-xl hover:border-blue-500/30 transition-all space-y-6 relative overflow-hidden",
+                    navigatingTo === store.slug && "pointer-events-none"
+                  )}
                 >
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full group-hover:bg-blue-500/10 transition-colors" />
+                  {navigatingTo === store.slug && (
+                    <div className="absolute inset-0 bg-white/70 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-[#1A1D21] border border-gray-100 dark:border-white/10 shadow-sm">
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">
+                          Opening
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="flex justify-between items-start">
                     <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -307,9 +330,19 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
                   </div>
                   <Link 
                     href={`/${store.slug}/admin/users`}
-                    className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400 group-hover:text-purple-600 transition-colors shadow-sm"
+                    prefetch
+                    onMouseEnter={() => router.prefetch(`/${store.slug}/admin/users`)}
+                    onClick={() => setNavigatingTo(`${store.slug}:users`)}
+                    className={cn(
+                      "w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400 group-hover:text-purple-600 transition-colors shadow-sm",
+                      navigatingTo === `${store.slug}:users` && "pointer-events-none"
+                    )}
                   >
-                    <Plus className="w-4 h-4" />
+                    {navigatingTo === `${store.slug}:users` ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
                   </Link>
                 </div>
               ))}
