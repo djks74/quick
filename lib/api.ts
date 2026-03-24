@@ -957,19 +957,15 @@ export async function updateProduct(id: number, data: any) {
 
 export async function deleteProduct(id: number) {
   try {
-    // 1. Trigger Reverse Sync before deletion to ensure we have the externalId
-    await triggerReverseSync(id, 'delete').catch(err => console.error("[SYNC_ERROR] Async delete trigger failed:", err));
+    // 1. Trigger Reverse Sync in background (don't await to speed up)
+    triggerReverseSync(id, 'delete').catch(err => console.error("[SYNC_ERROR] Async delete trigger failed:", err));
 
-    // 2. Try to delete the product
+    // 2. Try to delete the product and its ingredients in a single transaction
     try {
-      // Delete ingredients first due to foreign key constraints
-      await prisma.productIngredient.deleteMany({
-        where: { productId: id }
-      });
-      
-      await prisma.product.delete({
-        where: { id }
-      });
+      await prisma.$transaction([
+        prisma.productIngredient.deleteMany({ where: { productId: id } }),
+        prisma.product.delete({ where: { id } })
+      ]);
       return true;
     } catch (error: any) {
       // 3. Handle Foreign Key Constraint (P2003) - e.g. Product is in an Order
@@ -981,7 +977,7 @@ export async function deleteProduct(id: number) {
           data: {
             category: "_ARCHIVED_",
             externalId: null, // Clear this so it doesn't conflict with future syncs
-            name: `[ARCHIVED] ${new Date().toISOString().split('T')[0]} - ID ${id}` // Rename to avoid unique name constraint conflicts
+            name: `[ARCHIVED] ${new Date().toISOString().split('T')[0]} - ID ${id} - ${Math.random().toString(36).substring(7)}` 
           }
         });
         return true;

@@ -72,8 +72,8 @@ export async function ensureStoreSettingsSchema() {
       console.log("[DB_PATCH] StoreSettings schema patched successfully ✅");
     })().catch((error) => {
       console.error("[DB_PATCH_ERROR] StoreSettings schema patch failed ❌", error);
-      ensuredStoreSettingsSchemaV4 = null;
+      ensuredStoreSettingsSchemaV5 = null;
     });
   }
-  await ensuredStoreSettingsSchemaV4;
+  await ensuredStoreSettingsSchemaV5;
 }

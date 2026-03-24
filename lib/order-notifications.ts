@@ -36,10 +36,10 @@ export async function ensureOrderNotificationsSchema() {
       console.log("[DB_PATCH] OrderNotification schema patched successfully ✅");
     })().catch((err) => {
       console.error("[DB_PATCH_ERROR] OrderNotification schema patch failed ❌", err);
-      ensuredOrderNotificationsSchemaV2 = null;
+      ensuredOrderNotificationsSchemaV3 = null;
     });
   }
-  await ensuredOrderNotificationsSchemaV2;
+  await ensuredOrderNotificationsSchemaV3;
 }
 
 export async function createOrderNotification(input: {
