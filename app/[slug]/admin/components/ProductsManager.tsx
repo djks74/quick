@@ -8,7 +8,8 @@ import {
   Edit2, 
   Trash2, 
   Copy,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCcw
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "@/app/[slug]/admin/products/ProductForm";
@@ -56,6 +57,7 @@ export default function ProductsManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -63,7 +65,6 @@ export default function ProductsManager({
   const activeProductsCount = products.filter(p => p.category !== "_ARCHIVED_").length;
   const categoriesCount = categories.length;
 
-  // Find last sync time from any product if not on store (better would be from store)
   const lastSync = products.reduce((latest, p) => {
     const date = new Date(p.updatedAt).getTime();
     return date > latest ? date : latest;
@@ -162,12 +163,10 @@ export default function ProductsManager({
 
     setIsDeletingBulk(true);
     try {
-      // Run deletions in parallel for maximum speed
       const results = await Promise.all(selectedProductIds.map(id => deleteProduct(id)));
       const successCount = results.filter(ok => ok).length;
       
       if (successCount > 0) {
-        // Identify which IDs were successfully processed
         const processedIds = selectedProductIds.filter((_, index) => results[index]);
         
         setProducts(prev => prev.filter(p => !processedIds.includes(p.id)));
@@ -193,6 +192,25 @@ export default function ProductsManager({
   const handleAddCategory = () => {
     setEditingCategory(null);
     setIsCategoryFormOpen(true);
+  };
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      const [freshProducts, freshCategories] = await Promise.all([
+        getProducts(storeId),
+        getCategories(storeId)
+      ]);
+      setProducts(freshProducts);
+      setCategories(freshCategories);
+      setSelectedProductIds([]);
+      setPage(1);
+    } catch (err) {
+      console.error("[REFRESH_ERROR]", err);
+      alert("Failed to refresh data. Please reload the page.");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
@@ -256,6 +274,15 @@ export default function ProductsManager({
          </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={refreshData}
+            disabled={isRefreshing}
+            className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-gray-200 dark:border-gray-700 disabled:opacity-50"
+          >
+            <RefreshCcw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            <span>Refresh</span>
+          </button>
           {isSuperAdmin && (
             <button 
                 onClick={handleAddCategory}

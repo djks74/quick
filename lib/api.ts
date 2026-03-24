@@ -957,29 +957,62 @@ export async function updateProduct(id: number, data: any) {
 
 export async function deleteProduct(id: number) {
   try {
-    // 1. Trigger Reverse Sync in background (don't await to speed up)
-    triggerReverseSync(id, 'delete').catch(err => console.error("[SYNC_ERROR] Async delete trigger failed:", err));
+    const product = await prisma.product.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        externalId: true,
+        store: { select: { slug: true } }
+      }
+    });
 
-    // 2. Try to delete the product and its ingredients in a single transaction
+    if (!product) return true;
+
+    triggerReverseSync(id, "delete").catch((err) =>
+      console.error("[SYNC_ERROR] Async delete trigger failed:", err)
+    );
+
+    if (product.externalId) {
+      await prisma.product.update({
+        where: { id },
+        data: {
+          category: "_ARCHIVED_",
+          name: `[ARCHIVED] ${new Date().toISOString().split("T")[0]} - ID ${id} - ${Math.random().toString(36).slice(2, 8)}`
+        }
+      });
+
+      if (product.store?.slug) {
+        revalidatePath(`/${product.store.slug}`);
+      }
+
+      return true;
+    }
+
     try {
       await prisma.$transaction([
         prisma.productIngredient.deleteMany({ where: { productId: id } }),
         prisma.product.delete({ where: { id } })
       ]);
+
+      if (product.store?.slug) {
+        revalidatePath(`/${product.store.slug}`);
+      }
+
       return true;
     } catch (error: any) {
-      // 3. Handle Foreign Key Constraint (P2003) - e.g. Product is in an Order
-      if (error.code === 'P2003') {
-        console.log(`[SOFT_DELETE] Product ${id} has order history. Archiving instead of deleting.`);
-        
+      if (error.code === "P2003") {
         await prisma.product.update({
           where: { id },
           data: {
             category: "_ARCHIVED_",
-            externalId: null, // Clear this so it doesn't conflict with future syncs
-            name: `[ARCHIVED] ${new Date().toISOString().split('T')[0]} - ID ${id} - ${Math.random().toString(36).substring(7)}` 
+            name: `[ARCHIVED] ${new Date().toISOString().split("T")[0]} - ID ${id} - ${Math.random().toString(36).slice(2, 8)}`
           }
         });
+
+        if (product.store?.slug) {
+          revalidatePath(`/${product.store.slug}`);
+        }
+
         return true;
       }
       throw error;

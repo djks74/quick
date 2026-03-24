@@ -110,8 +110,6 @@ export async function POST(req: NextRequest) {
           });
 
           if (existingByExt) {
-            // CRITICAL FIX: If the product is archived on our platform, 
-            // DO NOT let the incoming sync restore it.
             if (existingByExt.category === "_ARCHIVED_") {
               console.log(`[SYNC] Ignoring archived product from sync: ${existingByExt.name} (ExtID: ${externalId})`);
               results.push({ name: name, status: "ignored", message: "Product is archived/deleted on platform" });
@@ -131,8 +129,6 @@ export async function POST(req: NextRequest) {
               }
             });
           } else {
-            // 2. Try to find by name to avoid unique constraint conflict (storeId, name)
-            // This handles cases where a product was created manually but now we want to link it to WCFM
             const existingByName = await prisma.product.findUnique({
               where: { storeId_name: { storeId: store.id, name: name } }
             });
