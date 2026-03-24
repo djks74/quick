@@ -1023,6 +1023,39 @@ export async function deleteProduct(id: number) {
   }
 }
 
+export async function resetAllProductsForStore(storeId: number) {
+  try {
+    const ids = await prisma.product.findMany({
+      where: { storeId },
+      select: { id: true }
+    });
+
+    const productIds = ids.map((p) => p.id);
+    if (productIds.length === 0) return { success: true, archived: 0, deletedIngredients: 0 };
+
+    const deletedIngredients = await prisma.productIngredient.deleteMany({
+      where: { productId: { in: productIds } }
+    });
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Product"
+       SET "category" = '_ARCHIVED_',
+           "externalId" = NULL,
+           "name" = '[ARCHIVED] ' || to_char(NOW(), 'YYYY-MM-DD') || ' - ID ' || "id"::text || ' - ' || substr(md5(random()::text), 1, 6)
+       WHERE "storeId" = $1`,
+      storeId
+    );
+
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { slug: true } });
+    if (store?.slug) revalidatePath(`/${store.slug}`);
+
+    return { success: true, archived: productIds.length, deletedIngredients: deletedIngredients.count };
+  } catch (error) {
+    console.error("Error resetting products:", error);
+    return { success: false };
+  }
+}
+
 // --- Categories ---
 
 export async function getCategories(storeId: number): Promise<Category[]> {

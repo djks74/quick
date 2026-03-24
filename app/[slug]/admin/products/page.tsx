@@ -17,7 +17,7 @@ export default async function AdminProducts({ params }: { params: Promise<{ slug
   }
   
   const [products, categories, inventoryItems] = await Promise.all([
-    getProducts(store.id),
+    getProducts(store.id, undefined, 5000, 0),
     getCategories(store.id),
     getInventoryItems(store.id)
   ]);

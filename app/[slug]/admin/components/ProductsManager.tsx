@@ -14,7 +14,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "@/app/[slug]/admin/products/ProductForm";
 import CategoryForm from "@/app/[slug]/admin/products/CategoryForm";
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, createCategory, updateCategory, deleteCategory } from "@/lib/api";
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, resetAllProductsForStore, createCategory, updateCategory, deleteCategory } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type IngredientUOM = "gram" | "kg" | "pcs";
@@ -213,6 +213,16 @@ export default function ProductsManager({
     }
   };
 
+  const resetAllProducts = async () => {
+    if (!confirm("Reset all products for this store? This will archive all current products so you can re-sync from WCFM.")) return;
+    const res = await resetAllProductsForStore(storeId);
+    if (!res?.success) {
+      alert("Failed to reset products. Please try again.");
+      return;
+    }
+    await refreshData();
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
@@ -282,6 +292,14 @@ export default function ProductsManager({
           >
             <RefreshCcw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
             <span>Refresh</span>
+          </button>
+          <button
+            type="button"
+            onClick={resetAllProducts}
+            className="bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-red-100 dark:border-red-900/20"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Reset Products</span>
           </button>
           {isSuperAdmin && (
             <button 
