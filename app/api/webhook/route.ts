@@ -1269,35 +1269,40 @@ export async function POST(req: NextRequest) {
         const isSessionRecent = (Date.now() - lastUpdated) < 30 * 60 * 1000;
         const hasCartItems = Array.isArray(session.cart) && session.cart.length > 0;
         
-        // If merchant in user mode, we are even more strict: only show store menu if they actually have a cart or very recent scan
         const isMerchantInUserMode = isMerchant && merchantSession?.step === 'USER_MODE';
-        const isActivelyOrdering = (session.step !== 'START' || hasCartItems) && (isSessionRecent || !isMerchantInUserMode);
         
-        if (isSharedNumber && lowerText === 'help' && !isActivelyOrdering) {
-          const platformHelp = l(
-            `👋 *Selamat datang di Gercep!* ⚡\n\n` +
-            `Cara pesan di restoran/toko favoritmu:\n` +
-            `1. *Scan QR Code* yang ada di meja atau kasir.\n` +
-            `2. Kamu akan otomatis masuk ke menu toko tersebut.\n` +
-            `3. Pilih makanan/produk & checkout langsung via WhatsApp.\n\n` +
-            `🔍 *Cari Toko Lain?*\n` +
-            `Balas dengan *"Cari <nama toko>"* (contoh: "Cari Pasar Segar") untuk belanja di toko terdekat.\n\n` +
-            `🤖 *Asisten AI*\n` +
-            `Kamu juga bisa tanya langsung ke AI kami, contoh: "Ada promo apa hari ini?" atau "Rekomendasi nasi goreng enak".`,
+        // Show platform help if explicitly requested AND not currently in a "hot" session
+        if (isSharedNumber && lowerText === 'help') {
+          const isSessionRecent = (Date.now() - lastUpdated) < 5 * 60 * 1000; // 5 mins
+          const hasCartItems = Array.isArray(session.cart) && session.cart.length > 0;
+          const isActivelyOrdering = hasCartItems || (session.step !== 'START' && isSessionRecent);
+
+          if (!isActivelyOrdering || isMerchantInUserMode) {
+            const platformHelp = l(
+              `👋 *Selamat datang di Gercep!* ⚡\n\n` +
+              `Cara pesan di restoran/toko favoritmu:\n` +
+              `1. *Scan QR Code* yang ada di meja atau kasir.\n` +
+              `2. Kamu akan otomatis masuk ke menu toko tersebut.\n` +
+              `3. Pilih makanan/produk & checkout langsung via WhatsApp.\n\n` +
+              `🔍 *Cari Toko Lain?*\n` +
+              `Balas dengan *"Cari <nama toko>"* (contoh: "Cari Pasar Segar") untuk belanja di toko terdekat.\n\n` +
+              `🤖 *Asisten AI*\n` +
+              `Kamu juga bisa tanya langsung ke AI kami, contoh: "Ada promo apa hari ini?" atau "Rekomendasi nasi goreng enak".`,
+              
+              `👋 *Welcome to Gercep!* ⚡\n\n` +
+              `How to order from your favorite store:\n` +
+              `1. *Scan the QR Code* at the table or cashier.\n` +
+              `2. You will automatically see the store's menu.\n` +
+              `3. Choose items & checkout directly via WhatsApp.\n\n` +
+              `🔍 *Find a Store?*\n` +
+              `Reply with *"Find <store name>"* (e.g., "Find Pasar Segar") to shop at nearby stores.\n\n` +
+              `🤖 *AI Assistant*\n` +
+              `You can also ask our AI, e.g.: "Any promos today?" or "Recommend me some good fried rice."`
+            );
             
-            `👋 *Welcome to Gercep!* ⚡\n\n` +
-            `How to order from your favorite store:\n` +
-            `1. *Scan the QR Code* at the table or cashier.\n` +
-            `2. You will automatically see the store's menu.\n` +
-            `3. Choose items & checkout directly via WhatsApp.\n\n` +
-            `🔍 *Find a Store?*\n` +
-            `Reply with *"Find <store name>"* (e.g., "Find Pasar Segar") to shop at nearby stores.\n\n` +
-            `🤖 *AI Assistant*\n` +
-            `You can also ask our AI, e.g.: "Any promos today?" or "Recommend me some good fried rice."`
-          );
-          
-          await sendWhatsAppMessage(from, platformHelp, targetStore.id);
-          return NextResponse.json({ success: true });
+            await sendWhatsAppMessage(from, platformHelp, targetStore.id);
+            return NextResponse.json({ success: true });
+          }
         }
 
         if (session.step === 'START' && isShippingConfigured(targetStore)) {
