@@ -89,7 +89,7 @@ export default function AdminTables() {
 
   // Compute Base URL
   const getQrUrl = (identifier: string) => {
-    let origin = (customDomain || (typeof window !== 'undefined' ? window.location.origin : '')).trim();
+    let origin = (customDomain || (typeof window !== 'undefined' ? window.location.origin : 'https://gercep.click')).trim();
     
     // Ensure protocol exists
     if (origin && !origin.startsWith("http://") && !origin.startsWith("https://")) {
@@ -112,33 +112,38 @@ export default function AdminTables() {
         </div>
       </div>
 
-      {/* Domain Configuration */}
-      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center">
-          <Globe className="w-4 h-4 mr-2" />
-          QR Code Base URL
-        </h3>
-        <div className="flex gap-4">
-          <input 
-            type="text" 
-            placeholder="https://your-app.ngrok-free.app" 
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary"
-            value={customDomain}
-            onChange={(e) => setCustomDomain(e.target.value)}
-          />
-          <button 
-            onClick={handleSaveDomain}
-            disabled={isSavingDomain}
-            className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-black transition-colors disabled:opacity-50 flex items-center"
-          >
-            {isSavingDomain ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Set a custom domain (e.g., ngrok URL) to make QR codes scannable from other devices. 
-          Leave empty to use current browser origin.
-        </p>
+      {/* Domain Configuration (Collapsible or secondary) */}
+      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+        <details className="group">
+          <summary className="text-sm font-bold text-gray-700 cursor-pointer flex items-center list-none group-open:mb-4">
+            <Globe className="w-4 h-4 mr-2" />
+            Advanced: QR Code Base URL
+            <span className="ml-auto text-xs font-normal text-gray-500">
+              {customDomain ? `Using: ${customDomain}` : "Using default: gercep.click"}
+            </span>
+          </summary>
+          <div className="flex gap-4">
+            <input 
+              type="text" 
+              placeholder="https://gercep.click" 
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+            />
+            <button 
+              onClick={handleSaveDomain}
+              disabled={isSavingDomain}
+              className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-black transition-colors disabled:opacity-50 flex items-center"
+            >
+              {isSavingDomain ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Save
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2">
+            Only change this if you are using a custom domain or testing locally with ngrok. 
+            Default is <strong>gercep.click</strong>.
+          </p>
+        </details>
       </div>
 
       {/* Add Table Form */}
