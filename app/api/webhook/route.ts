@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
 import { createPaymentLink } from '@/lib/payment';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { handleMerchantMessage } from '@/lib/whatsapp-merchant';
@@ -280,10 +281,11 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  console.log('WEBHOOK_VERIFY_REQUEST', { mode, token, challenge });
+  console.log('WEBHOOK_VERIFY_REQUEST', { mode, hasToken: Boolean(token), hasChallenge: Boolean(challenge) });
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || 'laku_verify_token';
 
   if (mode && token) {
-    if (mode === 'subscribe' && token === 'laku_verify_token') {
+    if (mode === 'subscribe' && token === verifyToken) {
       console.log('WEBHOOK_VERIFIED_SUCCESS');
       return new NextResponse(challenge, { status: 200 });
     }
@@ -303,7 +305,22 @@ const memoryCache = new Set<string>();
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    const signatureHeader = req.headers.get("x-hub-signature-256");
+    if (appSecret) {
+      if (!signatureHeader) {
+        return NextResponse.json({ error: "Missing webhook signature" }, { status: 401 });
+      }
+      const expectedSig = `sha256=${crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex")}`;
+      const sigBuf = Buffer.from(signatureHeader);
+      const expectedBuf = Buffer.from(expectedSig);
+      const isValidSig = sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+      if (!isValidSig) {
+        return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+      }
+    }
+    const body = JSON.parse(rawBody || "{}");
     
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];

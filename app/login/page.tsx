@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { signIn, getSession } from "next-auth/react";
+import { Suspense, useEffect, useState } from "react";
+import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Eye, EyeOff } from "lucide-react";
@@ -9,6 +9,7 @@ import { Loader2, Eye, EyeOff } from "lucide-react";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const registered = searchParams.get("registered");
   const callbackUrl = searchParams.get("callbackUrl");
   const inferredPosSlug = (() => {
@@ -25,6 +26,36 @@ function LoginForm() {
     password: "",
     storeSlug: ""
   });
+
+  useEffect(() => {
+    const redirectAuthenticatedUser = async () => {
+      if (status !== "authenticated") return;
+      const user = session?.user as any;
+      if (callbackUrl && callbackUrl.startsWith("/") && callbackUrl !== "/login") {
+        router.replace(callbackUrl);
+        router.refresh();
+        return;
+      }
+      if (user?.role === "SUPER_ADMIN") {
+        router.replace("/super-admin");
+      } else if (user?.hasMultipleStores) {
+        router.replace("/dashboard");
+      } else if (user?.storeSlug) {
+        router.replace(`/${user.storeSlug}/admin`);
+      } else if (user?.role === "MANAGER" && user?.storeId) {
+        const res = await fetch(`/api/stores/${user.storeId}`);
+        const data = await res.json();
+        if (data.slug) router.replace(`/${data.slug}/admin`);
+        else router.replace("/");
+      } else if (user?.role === "CASHIER" && (user?.storeSlug || inferredPosSlug)) {
+        router.replace(`/${user.storeSlug || inferredPosSlug}/pos`);
+      } else {
+        router.replace("/");
+      }
+      router.refresh();
+    };
+    redirectAuthenticatedUser();
+  }, [status, session, callbackUrl, router, inferredPosSlug]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +115,14 @@ function LoginForm() {
       setLoading(false);
     }
   };
+
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl p-10 border dark:border-white/10 transition-colors duration-300 flex items-center justify-center min-h-[260px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl p-10 border dark:border-white/10 transition-colors duration-300">

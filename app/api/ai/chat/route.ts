@@ -671,16 +671,27 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
-  async send_order_to_whatsapp({ orderId, phoneNumber, isMerchant }: { orderId: number; phoneNumber: string; isMerchant?: boolean }) {
+  async send_order_to_whatsapp({ orderId, phoneNumber, actorIsMerchant, callerPhone }: { orderId: number; phoneNumber: string; actorIsMerchant?: boolean; callerPhone?: string }) {
     const cleanPhone = normalizePhoneNumber(phoneNumber);
+    const cleanCallerPhone = callerPhone ? normalizePhoneNumber(callerPhone) : null;
+    const isMerchantActor = Boolean(actorIsMerchant);
     const order = await prisma.order.findUnique({
       where: { id: Number(orderId) },
       include: { store: true, items: { include: { product: true } } }
     });
 
     if (!order) return { error: "Order not found" };
+    if (!isMerchantActor) {
+      if (!cleanCallerPhone) return { error: "Unauthorized access" };
+      if (normalizePhoneNumber(order.customerPhone || "") !== cleanCallerPhone) {
+        return { error: "Unauthorized order access" };
+      }
+      if (cleanPhone !== cleanCallerPhone) {
+        return { error: "Unauthorized target phone" };
+      }
+    }
 
-    if (isMerchant) {
+    if (isMerchantActor) {
       const merchantMsg = await buildOrderMerchantSummary(order.id, "Summary Order");
       await sendWhatsAppMessage(cleanPhone, merchantMsg, order.id);
       return { success: true, message: "Order summary sent to merchant WhatsApp." };
@@ -746,9 +757,16 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { success: true, message: "Order details sent to WhatsApp." };
   },
 
-  async get_last_order_by_phone({ phoneNumber, isMerchant }: { phoneNumber: string; isMerchant?: boolean }) {
+  async get_last_order_by_phone({ phoneNumber, actorIsMerchant, callerPhone }: { phoneNumber: string; actorIsMerchant?: boolean; callerPhone?: string }) {
     await ensureStoreSettingsSchema();
     const cleanPhone = normalizePhoneNumber(phoneNumber);
+    const cleanCallerPhone = callerPhone ? normalizePhoneNumber(callerPhone) : null;
+    const isMerchantActor = Boolean(actorIsMerchant);
+    if (!isMerchantActor) {
+      if (!cleanCallerPhone || cleanCallerPhone !== cleanPhone) {
+        return { error: "Unauthorized access" };
+      }
+    }
     const order = await prisma.order.findFirst({
       where: { customerPhone: cleanPhone },
       orderBy: { createdAt: "desc" },
@@ -760,7 +778,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     if (!order) return { error: "No orders found for this phone number." };
 
-    if (isMerchant) {
+    if (isMerchantActor) {
       const merchantMsg = await buildOrderMerchantSummary(order.id, "Detail Order Terakhir");
       return { 
         success: true, 
@@ -1398,7 +1416,10 @@ Once an order is created:
           // Auto-inject isMerchant flag or corporateId
           const args = { ...call.args } as any;
           if (isMerchantUser) {
-            if (["send_order_to_whatsapp", "create_customer_order", "get_last_order_by_phone"].includes(call.name)) {
+            if (["send_order_to_whatsapp", "get_last_order_by_phone"].includes(call.name)) {
+              args.actorIsMerchant = true;
+            }
+            if (call.name === "create_customer_order") {
               args.isMerchant = true;
             }
             if (call.name === "get_corporate_stats" && !args.corporateId && corporateId) {
@@ -1411,6 +1432,9 @@ Once an order is created:
                }
             }
           }
+          if (context?.phoneNumber) {
+            args.callerPhone = context.phoneNumber;
+          }
 
           const sensitiveTools = new Set([
             "update_product_price",
@@ -1419,7 +1443,8 @@ Once an order is created:
             "toggle_store_open",
             "create_topup_payment_link",
             "get_store_stats",
-            "get_store_products"
+            "get_store_products",
+            "create_merchant_invoice"
           ]);
           if (sensitiveTools.has(call.name) && !isMerchantUser) {
             toolResponses.push({

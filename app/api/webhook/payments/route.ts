@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { applyWaTopup, grantBundleCredit } from '@/lib/wa-credit';
 import { createOrderNotification } from '@/lib/order-notifications';
@@ -29,7 +30,10 @@ export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
     const body = await req.json();
-    console.log('PAYMENT_WEBHOOK:', JSON.stringify(body, null, 2));
+    console.log('PAYMENT_WEBHOOK_RECEIVED', {
+      orderRef: body?.order_id || body?.external_id || body?.externalId,
+      status: body?.transaction_status || body?.status || body?.transactionStatus
+    });
 
     const orderRef = body.order_id || body.external_id || body.externalId;
     const transactionStatusRaw = body.transaction_status || body.status || body.transactionStatus;
@@ -45,6 +49,44 @@ export async function POST(req: NextRequest) {
 
     if (isNaN(id)) {
       return NextResponse.json({ error: 'Invalid Order ID' }, { status: 400 });
+    }
+
+    const signatureKey = String(body.signature_key || body.signatureKey || "").trim();
+    const statusCode = String(body.status_code || body.statusCode || "200").trim();
+    const grossAmountStr = String(gross_amount ?? "").trim();
+    const platform = await prisma.platformSettings.findUnique({
+      where: { key: "default" },
+      select: { midtransServerKey: true }
+    }).catch(() => null);
+    const candidateKeys = new Set<string>();
+    const platformKey = String(platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY || "").trim();
+    if (platformKey) candidateKeys.add(platformKey);
+
+    if (type === "SUB" || type === "TOPUP") {
+      const targetStore = await prisma.store.findUnique({
+        where: { id },
+        select: { paymentGatewaySecret: true }
+      }).catch(() => null);
+      const storeKey = String(targetStore?.paymentGatewaySecret || "").trim();
+      if (storeKey) candidateKeys.add(storeKey);
+    } else if (type === "ORDER") {
+      const targetOrder = await prisma.order.findUnique({
+        where: { id },
+        include: { store: { select: { paymentGatewaySecret: true } } }
+      }).catch(() => null);
+      const storeKey = String(targetOrder?.store?.paymentGatewaySecret || "").trim();
+      if (storeKey) candidateKeys.add(storeKey);
+    }
+
+    const isSignatureValid = signatureKey
+      ? Array.from(candidateKeys).some((serverKey) => {
+          const raw = `${orderRef}${statusCode}${grossAmountStr}${serverKey}`;
+          const expected = crypto.createHash("sha512").update(raw).digest("hex");
+          return expected === signatureKey;
+        })
+      : false;
+    if (process.env.NODE_ENV === "production" && !isSignatureValid) {
+      return NextResponse.json({ error: "Invalid payment signature" }, { status: 401 });
     }
 
     let status = 'PENDING';

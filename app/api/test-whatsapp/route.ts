@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { prisma } from '@/lib/prisma';
+import { GuardError, requireSuperAdminUser } from "@/lib/guards";
 
 export async function GET(req: NextRequest) {
-  const searchParams = req.nextUrl.searchParams;
-  const phone = searchParams.get('phone');
-
-  if (!phone) {
-    return NextResponse.json({ error: 'Missing phone parameter. Usage: ?phone=62812...' }, { status: 400 });
-  }
-
   try {
+    await requireSuperAdminUser();
+    const searchParams = req.nextUrl.searchParams;
+    const phone = searchParams.get('phone');
+    if (!phone) {
+      return NextResponse.json({ error: 'Missing phone parameter. Usage: ?phone=62812...' }, { status: 400 });
+    }
+
     // Get Demo Store ID (assuming it exists from seed)
     const store = await prisma.store.findFirst({ where: { slug: 'demo' } });
     
@@ -34,17 +35,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: `Message sent to ${phone}`,
-      debug: {
-        storeId: store.id,
-        usingPlatformToken: platform?.whatsappToken ? 'Yes' : 'No',
-        usingPlatformPhoneId: platform?.whatsappPhoneId ? `Yes (${maskedPhoneId})` : 'No',
-        usingEnvToken: process.env.WHATSAPP_TOKEN ? 'Yes' : 'No',
-        usingEnvPhoneId: process.env.WHATSAPP_PHONE_ID ? 'Yes' : 'No',
-        storePhoneId: store.whatsappPhoneId // Show what's in DB too
-      }
+      debug: { storeId: store.id, usingPlatformPhoneId: platform?.whatsappPhoneId ? `Yes (${maskedPhoneId})` : 'No' }
     });
 
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('[TEST_ERROR]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import midtransClient from "midtrans-client";
+import { GuardError, requireSessionUser } from "@/lib/guards";
 
 export async function POST(req: NextRequest) {
   try {
+    const sessionUser = await requireSessionUser();
     const body = await req.json();
     const { storeId, email, plan = 'ENTERPRISE' } = body;
 
@@ -28,6 +30,14 @@ export async function POST(req: NextRequest) {
 
     if (!store) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+    const userId = Number(sessionUser?.id);
+    const userStoreId = Number(sessionUser?.storeId);
+    const isSuperAdmin = sessionUser?.role === "SUPER_ADMIN";
+    const isOwner = userId === store.ownerId;
+    const isStoreUser = userStoreId === store.id;
+    if (!isSuperAdmin && !isOwner && !isStoreUser) {
+      return NextResponse.json({ error: 'Unauthorized store access' }, { status: 403 });
     }
 
     // Get Midtrans Keys from Platform Settings specifically for Subscriptions
@@ -84,6 +94,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
+    if (error instanceof GuardError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Subscription Checkout Error:', error);
     return NextResponse.json({ error: error.message || 'Subscription failed' }, { status: 500 });
   }

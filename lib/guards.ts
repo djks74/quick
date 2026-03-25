@@ -19,6 +19,14 @@ export async function requireSessionUser() {
   return user;
 }
 
+export async function requireSuperAdminUser() {
+  const user = await requireSessionUser();
+  if (user?.role !== "SUPER_ADMIN") {
+    throw new GuardError("Forbidden", 403);
+  }
+  return user;
+}
+
 export async function requireStoreAccessBySlug(slug: string) {
   if (!slug) {
     throw new GuardError("Missing slug", 400);
