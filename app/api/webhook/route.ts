@@ -484,11 +484,12 @@ export async function POST(req: NextRequest) {
         }
 
         try {
+          const isPlatformNumberForAi = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
           const aiStore = phoneNumberId
-            ? await prisma.store.findFirst({
+            ? (isPlatformNumberForAi ? null : await prisma.store.findFirst({
                 where: { whatsappPhoneId: String(phoneNumberId) },
                 select: { id: true }
-              })
+              }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
