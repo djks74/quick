@@ -58,6 +58,7 @@ const translations = {
     instant_launch: "Smart Search",
     easy_payment: "Instant Checkout",
     order_via_whatsapp: "Chat to Order",
+    order_via_whatsapp_help: "Tap to open Gercep WhatsApp and start ordering instantly.",
     new_order: "AI Order",
     whatsapp_features: "Your customers can search products and order just by chatting with our AI Assistant.",
     scan_demo: "Chat & Order via WhatsApp AI",
@@ -126,6 +127,7 @@ const translations = {
     instant_launch: "Pencarian Pintar",
     easy_payment: "Checkout Instan",
     order_via_whatsapp: "Chat untuk Pesan",
+    order_via_whatsapp_help: "Klik untuk membuka WhatsApp Gercep dan mulai pesan sekarang.",
     new_order: "Pesanan AI",
     whatsapp_features: "Pelanggan Anda bisa mencari produk dan pesan hanya dengan chatting dengan AI Assistant kami.",
     scan_demo: "Chat & Pesan via WhatsApp AI",
@@ -187,6 +189,7 @@ export default function Home() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [aiOpen, setAiOpen] = useState(false);
   const t = translations[lang];
+  const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep!%20Saya%20pelanggan%20baru.%20Tolong%20bantu%20cara%20pesan%20menu,%20pilih%20pengiriman,%20dan%20pembayaran.";
 
   const steps = [
     {
@@ -384,10 +387,18 @@ export default function Home() {
               
               {/* Bottom WhatsApp Button */}
               <div className="absolute bottom-6 left-6 right-6">
-                <div className="bg-[#25D366] text-white p-4 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold transform hover:scale-105 transition-transform cursor-pointer">
+                <a
+                  href={gercepWhatsAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#25D366] text-white p-4 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold transform hover:scale-105 transition-transform cursor-pointer"
+                >
                   <MessageCircle className="w-6 h-6" />
                   {t.order_via_whatsapp}
-                </div>
+                </a>
+                <p className="mt-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                  {t.order_via_whatsapp_help}
+                </p>
               </div>
             </div>
           </div>
