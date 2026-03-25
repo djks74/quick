@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
-import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
+import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey, finalizeMetaEmbeddedSignup } from "@/lib/api";
 import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe, HelpCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
@@ -122,6 +122,7 @@ export default function AdminSettings() {
 
   const [platformSettings, setPlatformSettings] = useState<any>(null);
   const [facebookAppIdError, setFacebookAppIdError] = useState<string | null>(null);
+  const [isMetaConnecting, setIsMetaConnecting] = useState(false);
 
   // Meta SDK Initialization for Embedded Signup
   useEffect(() => {
@@ -183,15 +184,37 @@ export default function AdminSettings() {
       alert("Facebook SDK not loaded. Please ensure a valid Facebook App ID is configured.");
       return;
     }
+    if (!storeId) {
+      alert("Store is not ready yet. Please refresh and try again.");
+      return;
+    }
     
-    (window as any).FB.login((response: any) => {
+    (window as any).FB.login(async (response: any) => {
       if (response.authResponse) {
-        const accessToken = response.authResponse.accessToken;
-        // The access token can be used to fetch the WABA ID and Phone Number ID
-        // In a real production app, you would send this to your backend
-        alert("Success! Connected to Facebook. Please copy your Token from the Facebook Developer Portal or use the one we just received (logged to console).");
-        console.log("Meta Access Token:", accessToken);
-        setSettings(prev => ({ ...prev, whatsappToken: accessToken }));
+        const accessToken = String(response.authResponse.accessToken || "");
+        setIsMetaConnecting(true);
+        try {
+          const result = await finalizeMetaEmbeddedSignup(storeId, accessToken);
+          if (!result?.success) {
+            alert(result?.error || "Meta signup connected, but Gercep failed to finalize setup.");
+            return;
+          }
+          setSettings(prev => ({
+            ...prev,
+            whatsappToken: accessToken,
+            whatsappPhoneId: result?.store?.whatsappPhoneId || prev.whatsappPhoneId,
+            whatsapp: result?.store?.whatsapp || prev.whatsapp,
+            enableWhatsApp: true
+          }));
+          setSaveMessage(`Meta connected: ${result?.selected?.displayPhoneNumber || result?.selected?.phoneId || "Phone linked"}`);
+          setTimeout(() => setSaveMessage(null), 4000);
+        } catch (error: any) {
+          alert(error?.message || "Failed to finalize Meta connection.");
+        } finally {
+          setIsMetaConnecting(false);
+        }
+      } else {
+        setIsMetaConnecting(false);
       }
     }, {
       scope: 'whatsapp_business_management,whatsapp_business_messaging',
@@ -1004,9 +1027,12 @@ export default function AdminSettings() {
                             </div>
                             <button 
                                 onClick={launchWhatsAppSignup}
-                                className="w-full sm:w-auto px-4 py-2 bg-[#1877F2] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors shadow-sm"
+                                disabled={isMetaConnecting}
+                                className="w-full sm:w-auto px-4 py-2 bg-[#1877F2] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors shadow-sm disabled:opacity-60"
                             >
+                                {isMetaConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : (
                                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                )}
                                 Connect with Facebook
                             </button>
                         </div>

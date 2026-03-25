@@ -140,7 +140,7 @@ export async function getStoreSettings(storeId: number | string) {
     if (!settings) return null;
 
     const canUseOwnIntegrationConfig =
-      settings.subscriptionPlan === "ENTERPRISE" &&
+      ["SOVEREIGN", "CORPORATE", "ENTERPRISE"].includes(String(settings.subscriptionPlan || "").toUpperCase()) &&
       settings.slug !== "demo";
 
     if (!canUseOwnIntegrationConfig) {
@@ -186,7 +186,9 @@ export async function updateStoreSettings(storeId: number, data: any) {
 
     if (!store) return null;
 
-    const canUseOwnIntegrationConfig = store.subscriptionPlan === "ENTERPRISE" && store.slug !== "demo";
+    const canUseOwnIntegrationConfig =
+      ["SOVEREIGN", "CORPORATE", "ENTERPRISE"].includes(String(store.subscriptionPlan || "").toUpperCase()) &&
+      store.slug !== "demo";
     const prevWebhookUrl = String(store.webhookUrl || "").trim();
 
     // 2. Update Store and User
@@ -295,6 +297,164 @@ export async function updateStoreSettings(storeId: number, data: any) {
   } catch (error) {
     console.error('Error updating store settings:', error);
     return null;
+  }
+}
+
+async function assertStoreManagementAccess(storeId: number) {
+  const session = await getServerSession(authOptions);
+  const user = (session as any)?.user;
+  if (!session || !user) {
+    throw new Error("Unauthorized");
+  }
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { id: true, ownerId: true, slug: true, subscriptionPlan: true, whatsapp: true }
+  });
+  if (!store) {
+    throw new Error("Store not found");
+  }
+  const role = String(user?.role || "");
+  if (role === "SUPER_ADMIN") {
+    return store;
+  }
+  const uid = Number(user?.id);
+  const userStoreId = Number(user?.storeId);
+  if (uid === store.ownerId || userStoreId === store.id) {
+    return store;
+  }
+  throw new Error("Forbidden");
+}
+
+async function graphApiGet(path: string, accessToken: string) {
+  const url = `https://graph.facebook.com/v21.0/${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(accessToken)}`;
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || data?.error) {
+    const msg = data?.error?.message || `Graph API error (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+export async function finalizeMetaEmbeddedSignup(storeId: number, accessToken: string, selectedPhoneId?: string) {
+  try {
+    await ensureStoreSettingsSchema();
+    const store = await assertStoreManagementAccess(Number(storeId));
+    const plan = String(store.subscriptionPlan || "").toUpperCase();
+    if (!["SOVEREIGN", "CORPORATE", "ENTERPRISE"].includes(plan) || store.slug === "demo") {
+      return { success: false, error: "Plan is not eligible for custom Meta integration" };
+    }
+    const token = String(accessToken || "").trim();
+    if (!token || token.length < 20) {
+      return { success: false, error: "Invalid Meta access token" };
+    }
+
+    const candidates: Array<{
+      businessId: string | null;
+      businessName: string | null;
+      wabaId: string;
+      wabaName: string | null;
+      phoneId: string;
+      displayPhoneNumber: string | null;
+      verifiedName: string | null;
+      nameStatus: string | null;
+      qualityRating: string | null;
+    }> = [];
+
+    const businesses = await graphApiGet("me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}}&limit=50", token).catch(() => null);
+    for (const biz of businesses?.data || []) {
+      for (const waba of biz?.owned_whatsapp_business_accounts?.data || []) {
+        for (const phone of waba?.phone_numbers?.data || []) {
+          if (!phone?.id) continue;
+          candidates.push({
+            businessId: biz?.id || null,
+            businessName: biz?.name || null,
+            wabaId: String(waba?.id),
+            wabaName: waba?.name || null,
+            phoneId: String(phone.id),
+            displayPhoneNumber: phone?.display_phone_number || null,
+            verifiedName: phone?.verified_name || null,
+            nameStatus: phone?.name_status || null,
+            qualityRating: phone?.quality_rating || null
+          });
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      const wabas = await graphApiGet("me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50", token).catch(() => null);
+      for (const waba of wabas?.data || []) {
+        for (const phone of waba?.phone_numbers?.data || []) {
+          if (!phone?.id) continue;
+          candidates.push({
+            businessId: null,
+            businessName: null,
+            wabaId: String(waba?.id),
+            wabaName: waba?.name || null,
+            phoneId: String(phone.id),
+            displayPhoneNumber: phone?.display_phone_number || null,
+            verifiedName: phone?.verified_name || null,
+            nameStatus: phone?.name_status || null,
+            qualityRating: phone?.quality_rating || null
+          });
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      return { success: false, error: "No WhatsApp Business phone number found on this Meta account" };
+    }
+
+    const selectedId = String(selectedPhoneId || "").trim();
+    const chosen =
+      (selectedId ? candidates.find((c) => c.phoneId === selectedId) : null) ||
+      candidates.find((c) => ["APPROVED", "ACTIVE", "AVAILABLE"].includes(String(c.nameStatus || "").toUpperCase())) ||
+      candidates[0];
+
+    if (!chosen?.phoneId) {
+      return { success: false, error: "No eligible phone number found" };
+    }
+
+    const updated = await prisma.store.update({
+      where: { id: store.id },
+      data: {
+        whatsappToken: token,
+        whatsappPhoneId: chosen.phoneId,
+        whatsapp: chosen.displayPhoneNumber || store.whatsapp || null,
+        enableWhatsApp: true
+      },
+      select: {
+        id: true,
+        slug: true,
+        whatsapp: true,
+        whatsappPhoneId: true,
+        enableWhatsApp: true
+      }
+    });
+
+    return {
+      success: true,
+      store: updated,
+      selected: {
+        phoneId: chosen.phoneId,
+        displayPhoneNumber: chosen.displayPhoneNumber,
+        verifiedName: chosen.verifiedName,
+        wabaId: chosen.wabaId,
+        wabaName: chosen.wabaName,
+        businessId: chosen.businessId,
+        businessName: chosen.businessName
+      },
+      discoveredPhones: candidates.map((c) => ({
+        phoneId: c.phoneId,
+        displayPhoneNumber: c.displayPhoneNumber,
+        verifiedName: c.verifiedName,
+        nameStatus: c.nameStatus,
+        wabaId: c.wabaId,
+        wabaName: c.wabaName
+      }))
+    };
+  } catch (error: any) {
+    return { success: false, error: error?.message || "Failed to finalize Meta signup" };
   }
 }
 
