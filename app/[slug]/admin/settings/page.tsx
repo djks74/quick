@@ -217,6 +217,7 @@ export default function AdminSettings() {
             });
             const result = await response.json();
             if (!result?.success) {
+              console.error("Meta Signup Error Debug:", result?.metaDebug);
               alert(result?.error || "Meta signup connected, but Gercep failed to finalize setup.");
               return;
             }

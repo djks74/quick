@@ -113,7 +113,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (candidates.length === 0) {
-      return NextResponse.json({ success: false, error: "No WhatsApp Business phone number found on this Meta account" }, { status: 404 });
+      console.log("[META_SIGNUP] No candidates found. Businesses:", JSON.stringify(businesses), "WABAs:", JSON.stringify(wabas));
+      return NextResponse.json({ 
+        success: false, 
+        error: "No WhatsApp Business phone number found on this Meta account.",
+        metaDebug: {
+          businessesFound: businesses?.data?.length || 0,
+          wabasFound: wabas?.data?.length || 0,
+          rawBusinesses: businesses,
+          rawWabas: wabas
+        }
+      }, { status: 404 });
     }
 
     const chosen =
