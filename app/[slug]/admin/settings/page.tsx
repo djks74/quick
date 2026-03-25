@@ -242,6 +242,8 @@ export default function AdminSettings() {
     }, {
       scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
       config_id: signupConfigId,
+      response_type: 'code',
+      override_default_response_type: true,
       extras: {
         feature: 'whatsapp_embedded_signup',
         setup: {
