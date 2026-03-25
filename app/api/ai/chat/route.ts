@@ -33,12 +33,13 @@ function isGercepOutOfScopeMessage(input: string) {
     "gercep", "toko", "resto", "restaurant", "store", "menu", "produk", "product", "pesan", "order",
     "delivery", "pengiriman", "kurir", "checkout", "bayar", "payment", "qris", "transfer", "stok",
     "inventory", "kasir", "cashier", "outlet", "meja", "table", "wa", "whatsapp", "promo", "diskon",
-    "sales", "omzet", "performa", "topup", "saldo"
+    "sales", "omzet", "performa", "topup", "saldo", "cara", "help", "bantuan", "panduan", "guide"
   ];
   const outOfScopeKeywords = [
     "coding", "koding", "programming", "python", "javascript", "react", "nextjs", "typescript", "sql",
     "algoritma", "algorithm", "matematika", "fisika", "kimia", "biologi", "sejarah", "politik", "agama",
-    "berita", "news", "crypto", "saham", "trading", "cuaca", "weather", "ramalan", "horoscope", "game"
+    "berita", "news", "crypto", "saham", "trading", "cuaca", "weather", "ramalan", "horoscope", "game",
+    "recipe", "resep", "masak", "cooking", "how to make", "cara membuat", "write a code", "buatkan kode"
   ];
   const hasScope = scopeKeywords.some((kw) => text.includes(kw));
   if (hasScope) return false;
@@ -77,14 +78,27 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
 
   let effectiveLocation = providedLocation;
   if (!effectiveLocation) {
-    const locationMatch = normalized.match(/(?:sekitar|dekat|di area|area|nearby|near)\s+([a-z0-9\p{L}\s-]+)/iu);
+    // Improved regex to capture location even without "sekitar/dekat"
+    const locationMatch = normalized.match(/(?:sekitar|dekat|di area|area|nearby|near|di)\s+([a-z0-9\p{L}\s-]+)/iu);
     if (locationMatch?.[1]) {
       effectiveLocation = locationMatch[1].trim();
+    } else {
+      // If no explicit location keyword, check if the last word might be a location
+      const words = normalized.split(" ");
+      if (words.length > 1) {
+        const lastWord = words[words.length - 1];
+        // Simple heuristic: if last word is not a common food/action word, it might be a location
+        const commonNonLocationWords = ["toko", "resto", "makanan", "minuman", "menu", "pesan", "order", "ada", "cari", "bisa", "tolong"];
+        if (!commonNonLocationWords.includes(lastWord) && lastWord.length > 3) {
+          // We don't set it as effectiveLocation automatically to avoid false positives, 
+          // but we keep it in the query.
+        }
+      }
     }
   }
 
   let cleanedQuery = normalized
-    .replace(/(?:\bapa ada\b|\badakah\b|\bada gak\b|\bada tak\b|\btolong\b|\bbisa\b|\bcari\b|\bfind\b|\bsearch\b|\bresto\b|\btoko\b|\bstore\b|\brestaurant\b|\bmakanan\b|\bkuliner\b|\bdi sekitar\b|\bsekitar\b|\bdekat\b|\bdi area\b|\barea\b|\bnearby\b|\bnear\b)/giu, " ")
+    .replace(/(?:\bapa ada\b|\badakah\b|\bada gak\b|\bada tak\b|\btolong\b|\bbisa\b|\bcari\b|\bfind\b|\bsearch\b|\bresto\b|\btoko\b|\bstore\b|\brestaurant\b|\bmakanan\b|\bkuliner\b|\bdi sekitar\b|\bsekitar\b|\bdekat\b|\bdi area\b|\barea\b|\bnearby\b|\bnear\b|\bdi\b)/giu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
