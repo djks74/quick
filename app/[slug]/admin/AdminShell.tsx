@@ -35,7 +35,6 @@ import { useAdmin } from "@/lib/admin-context";
 import { signOut, useSession } from "next-auth/react";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import ThemeToggle from "@/components/ThemeToggle";
-import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
 import AdminChat from "@/components/AdminChat";
 
 interface SidebarItem {
@@ -210,9 +209,25 @@ export default function AdminShell({
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
-      let rows: any;
       try {
-        rows = await getOrderNotifications(store.id, 25);
+        const res = await fetch(`/api/admin/order-notifications?slug=${encodeURIComponent(store.slug)}&limit=25`, { cache: "no-store" });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload?.success) {
+          throw new Error(payload?.error || "Failed to load notifications");
+        }
+        const rows = payload.notifications as any[];
+        if (!mounted) return;
+        const nextRows = rows as any[];
+        if (!notificationsReadyRef.current) {
+          notificationsReadyRef.current = true;
+          knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+          setNotifications(nextRows);
+          return;
+        }
+        const newItems = nextRows.filter((n) => !knownNotificationIdsRef.current.has(n.id));
+        knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+        newItems.slice(0, 3).forEach(pushToast);
+        setNotifications(rows as any[]);
       } catch (error: any) {
         const message = String(error?.message || error || "");
         if (message.includes("Failed to find Server Action")) {
@@ -221,18 +236,6 @@ export default function AdminShell({
         }
         return;
       }
-      if (!mounted) return;
-      const nextRows = rows as any[];
-      if (!notificationsReadyRef.current) {
-        notificationsReadyRef.current = true;
-        knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
-        setNotifications(nextRows);
-        return;
-      }
-      const newItems = nextRows.filter((n) => !knownNotificationIdsRef.current.has(n.id));
-      knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
-      newItems.slice(0, 3).forEach(pushToast);
-      setNotifications(rows as any[]);
     };
     refresh();
     const timer = setInterval(refresh, 10000);
@@ -247,7 +250,13 @@ export default function AdminShell({
   }, [pathname]);
 
   const markOneRead = async (id: number) => {
-    const ok = await markOrderNotificationRead(id);
+    const res = await fetch("/api/admin/order-notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: store.slug, id })
+    }).catch(() => null);
+    const payload = res ? await res.json().catch(() => null) : null;
+    const ok = Boolean(payload?.success);
     if (ok) setNotifications(prev => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
   };
 
@@ -255,11 +264,18 @@ export default function AdminShell({
     // Optimistic UI update
     setNotifications(prev => prev.map((n) => ({ ...n, isRead: true })));
     
-    const ok = await markAllOrderNotificationsRead(store.id);
+    const res = await fetch("/api/admin/order-notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: store.slug, action: "mark_all_read" })
+    }).catch(() => null);
+    const payload = res ? await res.json().catch(() => null) : null;
+    const ok = Boolean(payload?.success);
     if (!ok) {
       // Refresh to sync with server state
-      const rows = await getOrderNotifications(store.id, 25);
-      setNotifications(rows as any[]);
+      const reload = await fetch(`/api/admin/order-notifications?slug=${encodeURIComponent(store.slug)}&limit=25`, { cache: "no-store" }).catch(() => null);
+      const reloadPayload = reload ? await reload.json().catch(() => null) : null;
+      if (reloadPayload?.success) setNotifications(reloadPayload.notifications as any[]);
     }
   };
 

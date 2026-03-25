@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getOrderNotifications, markAllOrderNotificationsRead, markOrderNotificationRead } from "@/lib/api";
 
 type Row = {
   id: number;
@@ -33,8 +32,12 @@ export default function OrderNotificationsPanel({
 
   const refresh = useCallback(async () => {
     try {
-      const rows = await getOrderNotifications(storeId, 25);
-      setItems(rows as any);
+      const res = await fetch(`/api/admin/order-notifications?slug=${encodeURIComponent(String((window as any).__STORE_SLUG__ || ""))}&limit=25`, { cache: "no-store" });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.error || "Failed to load notifications");
+      }
+      setItems(payload.notifications as any);
     } catch (error: any) {
       const message = String(error?.message || error || "");
       if (message.includes("Failed to find Server Action")) {
@@ -50,7 +53,14 @@ export default function OrderNotificationsPanel({
   }, [refresh]);
 
   const markRead = async (id: number) => {
-    const ok = await markOrderNotificationRead(id);
+    const slug = String((window as any).__STORE_SLUG__ || "");
+    const res = await fetch("/api/admin/order-notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, id })
+    }).catch(() => null);
+    const payload = res ? await res.json().catch(() => null) : null;
+    const ok = Boolean(payload?.success);
     if (ok) setItems((prev) => prev.map((p) => (p.id === id ? { ...p, isRead: true } : p)));
   };
 
@@ -58,7 +68,14 @@ export default function OrderNotificationsPanel({
     // Optimistic UI update
     setItems((prev) => prev.map((p) => ({ ...p, isRead: true })));
     
-    const ok = await markAllOrderNotificationsRead(storeId);
+    const slug = String((window as any).__STORE_SLUG__ || "");
+    const res = await fetch("/api/admin/order-notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, action: "mark_all_read" })
+    }).catch(() => null);
+    const payload = res ? await res.json().catch(() => null) : null;
+    const ok = Boolean(payload?.success);
     if (!ok) {
       // Rollback on failure
       refresh();
