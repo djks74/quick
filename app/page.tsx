@@ -189,7 +189,7 @@ export default function Home() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [aiOpen, setAiOpen] = useState(false);
   const t = translations[lang];
-  const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep,%20tolong%20bantu%20cara%20cari%20toko/resto%20dan%20pesan%20menu,%20pengiriman%20dan%20pembayaran.";
+  const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep,%20bisa%20pandu%20saya%20langkah%20cari%20resto,%20pilih%20menu,%20sampai%20proses%20bayar%20dan%20pengiriman%3F";
 
   const steps = [
     {
