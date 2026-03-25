@@ -12,6 +12,14 @@ import { logTraffic } from '@/lib/traffic';
 import { getDistanceMeters } from '@/lib/utils';
 
 type WaLang = "id" | "en";
+const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
+
+const isSessionExpired = (updatedAt?: Date | string | null, ttlMs: number = SESSION_CONTEXT_TTL_MS) => {
+  if (!updatedAt) return true;
+  const ts = new Date(updatedAt).getTime();
+  if (!Number.isFinite(ts)) return true;
+  return (Date.now() - ts) > ttlMs;
+};
 
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
@@ -414,6 +422,15 @@ export async function POST(req: NextRequest) {
       let aiSession = await prisma.whatsAppSession.findFirst({
         where: { phoneNumber: from, step: "AI_MODE" }
       });
+      if (aiSession && isSessionExpired(aiSession.updatedAt)) {
+        await prisma.whatsAppSession
+          .update({
+            where: { id: aiSession.id },
+            data: { step: "START", cart: [], metadata: {} as any, tableNumber: null }
+          })
+          .catch(() => null);
+        aiSession = null;
+      }
 
       if (isAICommand || aiSession) {
         // Switch to AI Mode if command used
@@ -694,7 +711,7 @@ export async function POST(req: NextRequest) {
               orderBy: { updatedAt: 'desc' }
            });
            
-           if (recentSession && recentSession.storeId) {
+           if (recentSession && recentSession.storeId && !isSessionExpired(recentSession.updatedAt)) {
               const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
               
               // If merchant in user mode, only use this session if it's not their own store
@@ -727,6 +744,13 @@ export async function POST(req: NextRequest) {
 
       console.log(`[WHATSAPP] Incoming: "${textBody}" from ${from}, STORE: ${targetStore.name}`);
       const session = await getSession(from, targetStore.id);
+      if (isSessionExpired(session.updatedAt)) {
+        await updateSession(from, targetStore.id, { step: 'START', cart: [], metadata: {} as any, tableNumber: null });
+        session.step = 'START';
+        session.cart = [];
+        session.metadata = {} as any;
+        session.tableNumber = null as any;
+      }
 
       const deliveryLocationCtx =
         session.step && session.step.startsWith("DELIVERY_LOCATION:")

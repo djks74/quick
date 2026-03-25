@@ -58,7 +58,7 @@ const translations = {
     instant_launch: "Smart Search",
     easy_payment: "Instant Checkout",
     order_via_whatsapp: "Chat to Order",
-    order_via_whatsapp_help: "Tap to open Gercep WhatsApp and start ordering instantly.",
+    order_via_whatsapp_help: "Tap to find the nearest store/resto or ask anything you need.",
     new_order: "AI Order",
     whatsapp_features: "Your customers can search products and order just by chatting with our AI Assistant.",
     scan_demo: "Chat & Order via WhatsApp AI",
@@ -127,7 +127,7 @@ const translations = {
     instant_launch: "Pencarian Pintar",
     easy_payment: "Checkout Instan",
     order_via_whatsapp: "Chat untuk Pesan",
-    order_via_whatsapp_help: "Klik untuk membuka WhatsApp Gercep dan mulai pesan sekarang.",
+    order_via_whatsapp_help: "Klik untuk cari toko/resto terdekat atau tanya kebutuhanmu.",
     new_order: "Pesanan AI",
     whatsapp_features: "Pelanggan Anda bisa mencari produk dan pesan hanya dengan chatting dengan AI Assistant kami.",
     scan_demo: "Chat & Pesan via WhatsApp AI",
@@ -189,7 +189,7 @@ export default function Home() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [aiOpen, setAiOpen] = useState(false);
   const t = translations[lang];
-  const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep!%20Saya%20pelanggan%20baru.%20Tolong%20bantu%20cara%20pesan%20menu,%20pilih%20pengiriman,%20dan%20pembayaran.";
+  const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep!%20Tolong%20bantu%20saya%20cari%20toko/resto%20terdekat,%20atau%20saya%20bisa%20tanya%20kebutuhan%20saya%20di%20sini.";
 
   const steps = [
     {
