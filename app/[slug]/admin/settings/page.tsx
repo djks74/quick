@@ -133,12 +133,15 @@ export default function AdminSettings() {
       if (platRes?.ok) {
         const platData = await platRes.json();
         setPlatformSettings(platData.settings);
+        if (platData?.facebookAppId) {
+          appIdCandidate = String(platData.facebookAppId);
+        }
         if (platData.settings?.facebookAppId) {
           appIdCandidate = String(platData.settings.facebookAppId);
         }
       }
 
-      const appId = appIdCandidate.trim();
+      const appId = appIdCandidate.trim().replace(/[^\d]/g, "");
       if (!/^\d{5,30}$/.test(appId)) {
         setFacebookAppIdError("Facebook App ID is missing or invalid. Please update it in Super Admin settings.");
         return;
@@ -189,30 +192,32 @@ export default function AdminSettings() {
       return;
     }
     
-    (window as any).FB.login(async (response: any) => {
+    (window as any).FB.login((response: any) => {
       if (response.authResponse) {
         const accessToken = String(response.authResponse.accessToken || "");
-        setIsMetaConnecting(true);
-        try {
-          const result = await finalizeMetaEmbeddedSignup(storeId, accessToken);
-          if (!result?.success) {
-            alert(result?.error || "Meta signup connected, but Gercep failed to finalize setup.");
-            return;
+        void (async () => {
+          setIsMetaConnecting(true);
+          try {
+            const result = await finalizeMetaEmbeddedSignup(storeId, accessToken);
+            if (!result?.success) {
+              alert(result?.error || "Meta signup connected, but Gercep failed to finalize setup.");
+              return;
+            }
+            setSettings(prev => ({
+              ...prev,
+              whatsappToken: accessToken,
+              whatsappPhoneId: result?.store?.whatsappPhoneId || prev.whatsappPhoneId,
+              whatsapp: result?.store?.whatsapp || prev.whatsapp,
+              enableWhatsApp: true
+            }));
+            setSaveMessage(`Meta connected: ${result?.selected?.displayPhoneNumber || result?.selected?.phoneId || "Phone linked"}`);
+            setTimeout(() => setSaveMessage(null), 4000);
+          } catch (error: any) {
+            alert(error?.message || "Failed to finalize Meta connection.");
+          } finally {
+            setIsMetaConnecting(false);
           }
-          setSettings(prev => ({
-            ...prev,
-            whatsappToken: accessToken,
-            whatsappPhoneId: result?.store?.whatsappPhoneId || prev.whatsappPhoneId,
-            whatsapp: result?.store?.whatsapp || prev.whatsapp,
-            enableWhatsApp: true
-          }));
-          setSaveMessage(`Meta connected: ${result?.selected?.displayPhoneNumber || result?.selected?.phoneId || "Phone linked"}`);
-          setTimeout(() => setSaveMessage(null), 4000);
-        } catch (error: any) {
-          alert(error?.message || "Failed to finalize Meta connection.");
-        } finally {
-          setIsMetaConnecting(false);
-        }
+        })();
       } else {
         setIsMetaConnecting(false);
       }
