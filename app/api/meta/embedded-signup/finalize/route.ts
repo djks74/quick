@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
       qualityRating: string | null;
     }> = [];
 
-    const businesses = await graphApiGet("me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}}&limit=50", accessToken).catch(() => null);
+    const businesses = await graphApiGet("me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}}&limit=50", accessToken).catch((e) => {
+      console.error("[META_API_ERROR] businesses:", e);
+      return null;
+    });
     for (const biz of businesses?.data || []) {
       for (const waba of biz?.owned_whatsapp_business_accounts?.data || []) {
         for (const phone of waba?.phone_numbers?.data || []) {
@@ -93,7 +96,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (candidates.length === 0) {
-      const wabas = await graphApiGet("me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50", accessToken).catch(() => null);
+      const wabas = await graphApiGet("me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50", accessToken).catch((e) => {
+        console.error("[META_API_ERROR] wabas:", e);
+        return null;
+      });
       for (const waba of wabas?.data || []) {
         for (const phone of waba?.phone_numbers?.data || []) {
           if (!phone?.id) continue;
@@ -119,7 +125,8 @@ export async function POST(req: NextRequest) {
         error: "No WhatsApp Business phone number found on this Meta account.",
         metaDebug: {
           businessesFound: businesses?.data?.length || 0,
-          rawBusinesses: businesses
+          rawBusinesses: businesses,
+          tokenLength: accessToken.length
         }
       }, { status: 404 });
     }
