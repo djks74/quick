@@ -93,20 +93,23 @@ export async function sendMerchantWhatsApp(storeId: number, text: string, orderI
     console.log(`[MERCHANT_ALERT] Store: ${store.name}. Recipients:`, phones);
     
     let overallSuccess = false;
-
-    for (const phone of phones) {
-      console.log(`[MERCHANT_NOTIF] Attempting send to ${phone} for store ${store.name} (#${store.id})`);
-
-      // Use store.id so it uses store branding if available (Sovereign)
-      // sendWhatsAppMessage will fallback to platform account if store config is missing.
-      // Merchant alerts are NOT system alerts in terms of billing; they should use store credit if available.
-      let sent = await sendWhatsAppMessage(phone, text, store.id);
-
-      if (sent) {
+    const chunkSize = 3;
+    for (let i = 0; i < phones.length; i += chunkSize) {
+      const chunk = phones.slice(i, i + chunkSize);
+      const results = await Promise.allSettled(
+        chunk.map(async (phone) => {
+          console.log(`[MERCHANT_NOTIF] Attempting send to ${phone} for store ${store.name} (#${store.id})`);
+          const sent = await sendWhatsAppMessage(phone, text, store.id);
+          if (sent) {
+            console.log(`[MERCHANT_NOTIF] Successfully sent to ${phone}`);
+          } else {
+            console.error(`[MERCHANT_NOTIF] FAILED to send to ${phone} for store ${store.name}`);
+          }
+          return sent;
+        })
+      );
+      if (results.some((r) => r.status === "fulfilled" && r.value)) {
         overallSuccess = true;
-        console.log(`[MERCHANT_NOTIF] Successfully sent to ${phone}`);
-      } else {
-        console.error(`[MERCHANT_NOTIF] FAILED to send to ${phone} for store ${store.name}`);
       }
     }
 

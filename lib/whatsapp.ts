@@ -7,7 +7,15 @@ type WaResolvedConfig = {
   useEnterpriseConfig: boolean;
 };
 
+const WA_CONFIG_CACHE_TTL_MS = 30 * 1000;
+const waConfigCache = new Map<number, { value: WaResolvedConfig; expiresAt: number }>();
+
 async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig> {
+  const cached = waConfigCache.get(storeId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const store = storeId > 0 ? await prisma.store.findUnique({ where: { id: storeId } }) : null;
   const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
 
@@ -24,7 +32,9 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
     useEnterpriseConfig = true;
   }
 
-  return { token, phoneNumberId, useEnterpriseConfig };
+  const resolved = { token, phoneNumberId, useEnterpriseConfig };
+  waConfigCache.set(storeId, { value: resolved, expiresAt: Date.now() + WA_CONFIG_CACHE_TTL_MS });
+  return resolved;
 }
 
 async function dispatchWhatsAppMessage(formattedTo: string, message: string, token: string, phoneNumberId: string, options?: { buttonText?: string, buttonUrl?: string, imageUrl?: string }) {

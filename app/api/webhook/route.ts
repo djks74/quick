@@ -372,7 +372,7 @@ export async function POST(req: NextRequest) {
     const l = (idText: string, enText: string) => (lang === "en" ? enText : idText);
 
     // Log WhatsApp Traffic
-      await logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id });
+      logTraffic(undefined, "WHATSAPP", { from, text: textBody, messageId: message.id }).catch(() => null);
 
       // --- SENDER IDENTIFICATION ---
       const senderPhoneVariants = (() => {
@@ -493,38 +493,38 @@ export async function POST(req: NextRequest) {
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
-          const res = await fetch(`${baseUrl}/api/ai/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              message: finalPrompt, 
-              history, 
-              isPublic: true,
-              context: {
-                phoneNumber: from,
-                channel: "WHATSAPP",
-                storeId: aiStoreId || undefined,
-                tableNumber: aiSession?.tableNumber || undefined,
-                location: (message as any).location, // Pass location if available
-                userName: dbUser?.name || undefined,
-                userRole: dbUser?.role || undefined,
-                subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined
-              }
-            })
-          });
+          const aiAbortController = new AbortController();
+          const aiTimeout = setTimeout(() => aiAbortController.abort(), 12000);
+          let res: Response;
+          try {
+            res = await fetch(`${baseUrl}/api/ai/chat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: aiAbortController.signal,
+              body: JSON.stringify({ 
+                message: finalPrompt, 
+                history, 
+                isPublic: true,
+                context: {
+                  phoneNumber: from,
+                  channel: "WHATSAPP",
+                  storeId: aiStoreId || undefined,
+                  tableNumber: aiSession?.tableNumber || undefined,
+                  location: (message as any).location, // Pass location if available
+                  userName: dbUser?.name || undefined,
+                  userRole: dbUser?.role || undefined,
+                  subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined
+                }
+              })
+            });
+          } finally {
+            clearTimeout(aiTimeout);
+          }
+          if (!res.ok) {
+            throw new Error(`AI route failed with status ${res.status}`);
+          }
           const data = await res.json();
           if (data.text) {
-            // Update session with new history
-            await prisma.whatsAppSession.update({
-              where: { id: aiSession?.id || 0 },
-              data: { 
-                metadata: { 
-                  ...((aiSession as any)?.metadata || {}),
-                  chatHistory: data.history || [] 
-                } 
-              } as any
-            });
-
             // If there's a breakdown, show it before the main text
             const rawResponseText = data.breakdown
               ? `${data.breakdown}\n\n${data.text}`
@@ -541,8 +541,22 @@ export async function POST(req: NextRequest) {
               buttonUrl: data.paymentUrl || undefined,
               imageUrl: data.productImage || undefined
             };
-
-            await sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any);
+            const persistHistoryPromise = (aiSession?.id
+              ? prisma.whatsAppSession.update({
+                  where: { id: aiSession.id },
+                  data: {
+                    metadata: {
+                      ...((aiSession as any)?.metadata || {}),
+                      chatHistory: data.history || []
+                    }
+                  } as any
+                })
+              : Promise.resolve(null)
+            ).catch(() => null);
+            await Promise.all([
+              persistHistoryPromise,
+              sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any)
+            ]);
           } else {
             await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", aiStoreId);
           }

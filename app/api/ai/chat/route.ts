@@ -26,6 +26,42 @@ function normalizePhoneNumber(phone: string) {
   return clean;
 }
 
+function normalizeStoreSearchInput(query: string, locationContext?: string) {
+  const raw = String(query || "").trim();
+  const providedLocation = String(locationContext || "").trim();
+  const normalized = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  let effectiveLocation = providedLocation;
+  if (!effectiveLocation) {
+    const locationMatch = normalized.match(/(?:sekitar|dekat|di area|area|nearby|near)\s+([a-z0-9\p{L}\s-]+)/iu);
+    if (locationMatch?.[1]) {
+      effectiveLocation = locationMatch[1].trim();
+    }
+  }
+
+  let cleanedQuery = normalized
+    .replace(/(?:\bapa ada\b|\badakah\b|\bada gak\b|\bada tak\b|\btolong\b|\bbisa\b|\bcari\b|\bfind\b|\bsearch\b|\bresto\b|\btoko\b|\bstore\b|\brestaurant\b|\bmakanan\b|\bkuliner\b|\bdi sekitar\b|\bsekitar\b|\bdekat\b|\bdi area\b|\barea\b|\bnearby\b|\bnear\b)/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (effectiveLocation) {
+    const escapedLocation = effectiveLocation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    cleanedQuery = cleanedQuery
+      .replace(new RegExp(`\\b${escapedLocation}\\b`, "iu"), " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return {
+    keyword: cleanedQuery,
+    effectiveLocation
+  };
+}
+
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
 
@@ -33,47 +69,70 @@ const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
 const tools: Record<string, (args: any) => Promise<any>> = {
   async search_stores({ query, location_context, latitude, longitude }: { query: string, location_context?: string, latitude?: number, longitude?: number }) {
     await ensureStoreSettingsSchema();
-    const where: any = {
-      isActive: true,
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        { slug: { contains: query, mode: "insensitive" } },
-        { categories: { some: { name: { contains: query, mode: "insensitive" } } } },
-        { products: { some: { name: { contains: query, mode: "insensitive" } } } }
-      ]
-    };
-
-    if (location_context) {
-      where.AND = [
-        {
-          OR: [
-            { shippingSenderAddress: { contains: location_context, mode: "insensitive" } },
-            { shippingSenderPostalCode: { contains: location_context, mode: "insensitive" } }
-          ]
-        }
-      ];
-    }
-
-    let stores = await prisma.store.findMany({
-      where,
-      select: { 
-        name: true, 
-        slug: true,
-        whatsapp: true,
-        shippingSenderAddress: true,
-        shippingSenderName: true,
-        shippingSenderPostalCode: true,
-        biteshipOriginLat: true,
-        biteshipOriginLng: true,
-        categories: { select: { name: true }, take: 2 },
-        products: { 
-          where: { name: { contains: query, mode: "insensitive" } },
+    const { keyword, effectiveLocation } = normalizeStoreSearchInput(String(query || ""), location_context);
+    const productSelect: any = keyword
+      ? {
+          where: { name: { contains: keyword, mode: "insensitive" } },
           select: { name: true },
           take: 2
         }
-      },
-      take: 20 // Fetch more to filter by distance
+      : { select: { name: true }, take: 0 };
+
+    const selectShape: any = {
+      name: true,
+      slug: true,
+      whatsapp: true,
+      shippingSenderAddress: true,
+      shippingSenderName: true,
+      shippingSenderPostalCode: true,
+      biteshipOriginLat: true,
+      biteshipOriginLng: true,
+      categories: { select: { name: true }, take: 2 },
+      products: productSelect
+    };
+
+    const keywordOr = keyword
+      ? [
+          { name: { contains: keyword, mode: "insensitive" } },
+          { slug: { contains: keyword, mode: "insensitive" } },
+          { categories: { some: { name: { contains: keyword, mode: "insensitive" } } } },
+          { products: { some: { name: { contains: keyword, mode: "insensitive" } } } }
+        ]
+      : [];
+    const locationOr = effectiveLocation
+      ? [
+          { shippingSenderAddress: { contains: effectiveLocation, mode: "insensitive" } },
+          { shippingSenderPostalCode: { contains: effectiveLocation, mode: "insensitive" } },
+          { name: { contains: effectiveLocation, mode: "insensitive" } },
+          { slug: { contains: effectiveLocation, mode: "insensitive" } }
+        ]
+      : [];
+    const baseWhere: any = { isActive: true };
+    const strictWhere: any = { ...baseWhere };
+    if (keywordOr.length > 0) strictWhere.OR = keywordOr;
+    if (locationOr.length > 0) strictWhere.AND = [{ OR: locationOr }];
+
+    let stores = await prisma.store.findMany({
+      where: strictWhere,
+      select: selectShape,
+      take: 20
     });
+
+    if (stores.length === 0 && locationOr.length > 0) {
+      stores = await prisma.store.findMany({
+        where: { ...baseWhere, OR: locationOr },
+        select: selectShape,
+        take: 20
+      });
+    }
+
+    if (stores.length === 0 && keywordOr.length > 0) {
+      stores = await prisma.store.findMany({
+        where: { ...baseWhere, OR: keywordOr },
+        select: selectShape,
+        take: 20
+      });
+    }
 
     if (latitude && longitude) {
       const mapped = stores.map(s => {
@@ -89,10 +148,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         return { ...s, distance };
       });
 
-      // Filter: If coordinates provided, only show stores with coordinates OR within 50km if distance known
-      // Also sort by distance
       stores = mapped
-        .filter(s => s.distance === null || s.distance <= 50000) // 50km limit for "nearby"
+        .filter(s => s.distance === null || s.distance <= 50000)
         .sort((a, b) => (a.distance || 999999) - (b.distance || 999999))
         .slice(0, 5) as any;
     } else {
@@ -1116,7 +1173,7 @@ Once an order is created:
           functionDeclarations: [
             {
               name: "search_stores",
-              description: "Find restaurants or stores by name, food category, or specific product. Use this if the user asks for a product or 'nearby' stores.",
+              description: "Find restaurants or stores by name/product/category and nearby area. For nearby intent, keep area in location_context (e.g. Ciputat) and keep query concise.",
               parameters: {
                 type: "object",
                 properties: {
@@ -1326,7 +1383,7 @@ Once an order is created:
     console.log(`[AI_CHAT] Gemini response calls count: ${calls.length}`);
 
     // 2. Handle Function Calls (Loop until no more calls)
-    const MAX_ITERATIONS = 5;
+    const MAX_ITERATIONS = 3;
     let iterations = 0;
 
     let finalBreakdown = undefined;
