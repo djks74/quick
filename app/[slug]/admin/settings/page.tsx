@@ -239,7 +239,7 @@ export default function AdminSettings() {
         setIsMetaConnecting(false);
       }
     }, {
-      scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
       config_id: signupConfigId,
       response_type: 'code',
       override_default_response_type: true,
