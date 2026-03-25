@@ -72,60 +72,39 @@ export async function POST(req: NextRequest) {
       qualityRating: string | null;
     }> = [];
 
-    const businesses = await graphApiGet("me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}}&limit=50", accessToken).catch((e) => {
-      console.error("[META_API_ERROR] businesses:", e);
-      return null;
-    });
-    for (const biz of businesses?.data || []) {
-      for (const waba of biz?.owned_whatsapp_business_accounts?.data || []) {
-        for (const phone of waba?.phone_numbers?.data || []) {
-          if (!phone?.id) continue;
-          candidates.push({
-            businessId: biz?.id || null,
-            businessName: biz?.name || null,
-            wabaId: String(waba?.id),
-            wabaName: waba?.name || null,
-            phoneId: String(phone.id),
-            displayPhoneNumber: phone?.display_phone_number || null,
-            verifiedName: phone?.verified_name || null,
-            nameStatus: phone?.name_status || null,
-            qualityRating: phone?.quality_rating || null
-          });
-        }
+    // Fetch WABAs directly
+    const wabasUrl = `https://graph.facebook.com/v21.0/me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50&access_token=${encodeURIComponent(accessToken)}`;
+    const wabasRes = await fetch(wabasUrl, { method: "GET", cache: "no-store" });
+    const wabas = await wabasRes.json().catch(() => null);
+
+    if (wabas?.error) {
+      console.error("[META_API_ERROR] Direct wabas fetch:", wabas.error);
+    }
+    for (const waba of wabas?.data || []) {
+      for (const phone of waba?.phone_numbers?.data || []) {
+        if (!phone?.id) continue;
+        candidates.push({
+          businessId: null,
+          businessName: null,
+          wabaId: String(waba?.id),
+          wabaName: waba?.name || null,
+          phoneId: String(phone.id),
+          displayPhoneNumber: phone?.display_phone_number || null,
+          verifiedName: phone?.verified_name || null,
+          nameStatus: phone?.name_status || null,
+          qualityRating: phone?.quality_rating || null
+        });
       }
     }
 
     if (candidates.length === 0) {
-      const wabas = await graphApiGet("me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50", accessToken).catch((e) => {
-        console.error("[META_API_ERROR] wabas:", e);
-        return null;
-      });
-      for (const waba of wabas?.data || []) {
-        for (const phone of waba?.phone_numbers?.data || []) {
-          if (!phone?.id) continue;
-          candidates.push({
-            businessId: null,
-            businessName: null,
-            wabaId: String(waba?.id),
-            wabaName: waba?.name || null,
-            phoneId: String(phone.id),
-            displayPhoneNumber: phone?.display_phone_number || null,
-            verifiedName: phone?.verified_name || null,
-            nameStatus: phone?.name_status || null,
-            qualityRating: phone?.quality_rating || null
-          });
-        }
-      }
-    }
-
-    if (candidates.length === 0) {
-      console.log("[META_SIGNUP] No candidates found. Businesses:", JSON.stringify(businesses));
+      console.log("[META_SIGNUP] No candidates found. WABAs:", JSON.stringify(wabas));
       return NextResponse.json({ 
         success: false, 
         error: "No WhatsApp Business phone number found on this Meta account.",
         metaDebug: {
-          businessesFound: businesses?.data?.length || 0,
-          rawBusinesses: businesses,
+          wabasFound: wabas?.data?.length || 0,
+          rawWabas: wabas,
           tokenLength: accessToken.length
         }
       }, { status: 404 });
