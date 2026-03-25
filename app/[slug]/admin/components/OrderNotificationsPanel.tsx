@@ -32,8 +32,15 @@ export default function OrderNotificationsPanel({
   const unreadCount = useMemo(() => items.filter((i) => !i.isRead).length, [items]);
 
   const refresh = useCallback(async () => {
-    const rows = await getOrderNotifications(storeId, 25);
-    setItems(rows as any);
+    try {
+      const rows = await getOrderNotifications(storeId, 25);
+      setItems(rows as any);
+    } catch (error: any) {
+      const message = String(error?.message || error || "");
+      if (message.includes("Failed to find Server Action")) {
+        window.location.reload();
+      }
+    }
   }, [storeId]);
 
   useEffect(() => {

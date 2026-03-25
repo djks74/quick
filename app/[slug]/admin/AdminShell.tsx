@@ -181,7 +181,17 @@ export default function AdminShell({
   useEffect(() => {
     let mounted = true;
     const refresh = async () => {
-      const rows = await getOrderNotifications(store.id, 25);
+      let rows: any;
+      try {
+        rows = await getOrderNotifications(store.id, 25);
+      } catch (error: any) {
+        const message = String(error?.message || error || "");
+        if (message.includes("Failed to find Server Action")) {
+          window.location.reload();
+          return;
+        }
+        return;
+      }
       if (!mounted) return;
       const nextRows = rows as any[];
       if (!notificationsReadyRef.current) {
