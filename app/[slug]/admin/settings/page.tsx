@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -124,6 +124,7 @@ export default function AdminSettings() {
   const [facebookAppIdError, setFacebookAppIdError] = useState<string | null>(null);
   const [signupConfigIdError, setSignupConfigIdError] = useState<string | null>(null);
   const [isMetaConnecting, setIsMetaConnecting] = useState(false);
+  const embeddedSignupSessionRef = useRef<{ wabaId?: string; phoneNumberId?: string } | null>(null);
 
   // Meta SDK Initialization for Embedded Signup
   useEffect(() => {
@@ -204,8 +205,31 @@ export default function AdminSettings() {
       return;
     }
     
+    embeddedSignupSessionRef.current = null;
+
+    const sessionInfoListener = (event: MessageEvent) => {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") {
+        return;
+      }
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") {
+          return;
+        }
+        if (data?.event === "FINISH") {
+          embeddedSignupSessionRef.current = {
+            wabaId: String(data?.data?.waba_id || ""),
+            phoneNumberId: String(data?.data?.phone_number_id || "")
+          };
+        }
+      } catch {}
+    };
+
+    window.addEventListener("message", sessionInfoListener);
+
     (window as any).FB.login((response: any) => {
       if (response.authResponse) {
+        const code = String(response.authResponse.code || "");
         const accessToken = String(response.authResponse.accessToken || "");
         void (async () => {
           setIsMetaConnecting(true);
@@ -213,7 +237,12 @@ export default function AdminSettings() {
             const response = await fetch("/api/meta/embedded-signup/finalize", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ storeId, accessToken })
+              body: JSON.stringify({
+                storeId,
+                code,
+                accessToken,
+                sessionInfo: embeddedSignupSessionRef.current
+              })
             });
             const result = await response.json();
             if (!result?.success) {
@@ -223,7 +252,7 @@ export default function AdminSettings() {
             }
             setSettings(prev => ({
               ...prev,
-              whatsappToken: accessToken,
+              whatsappToken: result?.tokenPreview || prev.whatsappToken,
               whatsappPhoneId: result?.store?.whatsappPhoneId || prev.whatsappPhoneId,
               whatsapp: result?.store?.whatsapp || prev.whatsapp,
               enableWhatsApp: true
@@ -234,10 +263,12 @@ export default function AdminSettings() {
             alert(error?.message || "Failed to finalize Meta connection.");
           } finally {
             setIsMetaConnecting(false);
+            window.removeEventListener("message", sessionInfoListener);
           }
         })();
       } else {
         setIsMetaConnecting(false);
+        window.removeEventListener("message", sessionInfoListener);
       }
     }, {
       scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
@@ -246,6 +277,7 @@ export default function AdminSettings() {
       override_default_response_type: true,
       extras: {
         feature: 'whatsapp_embedded_signup',
+        sessionInfoVersion: 2,
         setup: {
           // Additional setup params can go here
         }
