@@ -86,6 +86,35 @@ export default function AdminShell({
     }
   }, [isTrial]);
 
+  useEffect(() => {
+    const shouldReload = (message: string) => {
+      if (!message.includes("Failed to find Server Action")) return false;
+      const key = "gercep_server_action_reload_at";
+      const last = Number(sessionStorage.getItem(key) || "0");
+      const now = Date.now();
+      if (last && now - last < 30000) return false;
+      sessionStorage.setItem(key, String(now));
+      return true;
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const message = String((event as any)?.reason?.message || (event as any)?.reason || "");
+      if (shouldReload(message)) window.location.reload();
+    };
+
+    const onError = (event: ErrorEvent) => {
+      const message = String((event as any)?.error?.message || (event as any)?.message || "");
+      if (shouldReload(message)) window.location.reload();
+    };
+
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    window.addEventListener("error", onError);
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("error", onError);
+    };
+  }, []);
+
   const sidebarItems: SidebarItem[] = [
     { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
     ...(store.subscriptionPlan !== 'FREE' ? [
