@@ -122,6 +122,7 @@ export default function AdminSettings() {
 
   const [platformSettings, setPlatformSettings] = useState<any>(null);
   const [facebookAppIdError, setFacebookAppIdError] = useState<string | null>(null);
+  const [signupConfigIdError, setSignupConfigIdError] = useState<string | null>(null);
   const [isMetaConnecting, setIsMetaConnecting] = useState(false);
 
   // Meta SDK Initialization for Embedded Signup
@@ -139,6 +140,9 @@ export default function AdminSettings() {
         if (platData.settings?.facebookAppId) {
           appIdCandidate = String(platData.settings.facebookAppId);
         }
+        if (platData?.whatsappSignupConfigId) {
+          setPlatformSettings((prev: any) => ({ ...(prev || {}), whatsappSignupConfigId: String(platData.whatsappSignupConfigId) }));
+        }
       }
 
       const appId = appIdCandidate.trim().replace(/[^\d]/g, "");
@@ -146,6 +150,7 @@ export default function AdminSettings() {
         setFacebookAppIdError("Facebook App ID is missing or invalid. Please update it in Super Admin settings.");
         return;
       }
+      setSignupConfigIdError(null);
 
       setFacebookAppIdError(null);
       const initSdk = () => {
@@ -191,6 +196,13 @@ export default function AdminSettings() {
       alert("Store is not ready yet. Please refresh and try again.");
       return;
     }
+    const signupConfigId = String(platformSettings?.whatsappSignupConfigId || "").trim();
+    if (!signupConfigId) {
+      const message = "WhatsApp Signup Config ID is missing. Please update it in Super Admin settings.";
+      setSignupConfigIdError(message);
+      alert(message);
+      return;
+    }
     
     (window as any).FB.login((response: any) => {
       if (response.authResponse) {
@@ -228,6 +240,7 @@ export default function AdminSettings() {
       }
     }, {
       scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      config_id: signupConfigId,
       extras: {
         feature: 'whatsapp_embedded_signup',
         setup: {
@@ -1048,6 +1061,9 @@ export default function AdminSettings() {
                         </div>
                         {facebookAppIdError && (
                           <p className="text-[11px] text-red-600 dark:text-red-400">{facebookAppIdError}</p>
+                        )}
+                        {signupConfigIdError && (
+                          <p className="text-[11px] text-red-600 dark:text-red-400">{signupConfigIdError}</p>
                         )}
                     </div>
 

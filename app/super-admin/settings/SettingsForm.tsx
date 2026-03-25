@@ -16,6 +16,7 @@ type PlatformSettings = {
   subscriptionClientKey?: string | null;
   geminiApiKey?: string | null;
   facebookAppId?: string | null;
+  whatsappSignupConfigId?: string | null;
   waRateMarketing?: number;
   waRateUtility?: number;
   waRateAuthentication?: number;
@@ -47,6 +48,7 @@ export default function SettingsForm({
       subscriptionClientKey: initialSettings?.subscriptionClientKey || "",
       geminiApiKey: initialSettings?.geminiApiKey || "",
       facebookAppId: initialSettings?.facebookAppId || "",
+      whatsappSignupConfigId: initialSettings?.whatsappSignupConfigId || "",
       waRateMarketing: initialSettings?.waRateMarketing ?? 2000,
       waRateUtility: initialSettings?.waRateUtility ?? 350,
       waRateAuthentication: initialSettings?.waRateAuthentication ?? 300,
@@ -382,6 +384,16 @@ export default function SettingsForm({
               onChange={(e) => setForm({ ...form, facebookAppId: e.target.value })}
               placeholder="e.g. 752112443422115"
               inputMode="numeric"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Signup Config ID</label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
+              value={(form as any).whatsappSignupConfigId || ""}
+              onChange={(e) => setForm({ ...form, whatsappSignupConfigId: e.target.value })}
+              placeholder="e.g. 1234567890123456"
             />
           </div>
         </div>

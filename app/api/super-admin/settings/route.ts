@@ -8,7 +8,8 @@ export async function GET() {
     const settings = await prisma.platformSettings.findUnique({
       where: { key: "default" },
       select: {
-        facebookAppId: true
+        facebookAppId: true,
+        whatsappSignupConfigId: true
       }
     });
     const fallbackAppId =
@@ -16,11 +17,17 @@ export async function GET() {
       String(process.env.FACEBOOK_APP_ID || "").trim() ||
       null;
     const facebookAppId = String(settings?.facebookAppId || "").trim() || fallbackAppId;
+    const fallbackSignupConfigId =
+      String(process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || "").trim() ||
+      String(process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || "").trim() ||
+      null;
+    const whatsappSignupConfigId = String((settings as any)?.whatsappSignupConfigId || "").trim() || fallbackSignupConfigId;
 
     return NextResponse.json({
       success: true,
       settings,
-      facebookAppId
+      facebookAppId,
+      whatsappSignupConfigId
     });
   } catch (error) {
     console.error("[API_PUBLIC_SETTINGS_ERROR]", error);

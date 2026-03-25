@@ -22,6 +22,7 @@ export async function ensurePlatformSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT,
+         ADD COLUMN IF NOT EXISTS "whatsappSignupConfigId" TEXT,
          ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
          ADD COLUMN IF NOT EXISTS "waRateUtility" DOUBLE PRECISION NOT NULL DEFAULT 350,
          ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
@@ -295,6 +296,7 @@ export async function updatePlatformSettings(data: {
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
   facebookAppId?: string;
+  whatsappSignupConfigId?: string;
   waRateMarketing?: number;
   waRateUtility?: number;
   waRateAuthentication?: number;
@@ -304,6 +306,7 @@ export async function updatePlatformSettings(data: {
     await requireSuperAdmin();
     await ensurePlatformSettingsSchema();
     const cleanedFacebookAppId = (data.facebookAppId || "").trim();
+    const cleanedSignupConfigId = (data.whatsappSignupConfigId || "").trim();
     if (cleanedFacebookAppId && !/^\d{5,30}$/.test(cleanedFacebookAppId)) {
       return { success: false, error: "Facebook App ID must contain digits only." };
     }
@@ -320,6 +323,7 @@ export async function updatePlatformSettings(data: {
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
         facebookAppId: cleanedFacebookAppId || null,
+        whatsappSignupConfigId: cleanedSignupConfigId || null,
         waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : undefined,
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : undefined,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : undefined,
@@ -336,6 +340,7 @@ export async function updatePlatformSettings(data: {
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
         facebookAppId: cleanedFacebookAppId || null,
+        whatsappSignupConfigId: cleanedSignupConfigId || null,
         waRateMarketing: data.waRateMarketing !== undefined ? Number(data.waRateMarketing) : 2000,
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : 350,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : 300,

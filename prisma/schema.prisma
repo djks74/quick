@@ -339,6 +339,7 @@ model PlatformSettings {
   biteshipApiKey        String?
   geminiApiKey          String?
   facebookAppId         String?
+  whatsappSignupConfigId String?
   waRateMarketing       Float    @default(2000)
   waRateUtility         Float    @default(350)
   waRateAuthentication  Float    @default(300)
