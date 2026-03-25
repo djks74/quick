@@ -26,6 +26,46 @@ function normalizePhoneNumber(phone: string) {
   return clean;
 }
 
+function isGercepOutOfScopeMessage(input: string) {
+  const text = String(input || "").toLowerCase().trim();
+  if (!text) return false;
+  const scopeKeywords = [
+    "gercep", "toko", "resto", "restaurant", "store", "menu", "produk", "product", "pesan", "order",
+    "delivery", "pengiriman", "kurir", "checkout", "bayar", "payment", "qris", "transfer", "stok",
+    "inventory", "kasir", "cashier", "outlet", "meja", "table", "wa", "whatsapp", "promo", "diskon",
+    "sales", "omzet", "performa", "topup", "saldo"
+  ];
+  const outOfScopeKeywords = [
+    "coding", "koding", "programming", "python", "javascript", "react", "nextjs", "typescript", "sql",
+    "algoritma", "algorithm", "matematika", "fisika", "kimia", "biologi", "sejarah", "politik", "agama",
+    "berita", "news", "crypto", "saham", "trading", "cuaca", "weather", "ramalan", "horoscope", "game"
+  ];
+  const hasScope = scopeKeywords.some((kw) => text.includes(kw));
+  if (hasScope) return false;
+  const hasOutOfScopeKeyword = outOfScopeKeywords.some((kw) => text.includes(kw));
+  const looksGeneralQuestion = /^(what|why|how|when|where|who|apa|kenapa|bagaimana|kapan|dimana|siapa)\b/.test(text) || text.includes("?");
+  return hasOutOfScopeKeyword || looksGeneralQuestion;
+}
+
+function getGercepScopeRefusal(input: string) {
+  const text = String(input || "").toLowerCase();
+  const isEnglish = /\b(what|why|how|where|coding|programming|learn|teach)\b/.test(text);
+  if (isEnglish) {
+    return "I can only help with Gercep topics (store/resto search, menu, ordering, delivery, payment, and merchant operations). Please ask within Gercep context.";
+  }
+  return "Maaf, saya hanya bisa bantu topik dalam sistem Gercep (cari toko/resto, menu, pemesanan, pengiriman, pembayaran, dan operasional merchant). Silakan tanya dalam konteks Gercep ya.";
+}
+
+function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
+  return {
+    isActive: true,
+    shippingSenderAddress: { not: null },
+    NOT: [{ shippingSenderAddress: "" }],
+    products: { some: { category: { not: "System" } } },
+    ...extra
+  };
+}
+
 function normalizeStoreSearchInput(query: string, locationContext?: string) {
   const raw = String(query || "").trim();
   const providedLocation = String(locationContext || "").trim();
@@ -67,7 +107,7 @@ const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
-  async search_stores({ query, location_context, latitude, longitude }: { query: string, location_context?: string, latitude?: number, longitude?: number }) {
+  async search_stores({ query, location_context, latitude, longitude, scopedSlug }: { query: string, location_context?: string, latitude?: number, longitude?: number, scopedSlug?: string }) {
     await ensureStoreSettingsSchema();
     const { keyword, effectiveLocation } = normalizeStoreSearchInput(String(query || ""), location_context);
     const productSelect: any = keyword
@@ -107,7 +147,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           { slug: { contains: effectiveLocation, mode: "insensitive" } }
         ]
       : [];
-    const baseWhere: any = { isActive: true };
+    const baseWhere: any = buildAssistantStoreEligibilityWhere(
+      scopedSlug ? { slug: String(scopedSlug) } : {}
+    );
     const strictWhere: any = { ...baseWhere };
     if (keywordOr.length > 0) strictWhere.OR = keywordOr;
     if (locationOr.length > 0) strictWhere.AND = [{ OR: locationOr }];
@@ -161,8 +203,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async get_store_stats({ slug }: { slug: string }) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({
-      where: { slug },
+    const store = await prisma.store.findFirst({
+      where: buildAssistantStoreEligibilityWhere({ slug }),
       include: {
         orders: { where: { status: "PAID" }, select: { totalAmount: true } }
       }
@@ -179,8 +221,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async get_store_products({ slug }: { slug: string }) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({
-      where: { slug },
+    const store = await prisma.store.findFirst({
+      where: buildAssistantStoreEligibilityWhere({ slug }),
       include: {
         products: {
           where: { 
@@ -202,7 +244,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async update_product_price({ slug, productName, newPrice, variationName }: any) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
     
     const products = await prisma.product.findMany({
@@ -233,7 +275,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async add_new_product({ slug, name, price, category }: any) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
     
     const product = await prisma.product.create({
@@ -251,7 +293,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async toggle_store_active({ slug, active }: { slug: string; active: boolean }) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
 
     await (prisma.store as any).update({
@@ -264,7 +306,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async toggle_store_open({ slug, open }: { slug: string; open: boolean }) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
 
     await prisma.store.update({
@@ -367,7 +409,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async get_shipping_rates({ slug, address, latitude, longitude, weightGrams }: any) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } });
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
     
     try {
@@ -437,7 +479,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
   async create_customer_order({ slug, customer_phone, items, order_type, address, latitude, longitude, shippingProvider, shippingService, shippingFee, payment_method, isMerchant, table_number }: any) {
     await ensureStoreSettingsSchema();
-    const store = await prisma.store.findUnique({ where: { slug } }) as any;
+    const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) }) as any;
     if (!store) return { error: "Store not found" };
     if (!store.isActive) return { error: `Mohon maaf, toko '${store.name}' sedang tidak aktif (Disabled) saat ini. Silakan hubungi admin toko.` };
 
@@ -954,7 +996,6 @@ export async function POST(req: NextRequest) {
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
-
     // Ensure history is a valid array of the correct format for Gemini SDK
     const validatedHistory = Array.isArray(history) ? history.map((h: any) => {
       // Role must be 'user', 'model', or 'function'
@@ -976,6 +1017,9 @@ export async function POST(req: NextRequest) {
           : [{ text: String(h.text || h.parts || "") }]
       };
     }) : [];
+    if (isGercepOutOfScopeMessage(message)) {
+      return NextResponse.json({ text: getGercepScopeRefusal(message), history: validatedHistory });
+    }
 
     // If not public, require session
     const session = await getServerSession(authOptions);
@@ -992,11 +1036,15 @@ export async function POST(req: NextRequest) {
     // Get Gemini Key: Prefer custom store key if Sovereign, otherwise platform default
     let geminiKey = null;
     const storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
+    let forcedScopedSlug: string | null = null;
     
     if (storeSlug) {
-      const store = await prisma.store.findUnique({ 
-        where: { slug: storeSlug }
+      const store = await prisma.store.findFirst({
+        where: buildAssistantStoreEligibilityWhere({ slug: storeSlug })
       }) as any;
+      if (isPublic && store?.slug) {
+        forcedScopedSlug = String(store.slug);
+      }
       if (["SOVEREIGN", "CORPORATE"].includes(store?.subscriptionPlan) && store?.customGeminiKey) {
         geminiKey = store.customGeminiKey;
         console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
@@ -1089,12 +1137,24 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+    if (isPublic && forcedScopedSlug) {
+      allowedStoreSlugs.add(forcedScopedSlug);
+    }
 
     // Inject store context if provided
     let storeContextInfo = "";
     if (context?.storeId) {
       const store = await prisma.store.findUnique({
         where: { id: Number(context.storeId) },
+        select: { name: true, slug: true, tables: true }
+      });
+      if (store) {
+        const hasTables = store.tables && store.tables.length > 0;
+        storeContextInfo = ` You are currently assisting at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
+      }
+    } else if (forcedScopedSlug) {
+      const store = await prisma.store.findFirst({
+        where: buildAssistantStoreEligibilityWhere({ slug: forcedScopedSlug }),
         select: { name: true, slug: true, tables: true }
       });
       if (store) {
@@ -1111,7 +1171,11 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: validatedHistory,
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information. 
+        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information.
+SCOPE POLICY:
+1. You only answer within Gercep scope: store/resto search, menu/products, ordering, delivery, payment, subscription, and merchant operations.
+2. If user asks coding, learning, or general questions outside Gercep, politely refuse and redirect to Gercep-related help.
+3. Never provide broad general-knowledge tutoring outside Gercep context.
 
 MERCHANT/ADMIN ASSISTANCE:
 If the user is an ADMIN or MERCHANT (see userContextInfo):
@@ -1434,6 +1498,25 @@ Once an order is created:
           }
           if (context?.phoneNumber) {
             args.callerPhone = context.phoneNumber;
+          }
+          if (forcedScopedSlug) {
+            const scopedSlugTools = new Set([
+              "get_store_stats",
+              "get_store_products",
+              "get_shipping_rates",
+              "create_customer_order",
+              "update_product_price",
+              "add_new_product",
+              "toggle_store_active",
+              "toggle_store_open",
+              "create_merchant_invoice"
+            ]);
+            if (scopedSlugTools.has(call.name)) {
+              args.slug = forcedScopedSlug;
+            }
+            if (call.name === "search_stores") {
+              args.scopedSlug = forcedScopedSlug;
+            }
           }
 
           const sensitiveTools = new Set([

@@ -22,6 +22,16 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
   return { keyword, effectiveLocation };
 }
 
+function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
+  return {
+    isActive: true,
+    shippingSenderAddress: { not: null },
+    NOT: [{ shippingSenderAddress: "" }],
+    products: { some: { category: { not: "System" } } },
+    ...extra
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     requireAiApiKey(req.headers);
@@ -44,7 +54,8 @@ export async function POST(req: NextRequest) {
           { slug: { contains: effectiveLocation, mode: "insensitive" } }
         ]
       : [];
-    const strictWhere: any = { isActive: true };
+    const baseWhere: any = buildAssistantStoreEligibilityWhere();
+    const strictWhere: any = { ...baseWhere };
     if (keywordOr.length > 0) strictWhere.OR = keywordOr;
     if (locationOr.length > 0) strictWhere.AND = [{ OR: locationOr }];
 
@@ -59,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     if (stores.length === 0 && locationOr.length > 0) {
       stores = await prisma.store.findMany({
-        where: { isActive: true, OR: locationOr } as any,
+        where: { ...baseWhere, OR: locationOr } as any,
         select: { name: true, slug: true },
         take: 10
       });
@@ -67,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     if (stores.length === 0 && keywordOr.length > 0) {
       stores = await prisma.store.findMany({
-        where: { isActive: true, OR: keywordOr } as any,
+        where: { ...baseWhere, OR: keywordOr } as any,
         select: { name: true, slug: true },
         take: 10
       });

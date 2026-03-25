@@ -22,6 +22,13 @@ const isSessionExpired = (updatedAt?: Date | string | null, ttlMs: number = SESS
   return (Date.now() - ts) > ttlMs;
 };
 
+const assistantStoreEligibilityWhere = {
+  isActive: true,
+  shippingSenderAddress: { not: null },
+  NOT: [{ shippingSenderAddress: "" }],
+  products: { some: { category: { not: "System" } } }
+};
+
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
   let session = await prisma.whatsAppSession.findUnique({
@@ -709,7 +716,7 @@ export async function POST(req: NextRequest) {
       
       if (!isPlatformNumber) {
         const store = await prisma.store.findFirst({
-          where: { whatsappPhoneId: String(phoneNumberId) }
+          where: { ...assistantStoreEligibilityWhere, whatsappPhoneId: String(phoneNumberId) }
         });
 
         if (store) {
@@ -728,7 +735,7 @@ export async function POST(req: NextRequest) {
 
          if (!targetStore && !isMerchantInUserMode) {
            const storeBySender = await prisma.store.findFirst({
-             where: { whatsapp: { in: senderPhoneVariants } },
+             where: { ...assistantStoreEligibilityWhere, whatsapp: { in: senderPhoneVariants } },
              orderBy: { updatedAt: "desc" }
            });
            if (storeBySender) {
@@ -744,7 +751,7 @@ export async function POST(req: NextRequest) {
            });
            
            if (recentSession && recentSession.storeId && !isSessionExpired(recentSession.updatedAt)) {
-              const s = await prisma.store.findUnique({ where: { id: recentSession.storeId } });
+              const s = await prisma.store.findFirst({ where: { ...assistantStoreEligibilityWhere, id: recentSession.storeId } });
               
               // If merchant in user mode, only use this session if it's not their own store
               // OR if it's recent (< 30m)
@@ -759,14 +766,14 @@ export async function POST(req: NextRequest) {
          }
          
          if (!targetStore) {
-            targetStore = await prisma.store.findFirst({ where: { slug: 'demo' } });
+            targetStore = await prisma.store.findFirst({ where: { ...assistantStoreEligibilityWhere, slug: 'demo' } });
             console.log(`[WHATSAPP] Fallback to Demo Store: ${targetStore?.name}`);
          }
       }
 
       // Dev Fallback
       if (!targetStore && process.env.NODE_ENV === 'development') {
-         targetStore = await prisma.store.findFirst();
+         targetStore = await prisma.store.findFirst({ where: assistantStoreEligibilityWhere });
       }
 
       if (!targetStore) {
