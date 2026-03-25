@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAdmin, AdminLayoutStyle } from "@/lib/admin-context";
 import { useShop } from "@/context/ShopContext";
-import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey, finalizeMetaEmbeddedSignup } from "@/lib/api";
+import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
 import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe, HelpCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AdminSpinner from "../components/AdminSpinner";
@@ -198,7 +198,12 @@ export default function AdminSettings() {
         void (async () => {
           setIsMetaConnecting(true);
           try {
-            const result = await finalizeMetaEmbeddedSignup(storeId, accessToken);
+            const response = await fetch("/api/meta/embedded-signup/finalize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ storeId, accessToken })
+            });
+            const result = await response.json();
             if (!result?.success) {
               alert(result?.error || "Meta signup connected, but Gercep failed to finalize setup.");
               return;
