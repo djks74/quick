@@ -72,13 +72,13 @@ export async function POST(req: NextRequest) {
       qualityRating: string | null;
     }> = [];
 
-    // Fetch WABAs directly
-    const wabasUrl = `https://graph.facebook.com/v21.0/me/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50&access_token=${encodeURIComponent(accessToken)}`;
-    const wabasRes = await fetch(wabasUrl, { method: "GET", cache: "no-store" });
-    const wabas = await wabasRes.json().catch(() => null);
+    // Fetch Client WABAs that this System User has been granted access to
+    const clientWabasUrl = `https://graph.facebook.com/v21.0/me/client_whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number,verified_name,name_status,quality_rating}&limit=50&access_token=${encodeURIComponent(accessToken)}`;
+    const clientWabasRes = await fetch(clientWabasUrl, { method: "GET", cache: "no-store" });
+    const wabas = await clientWabasRes.json().catch(() => null);
 
     if (wabas?.error) {
-      console.error("[META_API_ERROR] Direct wabas fetch:", wabas.error);
+      console.error("[META_API_ERROR] Direct client_wabas fetch:", wabas.error);
     }
     for (const waba of wabas?.data || []) {
       for (const phone of waba?.phone_numbers?.data || []) {
