@@ -624,6 +624,17 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };
       }
       const providerUpper = String(shippingProvider || "").toUpperCase();
+      const providerEnabled =
+        providerUpper === "STORE_COURIER"
+          ? Boolean((store as any).shippingEnableStoreCourier)
+          : providerUpper === "JNE"
+            ? Boolean(store.shippingEnableJne)
+            : providerUpper === "GOSEND"
+              ? Boolean(store.shippingEnableGosend) && !Boolean(store.shippingJneOnly)
+              : false;
+      if (!providerEnabled) {
+        return { error: `Kurir ${providerUpper || "-"} tidak aktif di pengaturan toko.` };
+      }
       if (providerUpper !== "STORE_COURIER") {
         if (!shippingService || shippingFee === undefined || shippingFee === null) {
           return { error: "Kurir belum dipilih. Mohon pilih kurir dan ongkir dulu." };

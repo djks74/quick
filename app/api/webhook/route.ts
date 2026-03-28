@@ -927,17 +927,17 @@ export async function POST(req: NextRequest) {
           if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
             optionCount++;
             optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
-            quickReplies.push({ id: String(optionCount), title: "Kurir Toko" });
+            quickReplies.push({ id: "STORE_COURIER", title: "Kurir Toko" });
           }
           if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
             optionCount++;
             optionsMsg += `\n${optionCount}. GoSend`;
-            quickReplies.push({ id: String(optionCount), title: "GoSend" });
+            quickReplies.push({ id: "GOSEND", title: "GoSend" });
           }
           if (targetStore.shippingEnableJne) {
             optionCount++;
             optionsMsg += `\n${optionCount}. JNE`;
-            quickReplies.push({ id: String(optionCount), title: "JNE" });
+            quickReplies.push({ id: "JNE", title: "JNE" });
           }
           await sendWhatsAppMessage(from, optionsMsg, targetStore.id, {
             quickReplies: quickReplies.slice(0, 3)
@@ -1673,6 +1673,7 @@ export async function POST(req: NextRequest) {
       if (session.step && session.step.startsWith('TAKEAWAY_DELIVERY_SELECT:')) {
         const ctx = parseTakeawayDeliveryStep(session.step);
         const input = textBody.trim();
+        const inputNorm = input.toLowerCase().replace(/\s+/g, " ").trim();
         const sessionOrderType = String((session.metadata as any)?.orderType || "").toUpperCase();
         const allowPickup = sessionOrderType !== "DELIVERY";
         const onSite = !!session.tableNumber;
@@ -1683,7 +1684,7 @@ export async function POST(req: NextRequest) {
         // --- Option 1: Pickup ---
         if (allowPickup) {
           currentOption++;
-          if (input === String(currentOption)) selectedProvider = "PICKUP";
+          if (input === String(currentOption) || inputNorm === "pickup" || inputNorm === "ambil sendiri") selectedProvider = "PICKUP";
         }
         
         // --- Option 2: Store Courier (Distance-based or Explicitly enabled) ---
@@ -1701,19 +1702,19 @@ export async function POST(req: NextRequest) {
 
         if (!selectedProvider && (isNearStore || (targetStore as any).shippingEnableStoreCourier)) {
           currentOption++;
-          if (input === String(currentOption)) selectedProvider = "STORE_COURIER";
+          if (input === String(currentOption) || inputNorm === "store_courier" || inputNorm === "kurir toko" || inputNorm === "kurir_toko") selectedProvider = "STORE_COURIER";
         }
         
         // --- Option 3: JNE ---
         if (!selectedProvider && targetStore.shippingEnableJne) {
           currentOption++;
-          if (input === String(currentOption)) selectedProvider = "JNE";
+          if (input === String(currentOption) || inputNorm === "jne") selectedProvider = "JNE";
         }
         
         // --- Option 4: GoSend ---
         if (!selectedProvider && targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
           currentOption++;
-          if (input === String(currentOption)) selectedProvider = "GOSEND";
+          if (input === String(currentOption) || inputNorm === "gosend" || inputNorm === "go send") selectedProvider = "GOSEND";
         }
 
         if (selectedProvider === "PICKUP") {
@@ -1751,22 +1752,22 @@ export async function POST(req: NextRequest) {
         if (allowPickup) {
           optionCount++;
           optionsMsg += `\n${optionCount}. Pickup (Ambil Sendiri)`;
-          quickReplies.push({ id: String(optionCount), title: "Pickup" });
+          quickReplies.push({ id: "PICKUP", title: "Pickup" });
         }
         if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
           optionCount++;
           optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
-          quickReplies.push({ id: String(optionCount), title: "Kurir Toko" });
+          quickReplies.push({ id: "STORE_COURIER", title: "Kurir Toko" });
         }
         if (targetStore.shippingEnableJne) {
           optionCount++;
           optionsMsg += `\n${optionCount}. JNE`;
-          quickReplies.push({ id: String(optionCount), title: "JNE" });
+          quickReplies.push({ id: "JNE", title: "JNE" });
         }
         if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
           optionCount++;
           optionsMsg += `\n${optionCount}. GoSend`;
-          quickReplies.push({ id: String(optionCount), title: "GoSend" });
+          quickReplies.push({ id: "GOSEND", title: "GoSend" });
         }
         if (quickReplies.length > 3) {
           await sendWhatsAppMessage(from, optionsMsg, targetStore.id, {
