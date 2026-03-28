@@ -34,6 +34,7 @@ function isGercepOutOfScopeMessage(input: string) {
   if (!text) return false;
   const scopeKeywords = [
     "gercep", "toko", "resto", "restaurant", "store", "menu", "produk", "product", "pesan", "order",
+    "ulang", "ulangi", "reorder", "order lagi", "pesan lagi",
     "delivery", "pengiriman", "kurir", "checkout", "bayar", "payment", "qris", "transfer", "stok",
     "inventory", "kasir", "cashier", "outlet", "meja", "table", "wa", "whatsapp", "promo", "diskon",
     "sales", "omzet", "performa", "topup", "saldo", "cara", "help", "bantuan", "panduan", "guide"
@@ -47,7 +48,7 @@ function isGercepOutOfScopeMessage(input: string) {
   const hasScope = scopeKeywords.some((kw) => text.includes(kw));
   if (hasScope) return false;
   const hasOutOfScopeKeyword = outOfScopeKeywords.some((kw) => text.includes(kw));
-  const looksGeneralQuestion = /^(what|why|how|when|where|who|apa|kenapa|bagaimana|kapan|dimana|siapa)\b/.test(text) || text.includes("?");
+  const looksGeneralQuestion = /^(what|why|how|when|where|who|apa|kenapa|bagaimana|kapan|dimana|siapa)\b/.test(text);
   return hasOutOfScopeKeyword || looksGeneralQuestion;
 }
 
