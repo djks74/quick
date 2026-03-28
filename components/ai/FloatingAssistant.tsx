@@ -111,6 +111,11 @@ export default function FloatingAssistant({
             })
           });
           const data = await res.json();
+          if (data.error) {
+            setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, ada kendala teknis. Coba kirim pesan lagi ya." }]);
+            if (data.resetHistory) setHistory([]);
+            return;
+          }
           setMessages(prev => [...prev, { 
             role: "assistant", 
             text: data.text,

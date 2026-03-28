@@ -1042,6 +1042,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
+    const startedAt = Date.now();
     const internalContextHeader = req.headers.get("x-internal-context-key");
     const isTrustedInternalContext = Boolean(
       AI_INTERNAL_CONTEXT_KEY &&
@@ -1703,7 +1704,11 @@ Once an order is created:
       iterations++;
     }
 
-    const responseText = response.text();
+    let responseText = String(response.text() || "");
+    responseText = responseText.replace(/\n{3,}/g, "\n\n").trim();
+    if (!responseText) {
+      responseText = "Maaf, aku belum bisa menjawab itu. Coba tanya dengan kata lain ya.";
+    }
     const imageMatch = responseText.match(/\[PRODUCT_IMAGE:\s*(https?:\/\/[^\]]+)\]/i);
     if (imageMatch) {
       finalProductImage = imageMatch[1];
@@ -1728,7 +1733,8 @@ Once an order is created:
         messageChars: String(message || "").length,
         responseChars: String(responseText || "").length,
         functionCalls: Array.isArray(calls) ? calls.length : 0,
-        iterationsUsed: iterations
+        iterationsUsed: iterations,
+        durationMs: Date.now() - startedAt
       }
     );
     return NextResponse.json({ 

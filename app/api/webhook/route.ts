@@ -16,6 +16,7 @@ type WaLang = "id" | "en";
 const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
 const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "900") || 900);
+const WA_AI_TIMEOUT_MS = Math.max(5000, Number(process.env.WA_AI_TIMEOUT_MS || "25000") || 25000);
 
 const isSessionExpired = (updatedAt?: Date | string | null, ttlMs: number = SESSION_CONTEXT_TTL_MS) => {
   if (!updatedAt) return true;
@@ -523,7 +524,7 @@ export async function POST(req: NextRequest) {
           const aiStoreId = Number(aiStore?.id || 0);
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
           const aiAbortController = new AbortController();
-          const aiTimeout = setTimeout(() => aiAbortController.abort(), 12000);
+          const aiTimeout = setTimeout(() => aiAbortController.abort(), WA_AI_TIMEOUT_MS);
           let res: Response;
           try {
             res = await fetch(`${baseUrl}/api/ai/chat`, {
@@ -596,7 +597,7 @@ export async function POST(req: NextRequest) {
           }
         } catch (e) {
           console.error("[WA_AI_ERROR]", e);
-          await sendWhatsAppMessage(from, "❌ Terjadi kesalahan koneksi ke AI.", 0);
+          await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi sebentar ya.", 0);
         }
         return NextResponse.json({ success: true });
       }
