@@ -7,15 +7,18 @@ export type StoreTypeOption = {
 export function getDefaultStoreTypes(): StoreTypeOption[] {
   return [
     { code: "GROCERY", label: "Grocery / Sembako", active: true },
-    { code: "RESTAURANT", label: "Restaurant / Warung", active: true },
-    { code: "COFFEE", label: "Coffee / Drinks", active: true },
-    { code: "BAKERY", label: "Bakery / Snacks", active: true },
-    { code: "PHARMACY", label: "Pharmacy / Health", active: true },
-    { code: "ELECTRONICS", label: "Electronics / Gadget", active: true },
+    { code: "RESTAURANT", label: "Restaurant / resto (menu siap makan)", active: true },
+    { code: "COFFEE", label: "Coffee / Ice (jual minuman jadi)", active: true },
+    { code: "BAKERY", label: "Bakery / Snacks (Jual roti dan sejenisnya)", active: true },
+    { code: "PHARMACY", label: "Pharmacy / Health (Jual obat obatan)", active: true },
+    { code: "ELECTRONICS", label: "Electronics / Gadget (Jual elektronik)", active: true },
     { code: "FASHION", label: "Fashion", active: true },
-    { code: "BEAUTY", label: "Beauty / Skincare", active: true },
-    { code: "HOUSEHOLD", label: "Household / Home supplies", active: true },
-    { code: "BABY_KIDS_TOYS", label: "Baby / Kids / Toys", active: true },
+    { code: "BEAUTY", label: "Beauty / Skincare (Jual kosmetik)", active: true },
+    { code: "HOUSEHOLD", label: "Household / Home supplies (panci, piring, dll)", active: true },
+    { code: "BABY", label: "Baby", active: true },
+    { code: "KIDS", label: "Kids", active: true },
+    { code: "TOYS", label: "Toys", active: true },
+    { code: "BABY_KIDS_TOYS", label: "Baby / Kids / Toys", active: false },
     { code: "PET_SHOP", label: "Pet shop", active: true },
     { code: "OTHER", label: "Other", active: true }
   ];
@@ -47,6 +50,16 @@ export function normalizeStoreTypes(input: any): StoreTypeOption[] {
   if (!byCode.has("OTHER")) {
     byCode.set("OTHER", { code: "OTHER", label: "Other", active: true });
   }
+  return Array.from(byCode.values());
+}
+
+export function ensureDefaultStoreTypes(input: any): StoreTypeOption[] {
+  const existing = normalizeStoreTypes(input);
+  const byCode = new Map(existing.map((t) => [t.code, t]));
+  for (const def of getDefaultStoreTypes()) {
+    if (!byCode.has(def.code)) byCode.set(def.code, def);
+  }
+  if (!byCode.has("OTHER")) byCode.set("OTHER", { code: "OTHER", label: "Other", active: true });
   return Array.from(byCode.values());
 }
 

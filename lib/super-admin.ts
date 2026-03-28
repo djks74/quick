@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
-import { getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
+import { ensureDefaultStoreTypes, getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
 import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
@@ -252,14 +252,16 @@ export async function getPlatformSettings() {
     await requireSuperAdmin();
     await ensurePlatformSettingsSchema();
     const existing = await prisma.platformSettings.findUnique({ where: { key: "default" } });
-    const storeTypes = normalizeStoreTypes((existing as any)?.storeTypes);
+    const storeTypes = ensureDefaultStoreTypes((existing as any)?.storeTypes);
     if (!existing) return null;
-    if (!Array.isArray((existing as any)?.storeTypes) || storeTypes.length === 0) {
-      const seeded = getDefaultStoreTypes();
-      const updated = await prisma.platformSettings.update({
-        where: { key: "default" },
-        data: { storeTypes: seeded as any }
-      }).catch(() => null);
+    const shouldUpdate = !Array.isArray((existing as any)?.storeTypes) || JSON.stringify((existing as any)?.storeTypes || []) !== JSON.stringify(storeTypes);
+    if (shouldUpdate) {
+      const updated = await prisma.platformSettings
+        .update({
+          where: { key: "default" },
+          data: { storeTypes: storeTypes as any }
+        })
+        .catch(() => null);
       return (updated as any) || existing;
     }
     return existing;
@@ -327,7 +329,7 @@ export async function updatePlatformSettings(data: {
     
     const normalizedStoreTypes =
       data.storeTypes !== undefined
-        ? (normalizeStoreTypes(data.storeTypes).length > 0 ? normalizeStoreTypes(data.storeTypes) : getDefaultStoreTypes())
+        ? (normalizeStoreTypes(data.storeTypes).length > 0 ? ensureDefaultStoreTypes(data.storeTypes) : getDefaultStoreTypes())
         : undefined;
     const updated = await prisma.platformSettings.upsert({
       where: { key: "default" },

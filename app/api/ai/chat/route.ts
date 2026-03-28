@@ -14,7 +14,7 @@ import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
 import { triggerReverseSync, isStoreOpen } from "@/lib/api";
 import { logTraffic } from "@/lib/traffic";
-import { getDefaultStoreTypes, getStoreTypeLabelMap } from "@/lib/store-types";
+import { ensureDefaultStoreTypes, getStoreTypeLabelMap } from "@/lib/store-types";
 
 export const runtime = "nodejs";
 
@@ -231,7 +231,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const platform = await prisma.platformSettings
       .findUnique({ where: { key: "default" }, select: { storeTypes: true } })
       .catch(() => null) as any;
-    const storeTypeLabelByCode = getStoreTypeLabelMap(platform?.storeTypes || getDefaultStoreTypes());
+    const storeTypeLabelByCode = getStoreTypeLabelMap(ensureDefaultStoreTypes(platform?.storeTypes));
     const normalizedStores = (stores as any[]).map((s) => ({
       ...s,
       storeTypeLabel: s?.storeType ? (storeTypeLabelByCode.get(String(s.storeType)) || String(s.storeType)) : null

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensurePlatformSettingsSchema } from "@/lib/super-admin";
-import { getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
+import { ensureDefaultStoreTypes, getDefaultStoreTypes } from "@/lib/store-types";
 
 export async function GET() {
   try {
@@ -14,12 +14,12 @@ export async function GET() {
         storeTypes: true
       }
     });
-    const normalizedStoreTypes = normalizeStoreTypes((settings as any)?.storeTypes);
-    if (settings && normalizedStoreTypes.length === 0) {
+    const normalizedStoreTypes = ensureDefaultStoreTypes((settings as any)?.storeTypes);
+    if (settings && (!Array.isArray((settings as any)?.storeTypes) || JSON.stringify((settings as any)?.storeTypes || []) !== JSON.stringify(normalizedStoreTypes))) {
       await prisma.platformSettings
         .update({
           where: { key: "default" },
-          data: { storeTypes: getDefaultStoreTypes() as any }
+          data: { storeTypes: normalizedStoreTypes as any }
         })
         .catch(() => null);
     }

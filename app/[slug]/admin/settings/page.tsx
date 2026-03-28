@@ -136,7 +136,7 @@ export default function AdminSettings() {
       
       if (platRes?.ok) {
         const platData = await platRes.json();
-        setPlatformSettings(platData.settings);
+        setPlatformSettings({ ...(platData.settings || {}), storeTypes: platData.storeTypes });
         if (platData?.facebookAppId) {
           appIdCandidate = String(platData.facebookAppId);
         }
@@ -552,6 +552,9 @@ export default function AdminSettings() {
                           {String(t.label)}
                         </option>
                       ))}
+                    {!storeTypeOptions.some((t: any) => String(t.code) === String(settings.storeType)) && settings.storeType ? (
+                      <option value={String(settings.storeType)}>{String(settings.storeType)}</option>
+                    ) : null}
                   </select>
                 </div>
                 <div>
