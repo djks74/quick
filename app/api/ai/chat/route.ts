@@ -1077,6 +1077,9 @@ export async function POST(req: NextRequest) {
     if (historyLimit > 0 && validatedHistory.length > historyLimit) {
       validatedHistory = validatedHistory.slice(-historyLimit);
     }
+    while (validatedHistory.length > 0 && validatedHistory[0]?.role !== "user") {
+      validatedHistory = validatedHistory.slice(1);
+    }
     if (isGercepOutOfScopeMessage(message)) {
       return NextResponse.json({ text: getGercepScopeRefusal(message), history: validatedHistory });
     }
@@ -1680,9 +1683,12 @@ Once an order is created:
     }
 
     const nextHistory = await chat.getHistory();
-    const trimmedNextHistory = historyLimit > 0 && nextHistory.length > historyLimit
+    let trimmedNextHistory = historyLimit > 0 && nextHistory.length > historyLimit
       ? nextHistory.slice(-historyLimit)
       : nextHistory;
+    while (Array.isArray(trimmedNextHistory) && trimmedNextHistory.length > 0 && trimmedNextHistory[0]?.role !== "user") {
+      trimmedNextHistory = trimmedNextHistory.slice(1);
+    }
     await logTraffic(
       context?.storeId ? Number(context.storeId) : undefined,
       context?.channel === "WHATSAPP" ? "WHATSAPP" : "WEB",
@@ -1712,6 +1718,20 @@ Once an order is created:
     if (error instanceof TypeError && error.message.includes("iterable")) {
       console.error("[GEMINI_CHAT_ERROR_DETAIL] Likely invalid history or message parts format.");
     }
-    return NextResponse.json({ error: error.message || "An unexpected error occurred during chat." }, { status: 500 });
+    const raw = String(error?.message || "");
+    const shouldReset =
+      raw.includes("First content should be with role 'user'") ||
+      raw.includes("First content should be with role \"user\"");
+    if (shouldReset) {
+      return NextResponse.json(
+        {
+          error: "Maaf, sesi chat perlu direset. Silakan kirim pesan lagi ya.",
+          resetHistory: true,
+          history: []
+        },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: raw || "An unexpected error occurred during chat." }, { status: 500 });
   }
 }
