@@ -40,6 +40,24 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   const formatMoney = (value: number) => `Rp ${new Intl.NumberFormat("id-ID").format(Math.round(Number(value) || 0))}`;
   const onOff = (value: boolean | null | undefined) => (value ? "ON" : "OFF");
 
+  const isGreetingOrHelp =
+    /^(halo|hallo|hai|hi|hello|alo|ass?alamualaikum|selamat\s+(pagi|siang|sore|malam))\b/.test(lowerText) ||
+    /\b(minta\s+tolong|tolong|bantu)\b/.test(lowerText);
+  if (isGreetingOrHelp) {
+    await sendWhatsAppMessage(
+      from,
+      `Halo! Saya *Gercep Assistant*, siap bantu kamu:\n\n` +
+        `- Cari toko atau resto terdekat.\n` +
+        `- Lihat menu dan info produk.\n` +
+        `- Pesan antar, ambil sendiri, atau makan di tempat.\n\n` +
+        `Ketik *"User Mode"* untuk mode belanja seperti customer.\n` +
+        `Ketik *"Help"* untuk lihat perintah *Admin Mode*.\n\n` +
+        `Ada yang bisa saya bantu cari hari ini?`,
+      store.id
+    );
+    return;
+  }
+
   // 1. Help Command
   if (lowerText === 'help' || lowerText === 'menu') {
     await sendWhatsAppMessage(from, 
@@ -963,5 +981,12 @@ export async function handleMerchantMessage(user: any, message: any, from: strin
   }
 
   // Default
-  await sendWhatsAppMessage(from, `Perintah tidak dikenali. Balas 'Help' atau 'Menu' untuk lihat opsi.`, store.id);
+  await sendWhatsAppMessage(
+    from,
+    `Aku belum paham perintahnya.\n\n` +
+      `- Balas *"Help"* untuk lihat perintah Admin Mode.\n` +
+      `- Balas *"User Mode"* untuk belanja seperti customer.\n\n` +
+      `Kalau mau cari toko/produk, coba contoh: "Cari bawang" atau "Cari Pasar Segar".`,
+    store.id
+  );
 }
