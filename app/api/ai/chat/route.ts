@@ -15,6 +15,7 @@ import { getDistanceMeters } from "@/lib/utils";
 import { triggerReverseSync, isStoreOpen } from "@/lib/api";
 import { logTraffic } from "@/lib/traffic";
 import { ensureDefaultStoreTypes, getStoreTypeLabelMap } from "@/lib/store-types";
+import { evaluateAiAbuseGuard, extractClientIp, isSpamLikeMessage } from "@/lib/ai-abuse-guard";
 
 export const runtime = "nodejs";
 
@@ -1051,6 +1052,32 @@ export async function POST(req: NextRequest) {
 
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    if (isPublic) {
+      const channel = context?.channel === "WHATSAPP" ? "WHATSAPP" : context?.channel === "WEB" ? "WEB" : "UNKNOWN";
+      const ip = extractClientIp(req.headers) || (req.headers.get("user-agent") ? `ua:${req.headers.get("user-agent")}` : null);
+      const phone = context?.phoneNumber ? normalizePhoneNumber(String(context.phoneNumber)) : null;
+      const isInScope = !isGercepOutOfScopeMessage(String(message || "")) && !isSpamLikeMessage(String(message || ""));
+      const abuseDecision = await evaluateAiAbuseGuard({
+        channel,
+        storeSlug: context?.slug || null,
+        ip,
+        phone,
+        message: String(message || ""),
+        isInScope
+      });
+      if (abuseDecision.action === "BLOCK") {
+        return NextResponse.json(
+          {
+            text: abuseDecision.message,
+            blocked: true,
+            resetHistory: abuseDecision.resetHistory,
+            history: []
+          },
+          { status: 200 }
+        );
+      }
     }
     // Ensure history is a valid array of the correct format for Gemini SDK
     let validatedHistory = Array.isArray(history) ? history.map((h: any) => {

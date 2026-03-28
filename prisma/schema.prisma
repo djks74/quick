@@ -104,6 +104,22 @@ model Withdrawal {
   store             Store    @relation(fields: [storeId], references: [id])
 }
 
+model AiAbuseGuard {
+  id           Int      @id @default(autoincrement())
+  channel      String
+  storeSlug    String   @default("")
+  identityHash String
+  strikes      Int      @default(0)
+  blockedUntil DateTime?
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([channel, storeSlug, identityHash])
+  @@index([blockedUntil])
+  @@index([lastSeenAt])
+}
+
 model Product {
   id               Int                 @id @default(autoincrement())
   storeId          Int
