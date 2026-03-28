@@ -18,6 +18,14 @@ const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_
 const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "900") || 900);
 const WA_AI_TIMEOUT_MS = Math.max(5000, Number(process.env.WA_AI_TIMEOUT_MS || "25000") || 25000);
 
+const sanitizeWhatsAppAssistantText = (input: string) => {
+  let text = String(input || "");
+  text = text.replace(/\*\*(.+?)\*\*/g, "*$1*");
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1: $2");
+  text = text.replace(/\*\*/g, "*");
+  return text;
+};
+
 const isSessionExpired = (updatedAt?: Date | string | null, ttlMs: number = SESSION_CONTEXT_TTL_MS) => {
   if (!updatedAt) return true;
   const ts = new Date(updatedAt).getTime();
@@ -572,6 +580,7 @@ export async function POST(req: NextRequest) {
               .replace(/^.*silahkan bayar menggunakan tautan.*$/gim, "")
               .replace(/^.*https?:\/\/\S+.*$/gim, "")
               .trim();
+            responseText = sanitizeWhatsAppAssistantText(responseText);
             if (responseText.length > WA_AI_REPLY_CHAR_LIMIT) {
               responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
             }

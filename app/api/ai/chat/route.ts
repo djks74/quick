@@ -91,8 +91,8 @@ function extractQuickRepliesFromText(text: string) {
 }
 
 function isFullMenuRequest(input: string) {
-  const t = String(input || "").toLowerCase();
-  return /\b(menu lengkap|semua menu|daftar menu|list menu|full menu|lihat menu lengkap)\b/.test(t);
+  const t = String(input || "").toLowerCase().trim();
+  return /\b(menu lengkap(?:nya)?|lihat menu lengkap|full menu|daftar menu|list menu|semua menu|daftar produk|list produk|semua produk|produk lengkap|lihat semua produk|all products|all menu)\b/.test(t);
 }
 
 function isContinueMenuRequest(input: string) {
@@ -139,6 +139,14 @@ function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
     isActive: true,
     shippingSenderAddress: { not: null },
     NOT: [{ shippingSenderAddress: "" }],
+    products: { some: { category: { not: "System" } } },
+    ...extra
+  };
+}
+
+function buildAssistantScopedStoreWhere(extra: Record<string, any> = {}) {
+  return {
+    isActive: true,
     products: { some: { category: { not: "System" } } },
     ...extra
   };
@@ -1239,7 +1247,7 @@ export async function POST(req: NextRequest) {
     const storeIdFromContext = context?.storeId ? Number(context.storeId) : null;
     if (!storeSlug && storeIdFromContext) {
       const store = await prisma.store.findFirst({
-        where: buildAssistantStoreEligibilityWhere({ id: storeIdFromContext })
+        where: buildAssistantScopedStoreWhere({ id: storeIdFromContext })
       }) as any;
       if (store?.slug) {
         storeSlug = String(store.slug);
@@ -1248,7 +1256,7 @@ export async function POST(req: NextRequest) {
     }
     if (storeSlug && !scopedStore) {
       const store = await prisma.store.findFirst({
-        where: buildAssistantStoreEligibilityWhere({ slug: storeSlug })
+        where: buildAssistantScopedStoreWhere({ slug: storeSlug })
       }) as any;
       scopedStore = store;
     }
@@ -1505,6 +1513,9 @@ RESPONSE STYLE (VERY IMPORTANT):
 2. Only show up to 10 bullets if the user asks for "detail", "semua", or "menu lengkap".
 3. Ask at most ONE question at the end. If you need multiple inputs, combine them into one question.
 4. Keep replies short, clear, and actionable. Avoid long explanations and avoid repeating the user's message.
+CHANNEL FORMATTING:
+1. If the user is chatting via WhatsApp, use WhatsApp formatting only: *bold* (single asterisk). Never use **double-asterisk** markdown.
+2. Avoid markdown links. If you must include a URL, paste the URL plainly.
 SCOPE POLICY:
 1. You only answer within Gercep scope: store/resto search, menu/products, ordering, delivery, payment, subscription, and merchant operations.
 2. If user asks coding, learning, or general questions outside Gercep, politely refuse and redirect to Gercep-related help.
@@ -1584,6 +1595,10 @@ PAYMENT & RE-ORDERING:
    - Their table number (if dine-in).
 3. If a product has variations (like size, flavor, etc.), you MUST pass the correct 'variationName' when calling 'create_customer_order' to ensure the correct price is used.
 4. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
+
+WEIGHT / UNIT CLARIFICATION:
+1. If the user orders using weights (kg/gram) but the menu item is sold per pack (e.g., 0.5kg), convert into pack count and ask to confirm.
+2. If conversion is ambiguous, ask the user to choose pack/weight before creating the order.
 
 Once an order is created:
 1. Show the user the 'breakdown' of the order.
