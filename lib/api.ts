@@ -242,10 +242,25 @@ export async function updateStoreSettings(storeId: number, data: any) {
     });
 
     if (data.whatsapp) {
-      await prisma.user.update({
-        where: { id: store.ownerId },
-        data: { phoneNumber: data.whatsapp }
-      });
+      const nextPhone = String(data.whatsapp || "").trim();
+      if (nextPhone) {
+        const owner = await prisma.user.findUnique({
+          where: { id: store.ownerId },
+          select: { phoneNumber: true }
+        });
+        const ownerPhone = String(owner?.phoneNumber || "").trim();
+        if (!ownerPhone || ownerPhone === nextPhone) {
+          await prisma.user
+            .update({
+              where: { id: store.ownerId },
+              data: { phoneNumber: nextPhone }
+            })
+            .catch((e: any) => {
+              if (e?.code === "P2002") return null;
+              throw e;
+            });
+        }
+      }
     }
 
     let finalStore: any = updatedStore;
