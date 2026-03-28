@@ -384,7 +384,14 @@ export async function POST(req: NextRequest) {
     const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
     const from = message.from;
-    const textBody = message.text?.body?.trim();
+    const textBody = String(
+      message.text?.body ||
+        message.interactive?.button_reply?.title ||
+        message.interactive?.list_reply?.title ||
+        message.interactive?.button_reply?.id ||
+        message.interactive?.list_reply?.id ||
+        ""
+    ).trim();
     const lowerText = textBody?.toLowerCase();
 
     // Get language early for localization
@@ -568,12 +575,49 @@ export async function POST(req: NextRequest) {
               responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
             }
 
-            // If there's a payment link, add a button
-            const options = {
-              buttonText: data.paymentUrl ? "Pay Now" : undefined,
-              buttonUrl: data.paymentUrl || undefined,
-              imageUrl: data.productImage || undefined
-            };
+            const quickReplies = Array.isArray(data.quickReplies)
+              ? data.quickReplies
+                  .slice(0, 3)
+                  .map((q: any, idx: number) => ({
+                    id: String(q?.id || `QR_${idx + 1}`).slice(0, 200),
+                    title: String(q?.title || q?.value || "").slice(0, 20)
+                  }))
+                  .filter((q: any) => q.title)
+              : [];
+            const shippingOptions = Array.isArray(data.shippingOptions) ? data.shippingOptions : [];
+            const shippingAsButtons = shippingOptions.slice(0, 3).map((s: any, idx: number) => ({
+              id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
+              title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
+            }));
+            const options =
+              data.paymentUrl
+                ? {
+                    buttonText: "Pay Now",
+                    buttonUrl: data.paymentUrl,
+                    imageUrl: data.productImage
+                  }
+                : (quickReplies.length > 0
+                    ? { quickReplies, imageUrl: data.productImage }
+                    : (shippingOptions.length > 3
+                        ? {
+                            list: {
+                              buttonText: l("Pilih Pengiriman", "Choose Shipping"),
+                              sections: [
+                                {
+                                  title: l("Opsi Pengiriman", "Shipping Options"),
+                                  rows: shippingOptions.slice(0, 10).map((s: any, idx: number) => ({
+                                    id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
+                                    title: String(s?.title || s?.provider || `Option ${idx + 1}`).slice(0, 24),
+                                    description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(s?.fee || 0))}${s?.eta ? ` • ${String(s.eta)}` : ""}`.slice(0, 72)
+                                  }))
+                                }
+                              ]
+                            },
+                            imageUrl: data.productImage
+                          }
+                        : (shippingAsButtons.length > 0
+                            ? { quickReplies: shippingAsButtons, imageUrl: data.productImage }
+                            : { imageUrl: data.productImage })));
             const persistHistoryPromise = (aiSession?.id
               ? prisma.whatsAppSession.update({
                   where: { id: aiSession.id },
@@ -879,19 +923,25 @@ export async function POST(req: NextRequest) {
             `🚫 Delivery option is not available for this location.\n\nIf your location is wrong, please check it and share again.\n\nPlease choose another courier.`
           );
           let optionCount = 0;
+          const quickReplies: Array<{ id: string; title: string }> = [];
           if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
             optionCount++;
             optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
+            quickReplies.push({ id: String(optionCount), title: "Kurir Toko" });
           }
           if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
             optionCount++;
             optionsMsg += `\n${optionCount}. GoSend`;
+            quickReplies.push({ id: String(optionCount), title: "GoSend" });
           }
           if (targetStore.shippingEnableJne) {
             optionCount++;
             optionsMsg += `\n${optionCount}. JNE`;
+            quickReplies.push({ id: String(optionCount), title: "JNE" });
           }
-          await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
+          await sendWhatsAppMessage(from, optionsMsg, targetStore.id, {
+            quickReplies: quickReplies.slice(0, 3)
+          });
           return NextResponse.json({ success: true });
         }
 
@@ -1697,23 +1747,44 @@ export async function POST(req: NextRequest) {
 
         let optionsMsg = l(`Pilihan tidak valid. Pilih opsi:`, `Invalid choice. Choose an option:`);
         let optionCount = 0;
+        const quickReplies: Array<{ id: string; title: string }> = [];
         if (allowPickup) {
           optionCount++;
           optionsMsg += `\n${optionCount}. Pickup (Ambil Sendiri)`;
+          quickReplies.push({ id: String(optionCount), title: "Pickup" });
         }
         if (isNearStore || (targetStore as any).shippingEnableStoreCourier) {
           optionCount++;
           optionsMsg += `\n${optionCount}. Kurir Toko (Store Courier)`;
+          quickReplies.push({ id: String(optionCount), title: "Kurir Toko" });
         }
         if (targetStore.shippingEnableJne) {
           optionCount++;
           optionsMsg += `\n${optionCount}. JNE`;
+          quickReplies.push({ id: String(optionCount), title: "JNE" });
         }
         if (targetStore.shippingEnableGosend && !targetStore.shippingJneOnly) {
           optionCount++;
           optionsMsg += `\n${optionCount}. GoSend`;
+          quickReplies.push({ id: String(optionCount), title: "GoSend" });
         }
-        await sendWhatsAppMessage(from, optionsMsg, targetStore.id);
+        if (quickReplies.length > 3) {
+          await sendWhatsAppMessage(from, optionsMsg, targetStore.id, {
+            list: {
+              buttonText: l("Pilih Pengiriman", "Choose Shipping"),
+              sections: [
+                {
+                  title: l("Opsi Pengiriman", "Shipping Options"),
+                  rows: quickReplies.slice(0, 10).map((q) => ({ id: q.id, title: q.title }))
+                }
+              ]
+            }
+          });
+        } else {
+          await sendWhatsAppMessage(from, optionsMsg, targetStore.id, {
+            quickReplies
+          });
+        }
         return NextResponse.json({ success: true });
       }
 

@@ -12,6 +12,7 @@ interface Message {
   breakdown?: string;
   paymentUrl?: string;
   productImage?: string;
+  quickReplies?: Array<{ id: string; title: string; value?: string }>;
 }
 
 interface FloatingAssistantProps {
@@ -121,7 +122,8 @@ export default function FloatingAssistant({
             text: data.text,
             breakdown: data.breakdown,
             paymentUrl: data.paymentUrl,
-            productImage: data.productImage
+            productImage: data.productImage,
+            quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined
           }]);
           if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
@@ -137,10 +139,11 @@ export default function FloatingAssistant({
     );
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (forcedMessage?: string) => {
+    const source = String(forcedMessage ?? input).trim();
+    if (!source || isLoading) return;
 
-    const userMsg = input.trim();
+    const userMsg = source;
     setInput("");
     setMessages(prev => [...prev, { role: "user", text: userMsg }]);
     setIsLoading(true);
@@ -170,7 +173,8 @@ export default function FloatingAssistant({
           text: data.text,
           breakdown: data.breakdown,
           paymentUrl: data.paymentUrl,
-          productImage: data.productImage
+          productImage: data.productImage,
+          quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined
         }]);
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
@@ -257,6 +261,19 @@ export default function FloatingAssistant({
                         Pay Now (Bayar Sekarang)
                       </a>
                     )}
+                    {Array.isArray(m.quickReplies) && m.quickReplies.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {m.quickReplies.map((qr) => (
+                          <button
+                            key={String(qr.id)}
+                            onClick={() => handleSend(String(qr.value || qr.title))}
+                            className="px-3 py-1.5 rounded-lg text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            {qr.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -296,7 +313,7 @@ export default function FloatingAssistant({
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 />
                 <button 
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={isLoading}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
                   style={{ color: themeColor || '#f97316' }}

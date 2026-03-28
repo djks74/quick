@@ -60,6 +60,36 @@ function getGercepScopeRefusal(input: string) {
   return "Maaf, saya hanya bisa bantu topik dalam sistem Gercep (cari toko/resto, menu, pemesanan, pengiriman, pembayaran, dan operasional merchant). Silakan tanya dalam konteks Gercep ya.";
 }
 
+function extractQuickRepliesFromText(text: string) {
+  const raw = String(text || "");
+  const t = raw.toLowerCase();
+  const yesNo =
+    /\b(ya|iya)\b.*\b(tidak|nggak|ga)\b/.test(t) ||
+    /\b(tidak|nggak|ga)\b.*\b(ya|iya)\b/.test(t) ||
+    /\b(yes)\b.*\b(no)\b/.test(t) ||
+    /\b(no)\b.*\b(yes)\b/.test(t) ||
+    /\bya\/tidak\b/.test(t) ||
+    /\byes\/no\b/.test(t);
+  if (yesNo) {
+    return [
+      { id: "YES", title: "Ya", value: "Ya" },
+      { id: "NO", title: "Tidak", value: "Tidak" }
+    ];
+  }
+
+  const asksPayment =
+    (t.includes("bayar") || t.includes("payment") || t.includes("metode pembayaran")) &&
+    t.includes("qris") &&
+    (t.includes("bank") || t.includes("transfer"));
+  if (asksPayment) {
+    return [
+      { id: "PAY_QRIS", title: "QRIS", value: "qris" },
+      { id: "PAY_BANK", title: "Bank Transfer", value: "bank transfer" }
+    ];
+  }
+  return null;
+}
+
 function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
   return {
     isActive: true,
@@ -520,11 +550,26 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         };
       }
 
-      const options = filtered.map((q: any) => 
-        `- ${q.provider === "STORE_COURIER" ? "Kurir Toko" : q.provider} ${q.provider === "STORE_COURIER" ? "" : q.service}: Rp ${new Intl.NumberFormat('id-ID').format(q.fee)}`.replace(/\s+/g, ' ').trim()
-      ).join("\n");
+      const shippingOptions = filtered.map((q: any) => {
+        const providerLabel = q.provider === "STORE_COURIER" ? "Kurir Toko" : q.provider;
+        const serviceLabel = q.provider === "STORE_COURIER" ? "KURIR_TOKO" : String(q.service || "-");
+        const title = `${providerLabel}${q.provider === "STORE_COURIER" ? "" : ` ${q.service}`}`.replace(/\s+/g, " ").trim();
+        const id = `SHIP_${String(q.provider)}_${String(serviceLabel)}`.replace(/[^A-Z0-9_]/gi, "_").slice(0, 200);
+        return {
+          id,
+          provider: q.provider,
+          service: serviceLabel,
+          title,
+          fee: Number(q.fee || 0),
+          eta: q.eta || null
+        };
+      });
 
-      return { options };
+      const options = shippingOptions
+        .map((o: any) => `- ${o.title}: Rp ${new Intl.NumberFormat('id-ID').format(o.fee)}`)
+        .join("\n");
+
+      return { options, shippingOptions };
     } catch (e) {
       console.error("[AI_SHIPPING_ERROR]", e);
       return { 
@@ -1576,6 +1621,7 @@ Once an order is created:
     let finalBreakdown = undefined;
     let finalPaymentUrl = undefined;
     let finalProductImage = undefined;
+    let lastShippingOptions: any[] | null = null;
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       const toolResponses = [];
@@ -1674,6 +1720,9 @@ Once an order is created:
           });
           
           // Capture structured data for the response
+          if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
+            lastShippingOptions = (data as any).shippingOptions;
+          }
           if (call.name === "create_customer_order" && data.success) {
             finalBreakdown = data.breakdown;
             finalPaymentUrl = data.paymentUrl;
@@ -1744,12 +1793,15 @@ Once an order is created:
         durationMs: Date.now() - startedAt
       }
     );
+    const quickReplies = extractQuickRepliesFromText(responseText);
     return NextResponse.json({ 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
       history: trimmedNextHistory,
       breakdown: finalBreakdown,
       paymentUrl: finalPaymentUrl,
-      productImage: finalProductImage
+      productImage: finalProductImage,
+      quickReplies,
+      shippingOptions: lastShippingOptions
     });
 
   } catch (error: any) {

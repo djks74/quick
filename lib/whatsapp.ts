@@ -7,6 +7,14 @@ type WaResolvedConfig = {
   useEnterpriseConfig: boolean;
 };
 
+type WaQuickReply = { id: string; title: string };
+type WaListRow = { id: string; title: string; description?: string };
+type WaListSection = { title: string; rows: WaListRow[] };
+type WaInteractiveOptions =
+  | { type: "cta_url"; buttonText: string; buttonUrl: string }
+  | { type: "buttons"; buttons: WaQuickReply[] }
+  | { type: "list"; buttonText: string; sections: WaListSection[] };
+
 const WA_CONFIG_CACHE_TTL_MS = 30 * 1000;
 const waConfigCache = new Map<number, { value: WaResolvedConfig; expiresAt: number }>();
 
@@ -37,7 +45,13 @@ async function resolveWhatsAppConfig(storeId: number): Promise<WaResolvedConfig>
   return resolved;
 }
 
-async function dispatchWhatsAppMessage(formattedTo: string, message: string, token: string, phoneNumberId: string, options?: { buttonText?: string, buttonUrl?: string, imageUrl?: string }) {
+async function dispatchWhatsAppMessage(
+  formattedTo: string,
+  message: string,
+  token: string,
+  phoneNumberId: string,
+  options?: { imageUrl?: string, interactive?: WaInteractiveOptions }
+) {
   let body: any = {
     messaging_product: "whatsapp",
     to: formattedTo,
@@ -49,7 +63,31 @@ async function dispatchWhatsAppMessage(formattedTo: string, message: string, tok
       link: options.imageUrl,
       caption: message
     };
-  } else if (options?.buttonText && options?.buttonUrl) {
+  } else if (options?.interactive?.type === "list") {
+    body.type = "interactive";
+    body.interactive = {
+      type: "list",
+      body: { text: message },
+      action: {
+        button: options.interactive.buttonText,
+        sections: options.interactive.sections
+      }
+    };
+  } else if (options?.interactive?.type === "buttons") {
+    const buttons = (options.interactive.buttons || []).slice(0, 3).map((b) => ({
+      type: "reply",
+      reply: {
+        id: String(b.id).slice(0, 200),
+        title: String(b.title).slice(0, 20)
+      }
+    }));
+    body.type = "interactive";
+    body.interactive = {
+      type: "button",
+      body: { text: message },
+      action: { buttons }
+    };
+  } else if (options?.interactive?.type === "cta_url") {
     body.type = "interactive";
     body.interactive = {
       type: "cta_url",
@@ -59,8 +97,8 @@ async function dispatchWhatsAppMessage(formattedTo: string, message: string, tok
       action: {
         name: "cta_url",
         parameters: {
-          display_text: options.buttonText,
-          url: options.buttonUrl
+          display_text: options.interactive.buttonText,
+          url: options.interactive.buttonUrl
         }
       }
     };
@@ -84,7 +122,7 @@ async function dispatchWhatsAppMessage(formattedTo: string, message: string, tok
   if (!res.ok) {
     const errText = await res.text();
     console.error(`[WHATSAPP_API_ERROR] Status: ${res.status}. Body: ${errText}`);
-    return { ok: false as const, error: errText, usedInteractive: body.type === "interactive" };
+    return { ok: false as const, error: errText, usedInteractive: body.type === "interactive", interactiveType: body?.interactive?.type || null };
   }
 
   const payload = await res.json().catch(() => ({}));
@@ -131,7 +169,19 @@ async function dispatchWhatsAppTemplateMessage(
   return { ok: true as const, messageId };
 }
 
-export async function sendWhatsAppMessage(to: string, message: string, storeId: number, options?: { buttonText?: string, buttonUrl?: string, imageUrl?: string, isSystemAlert?: boolean }) {
+export async function sendWhatsAppMessage(
+  to: string,
+  message: string,
+  storeId: number,
+  options?: {
+    buttonText?: string,
+    buttonUrl?: string,
+    imageUrl?: string,
+    isSystemAlert?: boolean,
+    quickReplies?: WaQuickReply[],
+    list?: { buttonText: string; sections: WaListSection[] }
+  }
+) {
   // Sanitize Phone Number (Indonesia Default)
   let formattedTo = to.replace(/\D/g, ''); 
   if (formattedTo.startsWith('0')) {
@@ -215,17 +265,32 @@ export async function sendWhatsAppMessage(to: string, message: string, storeId: 
   }
 
   try {
-    const result = await dispatchWhatsAppMessage(formattedTo, message, token, phoneNumberId, options);
+    const interactive: WaInteractiveOptions | undefined =
+      options?.list
+        ? { type: "list", buttonText: options.list.buttonText, sections: options.list.sections }
+        : (options?.quickReplies && options.quickReplies.length > 0)
+          ? { type: "buttons", buttons: options.quickReplies }
+          : (options?.buttonText && options?.buttonUrl)
+            ? { type: "cta_url", buttonText: options.buttonText, buttonUrl: options.buttonUrl }
+            : undefined;
+    const result = await dispatchWhatsAppMessage(formattedTo, message, token, phoneNumberId, { imageUrl: options?.imageUrl, interactive });
     if (!result.ok) {
       console.error("[WHATSAPP_API_ERROR]", result.error);
       if (usageLogId) {
         await finalizeWaMessageLog(usageLogId, null, "failed");
       }
       
-      // FALLBACK 1: If CTA Button failed, try plain text
-      if (result.usedInteractive && options?.buttonUrl) {
-        console.log("[WHATSAPP] CTA Button failed, falling back to text...");
-        return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
+      if (result.usedInteractive) {
+        if (options?.buttonUrl) {
+          return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
+        }
+        if (options?.quickReplies?.length) {
+          const listText = options.quickReplies
+            .slice(0, 3)
+            .map((b, idx) => `${idx + 1}. ${b.title}`)
+            .join("\n");
+          return await sendWhatsAppMessage(to, `${message}\n\n${listText}`, storeId);
+        }
       }
 
       return false;
