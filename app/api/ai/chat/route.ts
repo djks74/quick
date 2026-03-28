@@ -95,6 +95,45 @@ function isFullMenuRequest(input: string) {
   return /\b(menu lengkap|semua menu|daftar menu|list menu|full menu|lihat menu lengkap)\b/.test(t);
 }
 
+function isContinueMenuRequest(input: string) {
+  const t = String(input || "").toLowerCase().trim();
+  return /\b(lanjut menu|menu lanjut|menu berikutnya|next menu)\b/.test(t);
+}
+
+function getFullMenuStateFromHistory(history: any[]) {
+  if (!Array.isArray(history)) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h?.role !== "function") continue;
+    const parts = Array.isArray(h.parts) ? h.parts : [];
+    for (const p of parts) {
+      const fr = p?.functionResponse;
+      if (fr?.name !== "FULL_MENU_STATE") continue;
+      const resp = fr?.response;
+      if (!resp || typeof resp !== "object") continue;
+      const storeId = Number((resp as any).storeId || 0) || null;
+      const offset = Number((resp as any).offset || 0) || 0;
+      const totalCount = Number((resp as any).totalCount || 0) || 0;
+      if (storeId && offset >= 0) return { storeId, offset, totalCount };
+    }
+  }
+  return null;
+}
+
+function buildFullMenuStateHistoryPart(state: { storeId: number; offset: number; totalCount: number }) {
+  return {
+    role: "function",
+    parts: [
+      {
+        functionResponse: {
+          name: "FULL_MENU_STATE",
+          response: state
+        }
+      }
+    ]
+  };
+}
+
 function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
   return {
     isActive: true,
@@ -503,6 +542,12 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
+    if (typeof latitude !== "number" || typeof longitude !== "number") {
+      return { error: "Mohon bagikan lokasi (📍) dulu supaya ongkir bisa dihitung akurat.", needsLocation: true };
+    }
+    if (!String(address || "").trim()) {
+      return { error: "Alamat lengkap diperlukan untuk menghitung ongkir.", needsAddress: true };
+    }
     
     try {
       const quotes = await getShippingQuoteFromBiteship({
@@ -831,10 +876,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
-  async send_order_to_whatsapp({ orderId, phoneNumber, actorIsMerchant, callerPhone }: { orderId: number; phoneNumber: string; actorIsMerchant?: boolean; callerPhone?: string }) {
+  async send_order_to_whatsapp({ orderId, phoneNumber, actorIsMerchant, isMerchant, callerPhone }: { orderId: number; phoneNumber: string; actorIsMerchant?: boolean; isMerchant?: boolean; callerPhone?: string }) {
     const cleanPhone = normalizePhoneNumber(phoneNumber);
     const cleanCallerPhone = callerPhone ? normalizePhoneNumber(callerPhone) : null;
-    const isMerchantActor = Boolean(actorIsMerchant);
+    const isMerchantActor = Boolean(actorIsMerchant ?? isMerchant);
     const order = await prisma.order.findUnique({
       where: { id: Number(orderId) },
       include: { store: true, items: { include: { product: true } } }
@@ -917,11 +962,11 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     return { success: true, message: "Order details sent to WhatsApp." };
   },
 
-  async get_last_order_by_phone({ phoneNumber, actorIsMerchant, callerPhone }: { phoneNumber: string; actorIsMerchant?: boolean; callerPhone?: string }) {
+  async get_last_order_by_phone({ phoneNumber, actorIsMerchant, isMerchant, callerPhone }: { phoneNumber: string; actorIsMerchant?: boolean; isMerchant?: boolean; callerPhone?: string }) {
     await ensureStoreSettingsSchema();
     const cleanPhone = normalizePhoneNumber(phoneNumber);
     const cleanCallerPhone = callerPhone ? normalizePhoneNumber(callerPhone) : null;
-    const isMerchantActor = Boolean(actorIsMerchant);
+    const isMerchantActor = Boolean(actorIsMerchant ?? isMerchant);
     if (!isMerchantActor) {
       if (!cleanCallerPhone || cleanCallerPhone !== cleanPhone) {
         return { error: "Unauthorized access" };
@@ -1187,22 +1232,105 @@ export async function POST(req: NextRequest) {
 
     // Get Gemini Key: Prefer custom store key if Sovereign, otherwise platform default
     let geminiKey = null;
-    const storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
+    let storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
     let forcedScopedSlug: string | null = null;
     
     let scopedStore: any = null;
-    if (storeSlug) {
+    const storeIdFromContext = context?.storeId ? Number(context.storeId) : null;
+    if (!storeSlug && storeIdFromContext) {
+      const store = await prisma.store.findFirst({
+        where: buildAssistantStoreEligibilityWhere({ id: storeIdFromContext })
+      }) as any;
+      if (store?.slug) {
+        storeSlug = String(store.slug);
+        scopedStore = store;
+      }
+    }
+    if (storeSlug && !scopedStore) {
       const store = await prisma.store.findFirst({
         where: buildAssistantStoreEligibilityWhere({ slug: storeSlug })
       }) as any;
       scopedStore = store;
-      if (isPublic && store?.slug) {
-        forcedScopedSlug = String(store.slug);
+    }
+    if (isPublic && scopedStore?.slug) {
+      forcedScopedSlug = String(scopedStore.slug);
+    }
+    if (["SOVEREIGN", "CORPORATE"].includes(scopedStore?.subscriptionPlan) && scopedStore?.customGeminiKey) {
+      geminiKey = scopedStore.customGeminiKey;
+      console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
+    }
+
+    const fullMenuState = getFullMenuStateFromHistory(validatedHistory);
+
+    if (isPublic && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
+      if (!fullMenuState || fullMenuState.storeId !== scopedStore.id) {
+        const text = `Ketik "menu lengkap" untuk lihat daftar menu di *${scopedStore.name}*.`;
+        const nextHistory = [
+          ...validatedHistory,
+          { role: "user", parts: [{ text: String(message || "") }] },
+          { role: "model", parts: [{ text }] }
+        ];
+        const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+        return NextResponse.json({
+          text,
+          history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
+        });
       }
-      if (["SOVEREIGN", "CORPORATE"].includes(store?.subscriptionPlan) && store?.customGeminiKey) {
-        geminiKey = store.customGeminiKey;
-        console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
+
+      const offset = Math.max(0, Number(fullMenuState.offset || 0) || 0);
+      const products = await prisma.product.findMany({
+        where: {
+          storeId: scopedStore.id,
+          stock: { gt: 0 },
+          category: { notIn: ["_ARCHIVED_", "System"] }
+        },
+        select: { name: true, price: true, category: true },
+        orderBy: [{ category: "asc" }, { name: "asc" }],
+        skip: offset,
+        take: 25
+      });
+      const totalCount = await prisma.product.count({
+        where: {
+          storeId: scopedStore.id,
+          stock: { gt: 0 },
+          category: { notIn: ["_ARCHIVED_", "System"] }
+        }
+      });
+      if (products.length === 0) {
+        const text = `Itu semua menu di *${scopedStore.name}*. Kamu bisa ketik "cari <nama produk>" kalau mau langsung item tertentu.`;
+        const nextHistory = [
+          ...validatedHistory,
+          { role: "user", parts: [{ text: String(message || "") }] },
+          { role: "model", parts: [{ text }] },
+          buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: totalCount, totalCount })
+        ];
+        const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+        return NextResponse.json({
+          text,
+          history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
+        });
       }
+
+      let text = `Berikut lanjutan menu di *${scopedStore.name}* (${Math.min(offset + products.length, totalCount)} dari ${totalCount}):\n\n`;
+      products.forEach((p, idx) => {
+        text += `${offset + idx + 1}. ${p.name} — Rp ${new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}\n`;
+      });
+      if (offset + products.length < totalCount) {
+        text += `\nMasih ada ${totalCount - (offset + products.length)} produk lagi. Balas "lanjut menu" atau ketik "cari <nama produk>".`;
+      } else {
+        text += `\nKetik "cari <nama produk>" kalau mau langsung item tertentu.`;
+      }
+      const nextHistory = [
+        ...validatedHistory,
+        { role: "user", parts: [{ text: String(message || "") }] },
+        { role: "model", parts: [{ text }] },
+        buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: offset + products.length, totalCount })
+      ];
+      const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+      return NextResponse.json({
+        text,
+        history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
+      });
     }
 
     if (isPublic && isFullMenuRequest(String(message || "")) && scopedStore?.slug) {
@@ -1241,7 +1369,8 @@ export async function POST(req: NextRequest) {
       const nextHistory = [
         ...validatedHistory,
         { role: "user", parts: [{ text: String(message || "") }] },
-        { role: "model", parts: [{ text }] }
+        { role: "model", parts: [{ text }] },
+        buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: products.length, totalCount })
       ];
       const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
       return NextResponse.json({
@@ -1561,7 +1690,7 @@ Once an order is created:
                   longitude: { type: "number" },
                   weightGrams: { type: "integer" }
                 },
-                required: ["slug"]
+                required: ["slug", "address", "latitude", "longitude"]
               }
             },
             {

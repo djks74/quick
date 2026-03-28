@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
           const aiStore = phoneNumberId
             ? (isPlatformNumberForAi ? null : await prisma.store.findFirst({
                 where: { whatsappPhoneId: String(phoneNumberId) },
-                select: { id: true }
+                select: { id: true, slug: true }
               }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
@@ -545,6 +545,7 @@ export async function POST(req: NextRequest) {
                 context: {
                   phoneNumber: from,
                   channel: "WHATSAPP",
+                  slug: (aiStore as any)?.slug || undefined,
                   storeId: aiStoreId || undefined,
                   tableNumber: aiSession?.tableNumber || undefined,
                   location: (message as any).location, // Pass location if available
@@ -589,35 +590,35 @@ export async function POST(req: NextRequest) {
               id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
               title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
             }));
-            const options =
-              data.paymentUrl
-                ? {
-                    buttonText: "Pay Now",
-                    buttonUrl: data.paymentUrl,
-                    imageUrl: data.productImage
-                  }
-                : (quickReplies.length > 0
-                    ? { quickReplies, imageUrl: data.productImage }
-                    : (shippingOptions.length > 3
-                        ? {
-                            list: {
-                              buttonText: l("Pilih Pengiriman", "Choose Shipping"),
-                              sections: [
-                                {
-                                  title: l("Opsi Pengiriman", "Shipping Options"),
-                                  rows: shippingOptions.slice(0, 10).map((s: any, idx: number) => ({
-                                    id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
-                                    title: String(s?.title || s?.provider || `Option ${idx + 1}`).slice(0, 24),
-                                    description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(s?.fee || 0))}${s?.eta ? ` • ${String(s.eta)}` : ""}`.slice(0, 72)
-                                  }))
-                                }
-                              ]
-                            },
-                            imageUrl: data.productImage
-                          }
-                        : (shippingAsButtons.length > 0
-                            ? { quickReplies: shippingAsButtons, imageUrl: data.productImage }
-                            : { imageUrl: data.productImage })));
+            let options: any = { imageUrl: data.productImage };
+            if (data.paymentUrl) {
+              options = {
+                buttonText: "Pay Now",
+                buttonUrl: data.paymentUrl,
+                imageUrl: data.productImage
+              };
+            } else if (shippingOptions.length > 3) {
+              options = {
+                list: {
+                  buttonText: l("Pilih Pengiriman", "Choose Shipping"),
+                  sections: [
+                    {
+                      title: l("Opsi Pengiriman", "Shipping Options"),
+                      rows: shippingOptions.slice(0, 10).map((s: any, idx: number) => ({
+                        id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
+                        title: String(s?.title || s?.provider || `Option ${idx + 1}`).slice(0, 24),
+                        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(s?.fee || 0))}${s?.eta ? ` • ${String(s.eta)}` : ""}`.slice(0, 72)
+                      }))
+                    }
+                  ]
+                },
+                imageUrl: data.productImage
+              };
+            } else if (shippingAsButtons.length > 0) {
+              options = { quickReplies: shippingAsButtons, imageUrl: data.productImage };
+            } else if (quickReplies.length > 0) {
+              options = { quickReplies, imageUrl: data.productImage };
+            }
             const persistHistoryPromise = (aiSession?.id
               ? prisma.whatsAppSession.update({
                   where: { id: aiSession.id },

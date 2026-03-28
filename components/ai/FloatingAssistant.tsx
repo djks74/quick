@@ -13,6 +13,7 @@ interface Message {
   paymentUrl?: string;
   productImage?: string;
   quickReplies?: Array<{ id: string; title: string; value?: string }>;
+  shippingOptions?: Array<{ id: string; title: string; provider?: string; service?: string; fee?: number; eta?: string | null }>;
 }
 
 interface FloatingAssistantProps {
@@ -60,6 +61,7 @@ export default function FloatingAssistant({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export default function FloatingAssistant({
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
+        setSharedLocation({ latitude, longitude });
         const locMsg = `📍 Shared Location: ${latitude}, ${longitude}`;
         
         setMessages(prev => [...prev, { role: "user", text: locMsg }]);
@@ -123,7 +126,8 @@ export default function FloatingAssistant({
             breakdown: data.breakdown,
             paymentUrl: data.paymentUrl,
             productImage: data.productImage,
-            quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined
+            quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
+            shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined
           }]);
           if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
@@ -150,6 +154,8 @@ export default function FloatingAssistant({
 
     try {
       const trimmedHistory = Array.isArray(history) ? history.slice(-12) : [];
+      const context: any = { channel: "WEB", slug: storeSlug };
+      if (sharedLocation) context.location = sharedLocation;
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -157,10 +163,7 @@ export default function FloatingAssistant({
           message: userMsg, 
           history: trimmedHistory,
           isPublic: true,
-          context: { 
-            channel: "WEB",
-            slug: storeSlug // Pass the store slug context
-          }
+          context
         })
       });
       const data = await res.json();
@@ -174,7 +177,8 @@ export default function FloatingAssistant({
           breakdown: data.breakdown,
           paymentUrl: data.paymentUrl,
           productImage: data.productImage,
-          quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined
+          quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
+          shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined
         }]);
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
@@ -250,6 +254,15 @@ export default function FloatingAssistant({
                     <div className="break-words">
                       {formatMessage(m.text)}
                     </div>
+                    {!m.paymentUrl && m.role !== "user" && !sharedLocation && /bagikan lokasi|share location|kirim lokasi|📍/i.test(String(m.text || "")) && (
+                      <button
+                        onClick={shareLocation}
+                        disabled={isLoading}
+                        className="mt-3 px-3 py-2 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        Share Location
+                      </button>
+                    )}
                     {m.paymentUrl && (
                       <a 
                         href={m.paymentUrl} 
@@ -261,7 +274,28 @@ export default function FloatingAssistant({
                         Pay Now (Bayar Sekarang)
                       </a>
                     )}
-                    {Array.isArray(m.quickReplies) && m.quickReplies.length > 0 && (
+                    {Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0 && !m.paymentUrl && (
+                      <div className="mt-3 flex flex-col gap-2">
+                        {m.shippingOptions.slice(0, 3).map((opt) => (
+                          <button
+                            key={String(opt.id)}
+                            onClick={() =>
+                              handleSend(
+                                `Saya pilih pengiriman: ${String(opt.title)} (provider=${String(opt.provider || "")}, service=${String(opt.service || "")}, ongkir=Rp ${new Intl.NumberFormat("id-ID").format(Number(opt.fee || 0))}${opt.eta ? `, ETA ${String(opt.eta)}` : ""})`
+                              )
+                            }
+                            className="px-3 py-2 rounded-xl text-left text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <div className="font-semibold">{opt.title}</div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                              Rp {new Intl.NumberFormat("id-ID").format(Number(opt.fee || 0))}
+                              {opt.eta ? ` • ${String(opt.eta)}` : ""}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(m.quickReplies) && m.quickReplies.length > 0 && !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {m.quickReplies.map((qr) => (
                           <button
