@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
+import { getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
 import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
@@ -26,7 +27,8 @@ export async function ensurePlatformSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
          ADD COLUMN IF NOT EXISTS "waRateUtility" DOUBLE PRECISION NOT NULL DEFAULT 350,
          ADD COLUMN IF NOT EXISTS "waRateAuthentication" DOUBLE PRECISION NOT NULL DEFAULT 300,
-         ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0`
+         ADD COLUMN IF NOT EXISTS "waRateService" DOUBLE PRECISION NOT NULL DEFAULT 0,
+         ADD COLUMN IF NOT EXISTS "storeTypes" JSONB NOT NULL DEFAULT '[]'::jsonb`
       ];
 
       for (const cmd of commands) {
@@ -249,7 +251,18 @@ export async function getPlatformSettings() {
   try {
     await requireSuperAdmin();
     await ensurePlatformSettingsSchema();
-    return await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    const existing = await prisma.platformSettings.findUnique({ where: { key: "default" } });
+    const storeTypes = normalizeStoreTypes((existing as any)?.storeTypes);
+    if (!existing) return null;
+    if (!Array.isArray((existing as any)?.storeTypes) || storeTypes.length === 0) {
+      const seeded = getDefaultStoreTypes();
+      const updated = await prisma.platformSettings.update({
+        where: { key: "default" },
+        data: { storeTypes: seeded as any }
+      }).catch(() => null);
+      return (updated as any) || existing;
+    }
+    return existing;
   } catch (error) {
     console.error("Error fetching platform settings:", error);
     return null;
@@ -301,6 +314,7 @@ export async function updatePlatformSettings(data: {
   waRateUtility?: number;
   waRateAuthentication?: number;
   waRateService?: number;
+  storeTypes?: any;
 }) {
   try {
     await requireSuperAdmin();
@@ -311,6 +325,10 @@ export async function updatePlatformSettings(data: {
       return { success: false, error: "Facebook App ID must contain digits only." };
     }
     
+    const normalizedStoreTypes =
+      data.storeTypes !== undefined
+        ? (normalizeStoreTypes(data.storeTypes).length > 0 ? normalizeStoreTypes(data.storeTypes) : getDefaultStoreTypes())
+        : undefined;
     const updated = await prisma.platformSettings.upsert({
       where: { key: "default" },
       update: {
@@ -328,6 +346,7 @@ export async function updatePlatformSettings(data: {
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : undefined,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : undefined,
         waRateService: data.waRateService !== undefined ? Number(data.waRateService) : undefined,
+        storeTypes: normalizedStoreTypes !== undefined ? (normalizedStoreTypes as any) : undefined,
       } as any,
       create: {
         key: "default",
@@ -345,6 +364,7 @@ export async function updatePlatformSettings(data: {
         waRateUtility: data.waRateUtility !== undefined ? Number(data.waRateUtility) : 350,
         waRateAuthentication: data.waRateAuthentication !== undefined ? Number(data.waRateAuthentication) : 300,
         waRateService: data.waRateService !== undefined ? Number(data.waRateService) : 0,
+        storeTypes: normalizedStoreTypes !== undefined ? (normalizedStoreTypes as any) : (getDefaultStoreTypes() as any),
       } as any
     });
     return { success: true, data: updated };

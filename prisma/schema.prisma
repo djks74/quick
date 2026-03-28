@@ -345,6 +345,7 @@ model PlatformSettings {
   waRateUtility         Float    @default(350)
   waRateAuthentication  Float    @default(300)
   waRateService         Float    @default(0)
+  storeTypes            Json?    @default("[]")
 }
 
 model WaUserPreference {

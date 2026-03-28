@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -9,6 +9,7 @@ import { useShop } from "@/context/ShopContext";
 import { getStoreSettings, updateStoreSettings, getStoreBySlug, getPosCashierUsername, generateApiKey } from "@/lib/api";
 import { Building2, Check, Copy, Loader2, Lock, Plus, RefreshCcw, Sparkles, Trash2, ExternalLink, Globe, HelpCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
 import AdminSpinner from "../components/AdminSpinner";
 
 type PosPaymentMethod = {
@@ -184,6 +185,11 @@ export default function AdminSettings() {
     }
     initFB();
   }, []);
+
+  const storeTypeOptions = useMemo(() => {
+    const fromPlatform = normalizeStoreTypes(platformSettings?.storeTypes);
+    return fromPlatform.length > 0 ? fromPlatform : getDefaultStoreTypes();
+  }, [platformSettings?.storeTypes]);
 
   const launchWhatsAppSignup = () => {
     if (facebookAppIdError) {
@@ -539,12 +545,13 @@ export default function AdminSettings() {
                     value={settings.storeType}
                     onChange={(e) => setSettings({ ...settings, storeType: e.target.value })}
                   >
-                    <option value="OTHER">Other</option>
-                    <option value="GROCERY">Grocery</option>
-                    <option value="RESTAURANT">Restaurant</option>
-                    <option value="ELECTRONICS">Electronics</option>
-                    <option value="FASHION">Fashion</option>
-                    <option value="MIXED">Mixed</option>
+                    {storeTypeOptions
+                      .filter((t: any) => t?.active !== false)
+                      .map((t: any) => (
+                        <option key={String(t.code)} value={String(t.code)}>
+                          {String(t.label)}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>

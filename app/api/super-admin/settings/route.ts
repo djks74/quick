@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensurePlatformSettingsSchema } from "@/lib/super-admin";
+import { getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
 
 export async function GET() {
   try {
@@ -9,9 +10,19 @@ export async function GET() {
       where: { key: "default" },
       select: {
         facebookAppId: true,
-        whatsappSignupConfigId: true
+        whatsappSignupConfigId: true,
+        storeTypes: true
       }
     });
+    const normalizedStoreTypes = normalizeStoreTypes((settings as any)?.storeTypes);
+    if (settings && normalizedStoreTypes.length === 0) {
+      await prisma.platformSettings
+        .update({
+          where: { key: "default" },
+          data: { storeTypes: getDefaultStoreTypes() as any }
+        })
+        .catch(() => null);
+    }
     const fallbackAppId =
       String(process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "").trim() ||
       String(process.env.FACEBOOK_APP_ID || "").trim() ||
@@ -27,7 +38,8 @@ export async function GET() {
       success: true,
       settings,
       facebookAppId,
-      whatsappSignupConfigId
+      whatsappSignupConfigId,
+      storeTypes: normalizedStoreTypes.length > 0 ? normalizedStoreTypes : getDefaultStoreTypes()
     });
   } catch (error) {
     console.error("[API_PUBLIC_SETTINGS_ERROR]", error);

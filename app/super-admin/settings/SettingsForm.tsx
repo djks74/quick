@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, Send, Activity, Wallet, MessageSquare } from "lucide-react";
 import { updatePlatformSettings, testWhatsAppConnection } from "@/lib/super-admin";
 import { cn } from "@/lib/utils";
+import { getDefaultStoreTypes, normalizeStoreTypeCode, normalizeStoreTypes } from "@/lib/store-types";
 
 type PlatformSettings = {
   whatsappToken?: string | null;
@@ -21,6 +22,7 @@ type PlatformSettings = {
   waRateUtility?: number;
   waRateAuthentication?: number;
   waRateService?: number;
+  storeTypes?: any;
 };
 
 export default function SettingsForm({ 
@@ -52,7 +54,10 @@ export default function SettingsForm({
       waRateMarketing: initialSettings?.waRateMarketing ?? 2000,
       waRateUtility: initialSettings?.waRateUtility ?? 350,
       waRateAuthentication: initialSettings?.waRateAuthentication ?? 300,
-      waRateService: initialSettings?.waRateService ?? 0
+      waRateService: initialSettings?.waRateService ?? 0,
+      storeTypes: normalizeStoreTypes((initialSettings as any)?.storeTypes).length > 0
+        ? normalizeStoreTypes((initialSettings as any)?.storeTypes)
+        : getDefaultStoreTypes()
     }),
     [initialSettings]
   );
@@ -63,6 +68,7 @@ export default function SettingsForm({
   const [isTesting, setIsTesting] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [testPhone, setTestPhone] = useState("");
+  const [storeTypeDraft, setStoreTypeDraft] = useState({ code: "", label: "" });
 
   const handleTestWhatsApp = async () => {
     if (!form.whatsappToken || !form.whatsappPhoneId || !testPhone) {
@@ -101,7 +107,8 @@ export default function SettingsForm({
         setTimeout(() => setSaveMessage(null), 3000);
         return;
       }
-      const res = await updatePlatformSettings(form);
+      const nextStoreTypes = normalizeStoreTypes(form.storeTypes);
+      const res = await updatePlatformSettings({ ...form, storeTypes: nextStoreTypes });
       if (res.success) {
         setSaveMessage("Settings saved successfully.");
         router.refresh();
@@ -272,6 +279,83 @@ export default function SettingsForm({
                 {testMessage}
               </p>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Store Types</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Master list shown to merchants when setting store type.</p>
+        </div>
+        <div className="md:col-span-2 space-y-3">
+          <div className="space-y-2">
+            {(Array.isArray(form.storeTypes) ? form.storeTypes : []).map((t: any, idx: number) => (
+              <div key={`${t?.code || "type"}-${idx}`} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center">
+                <input
+                  type="text"
+                  className="sm:col-span-3 border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg text-sm dark:text-white transition-colors"
+                  value={String(t?.label || "")}
+                  onChange={(e) => {
+                    const next = Array.isArray(form.storeTypes) ? [...form.storeTypes] : [];
+                    next[idx] = { ...(next[idx] || {}), label: e.target.value, code: normalizeStoreTypeCode(next[idx]?.code || e.target.value) };
+                    setForm({ ...form, storeTypes: next });
+                  }}
+                  placeholder="Label"
+                />
+                <input
+                  type="text"
+                  className="sm:col-span-2 border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-2 rounded-lg text-sm dark:text-white transition-colors"
+                  value={String(t?.code || "")}
+                  onChange={(e) => {
+                    const next = Array.isArray(form.storeTypes) ? [...form.storeTypes] : [];
+                    next[idx] = { ...(next[idx] || {}), code: normalizeStoreTypeCode(e.target.value) };
+                    setForm({ ...form, storeTypes: next });
+                  }}
+                  placeholder="CODE"
+                />
+                <button
+                  onClick={() => {
+                    const next = (Array.isArray(form.storeTypes) ? [...form.storeTypes] : []).filter((_: any, i: number) => i !== idx);
+                    setForm({ ...form, storeTypes: next.length > 0 ? next : getDefaultStoreTypes() });
+                  }}
+                  className="sm:col-span-1 border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg text-sm dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center pt-2">
+            <input
+              type="text"
+              className="sm:col-span-3 border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg text-sm dark:text-white transition-colors"
+              value={storeTypeDraft.label}
+              onChange={(e) => setStoreTypeDraft({ ...storeTypeDraft, label: e.target.value, code: normalizeStoreTypeCode(storeTypeDraft.code || e.target.value) })}
+              placeholder="New type label"
+            />
+            <input
+              type="text"
+              className="sm:col-span-2 border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-black/20 px-3 py-2 rounded-lg text-sm dark:text-white transition-colors"
+              value={storeTypeDraft.code}
+              onChange={(e) => setStoreTypeDraft({ ...storeTypeDraft, code: normalizeStoreTypeCode(e.target.value) })}
+              placeholder="NEW_CODE"
+            />
+            <button
+              onClick={() => {
+                const label = String(storeTypeDraft.label || "").trim();
+                if (!label) return;
+                const code = normalizeStoreTypeCode(storeTypeDraft.code || label);
+                const next = Array.isArray(form.storeTypes) ? [...form.storeTypes] : [];
+                next.push({ code, label, active: true });
+                setForm({ ...form, storeTypes: normalizeStoreTypes(next) });
+                setStoreTypeDraft({ code: "", label: "" });
+              }}
+              className="sm:col-span-1 border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg text-sm dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              Add
+            </button>
           </div>
         </div>
       </div>
