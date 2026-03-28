@@ -13,6 +13,7 @@ import { processPayment } from "@/lib/payment";
 import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
 import { triggerReverseSync, isStoreOpen } from "@/lib/api";
+import { logTraffic } from "@/lib/traffic";
 
 export const runtime = "nodejs";
 
@@ -118,6 +119,10 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
 
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
+const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "384") || 384);
+const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "1") || 1);
+const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
+const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "20") || 20);
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
@@ -1011,7 +1016,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
     // Ensure history is a valid array of the correct format for Gemini SDK
-    const validatedHistory = Array.isArray(history) ? history.map((h: any) => {
+    let validatedHistory = Array.isArray(history) ? history.map((h: any) => {
       // Role must be 'user', 'model', or 'function'
       let role = h.role;
       if (role !== "model" && role !== "function") {
@@ -1031,6 +1036,10 @@ export async function POST(req: NextRequest) {
           : [{ text: String(h.text || h.parts || "") }]
       };
     }) : [];
+    const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+    if (historyLimit > 0 && validatedHistory.length > historyLimit) {
+      validatedHistory = validatedHistory.slice(-historyLimit);
+    }
     if (isGercepOutOfScopeMessage(message)) {
       return NextResponse.json({ text: getGercepScopeRefusal(message), history: validatedHistory });
     }
@@ -1186,10 +1195,16 @@ export async function POST(req: NextRequest) {
       history: validatedHistory,
       systemInstruction: {
         parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information.
+RESPONSE STYLE (VERY IMPORTANT):
+1. Default format: up to 3 bullets (short lines) + 1 question.
+2. Only show up to 10 bullets if the user asks for "detail", "semua", or "menu lengkap".
+3. Ask at most ONE question at the end. If you need multiple inputs, combine them into one question.
+4. Keep replies short, clear, and actionable. Avoid long explanations and avoid repeating the user's message.
 SCOPE POLICY:
 1. You only answer within Gercep scope: store/resto search, menu/products, ordering, delivery, payment, subscription, and merchant operations.
 2. If user asks coding, learning, or general questions outside Gercep, politely refuse and redirect to Gercep-related help.
 3. Never provide broad general-knowledge tutoring outside Gercep context.
+
 
 MERCHANT/ADMIN ASSISTANCE:
 If the user is an ADMIN or MERCHANT (see userContextInfo):
@@ -1468,7 +1483,7 @@ Once an order is created:
           ]
         }
       ] as any,
-      generationConfig: { maxOutputTokens: 1000 }
+      generationConfig: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS }
     });
 
     // 1. Initial Request to Gemini
@@ -1479,7 +1494,7 @@ Once an order is created:
     console.log(`[AI_CHAT] Gemini response calls count: ${calls.length}`);
 
     // 2. Handle Function Calls (Loop until no more calls)
-    const MAX_ITERATIONS = 3;
+    const MAX_ITERATIONS = GEMINI_MAX_TOOL_ITERATIONS;
     let iterations = 0;
 
     let finalBreakdown = undefined;
@@ -1626,9 +1641,28 @@ Once an order is created:
       finalProductImage = imageMatch[1];
     }
 
+    const nextHistory = await chat.getHistory();
+    const trimmedNextHistory = historyLimit > 0 && nextHistory.length > historyLimit
+      ? nextHistory.slice(-historyLimit)
+      : nextHistory;
+    await logTraffic(
+      context?.storeId ? Number(context.storeId) : undefined,
+      context?.channel === "WHATSAPP" ? "WHATSAPP" : "WEB",
+      {
+        event: "AI_CHAT",
+        channel: context?.channel || (isPublic ? "PUBLIC" : "PRIVATE"),
+        isPublic: Boolean(isPublic),
+        storeSlug: context?.slug || null,
+        historyCount: validatedHistory.length,
+        messageChars: String(message || "").length,
+        responseChars: String(responseText || "").length,
+        functionCalls: Array.isArray(calls) ? calls.length : 0,
+        iterationsUsed: iterations
+      }
+    );
     return NextResponse.json({ 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
-      history: await chat.getHistory(),
+      history: trimmedNextHistory,
       breakdown: finalBreakdown,
       paymentUrl: finalPaymentUrl,
       productImage: finalProductImage

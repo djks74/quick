@@ -60,12 +60,13 @@ export default function AdminChat({ user, context }: AdminChatProps) {
     setIsLoading(true);
 
     try {
+      const trimmedHistory = Array.isArray(messages) ? messages.slice(-12) : [];
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input,
-          history: messages,
+          history: trimmedHistory,
           isPublic: false,
           context: {
             ...context,

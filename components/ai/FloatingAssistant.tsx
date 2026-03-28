@@ -95,12 +95,13 @@ export default function FloatingAssistant({
         setIsLocating(false);
 
         try {
+          const trimmedHistory = Array.isArray(history) ? history.slice(-12) : [];
           const res = await fetch("/api/ai/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
               message: locMsg, 
-              history,
+              history: trimmedHistory,
               isPublic: true,
               context: {
                 channel: "WEB",
@@ -117,7 +118,7 @@ export default function FloatingAssistant({
             paymentUrl: data.paymentUrl,
             productImage: data.productImage
           }]);
-          if (data.history) setHistory(data.history);
+          if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
           setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);
         } finally {
@@ -140,12 +141,13 @@ export default function FloatingAssistant({
     setIsLoading(true);
 
     try {
+      const trimmedHistory = Array.isArray(history) ? history.slice(-12) : [];
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           message: userMsg, 
-          history,
+          history: trimmedHistory,
           isPublic: true,
           context: { 
             channel: "WEB",
@@ -164,7 +166,7 @@ export default function FloatingAssistant({
           paymentUrl: data.paymentUrl,
           productImage: data.productImage
         }]);
-        if (data.history) setHistory(data.history);
+        if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);

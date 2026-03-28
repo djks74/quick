@@ -14,6 +14,8 @@ import { getDistanceMeters } from '@/lib/utils';
 
 type WaLang = "id" | "en";
 const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
+const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
+const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "900") || 900);
 
 const isSessionExpired = (updatedAt?: Date | string | null, ttlMs: number = SESSION_CONTEXT_TTL_MS) => {
   if (!updatedAt) return true;
@@ -494,7 +496,10 @@ export async function POST(req: NextRequest) {
         }
 
         // Fetch history from session metadata
-        const history = ((aiSession as any)?.metadata as any)?.chatHistory || [];
+        const historyRaw = ((aiSession as any)?.metadata as any)?.chatHistory || [];
+        const history = (WA_AI_HISTORY_LIMIT > 0 && Array.isArray(historyRaw) && historyRaw.length > WA_AI_HISTORY_LIMIT)
+          ? historyRaw.slice(-WA_AI_HISTORY_LIMIT)
+          : historyRaw;
         let finalPrompt = textBody;
 
         // If it's a location message, provide a default prompt for the AI
@@ -553,11 +558,14 @@ export async function POST(req: NextRequest) {
             const rawResponseText = data.breakdown
               ? `${data.breakdown}\n\n${data.text}`
               : data.text;
-            const responseText = String(rawResponseText || "")
+            let responseText = String(rawResponseText || "")
               .replace(/(\*?Detail Pesanan[\s\S]*)$/i, "")
               .replace(/^.*silahkan bayar menggunakan tautan.*$/gim, "")
               .replace(/^.*https?:\/\/\S+.*$/gim, "")
               .trim();
+            if (responseText.length > WA_AI_REPLY_CHAR_LIMIT) {
+              responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
+            }
 
             // If there's a payment link, add a button
             const options = {
@@ -571,7 +579,9 @@ export async function POST(req: NextRequest) {
                   data: {
                     metadata: {
                       ...((aiSession as any)?.metadata || {}),
-                      chatHistory: data.history || []
+                      chatHistory: (WA_AI_HISTORY_LIMIT > 0 && Array.isArray(data.history) && data.history.length > WA_AI_HISTORY_LIMIT)
+                        ? data.history.slice(-WA_AI_HISTORY_LIMIT)
+                        : (data.history || [])
                     }
                   } as any
                 })
