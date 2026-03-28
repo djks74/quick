@@ -131,8 +131,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const { keyword, effectiveLocation } = normalizeStoreSearchInput(String(query || ""), location_context);
     const productSelect: any = keyword
       ? {
-          where: { name: { contains: keyword, mode: "insensitive" } },
-          select: { name: true },
+          where: {
+            OR: [
+              { name: { contains: keyword, mode: "insensitive" } },
+              { description: { contains: keyword, mode: "insensitive" } },
+              { shortDescription: { contains: keyword, mode: "insensitive" } }
+            ]
+          },
+          select: { name: true, description: true, shortDescription: true },
           take: 2
         }
       : { select: { name: true }, take: 0 };
@@ -140,6 +146,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const selectShape: any = {
       name: true,
       slug: true,
+      storeType: true,
       whatsapp: true,
       shippingSenderAddress: true,
       shippingSenderName: true,
@@ -155,7 +162,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           { name: { contains: keyword, mode: "insensitive" } },
           { slug: { contains: keyword, mode: "insensitive" } },
           { categories: { some: { name: { contains: keyword, mode: "insensitive" } } } },
-          { products: { some: { name: { contains: keyword, mode: "insensitive" } } } }
+          { products: { some: { name: { contains: keyword, mode: "insensitive" } } } },
+          { products: { some: { description: { contains: keyword, mode: "insensitive" } } } },
+          { products: { some: { shortDescription: { contains: keyword, mode: "insensitive" } } } }
         ]
       : [];
     const locationOr = effectiveLocation
@@ -243,6 +252,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const store = await prisma.store.findFirst({
       where: buildAssistantStoreEligibilityWhere({ slug }),
       include: {
+        categories: { select: { name: true, slug: true } },
         products: {
           where: { 
             category: { 
@@ -254,8 +264,15 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     });
     if (!store) return { error: "Store not found" };
+    const categoryNameBySlug = new Map<string, string>(
+      (store.categories || []).map((c: any) => [String(c.slug), String(c.name)])
+    );
+    const products = (store.products || []).map((p: any) => ({
+      ...p,
+      categoryName: p.category ? (categoryNameBySlug.get(String(p.category)) || String(p.category)) : null
+    }));
     return { 
-      products: store.products,
+      products,
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };
@@ -296,13 +313,22 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findFirst({ where: buildAssistantStoreEligibilityWhere({ slug }) });
     if (!store) return { error: "Store not found" };
-    
+    const categoryLabel = String(category || "General").trim() || "General";
+    const categorySlug = categoryLabel
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "general";
+    await prisma.category.upsert({
+      where: { storeId_slug: { storeId: store.id, slug: categorySlug } },
+      update: { name: categoryLabel },
+      create: { storeId: store.id, name: categoryLabel, slug: categorySlug, subCategories: [] as any }
+    }).catch(() => null);
     const product = await prisma.product.create({
       data: {
         storeId: store.id,
         name,
         price: Number(price),
-        category: category || "General",
+        category: categorySlug,
         stock: 100,
         description: "Added via AI Assistant"
       }
@@ -1229,6 +1255,7 @@ If the user is an ADMIN or MERCHANT (see userContextInfo):
 
 CUSTOMER ASSISTANCE:
 1. If a user asks for a specific food (like 'nasi uduk') or "nearby" stores, use 'search_stores'.
+1b. When listing stores, use storeType (if available) to describe what they sell.
 2. If you have the user's location (latitude/longitude) in the context, you MUST pass them to 'search_stores' to ensure results are relevant to their area.
 3. If no stores are found within 50km, tell the user: "Maaf, sepertinya belum ada toko di area kamu yang bergabung dengan Gercep."
 

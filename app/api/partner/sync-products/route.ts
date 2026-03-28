@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const store = await prisma.store.findUnique({
     where: { apiKey },
-    include: { products: true }
+    include: { products: true, categories: true }
   });
 
   if (!store) return NextResponse.json({ error: "Invalid API Key" }, { status: 403 });
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
         price: p.price,
         stock: p.stock,
         category: p.category,
+        categoryName: p.category ? (store.categories.find((c) => c.slug === p.category)?.name || p.category) : null,
         image: p.image
       }))
   });
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     console.log(`[API_SYNC] Starting sync for store "${store.name}" (ID: ${store.id}). Action: ${action}, Products: ${products.length}`);
 
     const results = [];
-    const syncedCategories = new Set<string>();
+    const syncedCategorySlugs = new Set<string>();
 
     for (const prod of products) {
       try {
@@ -69,7 +70,8 @@ export async function POST(req: NextRequest) {
           const externalId = prod.externalId ? String(prod.externalId) : null;
           const name = prod.name ? String(prod.name).trim() : null;
           const price = prod.price !== undefined ? Number(prod.price) : undefined;
-          const category = prod.category ? String(prod.category).trim() : "General";
+          const categoryLabel = prod.category ? String(prod.category).trim() : "General";
+          const categorySlug = String(categoryLabel).toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "") || "general";
           const description = prod.description ? String(prod.description) : "";
           const stock = prod.stock !== undefined ? Number(prod.stock) : 999999;
           const image = prod.image || null;
@@ -79,8 +81,7 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          if (category && !syncedCategories.has(category)) {
-            const categorySlug = String(category).toLowerCase().replace(/[^a-z0-9]/g, "-");
+          if (categorySlug && !syncedCategorySlugs.has(categorySlug)) {
             await prisma.category.upsert({
               where: {
                 storeId_slug: {
@@ -89,15 +90,15 @@ export async function POST(req: NextRequest) {
                 }
               },
               update: {
-                name: String(category)
+                name: String(categoryLabel)
               },
               create: {
                 storeId: store.id,
-                name: String(category),
+                name: String(categoryLabel),
                 slug: categorySlug
               }
             }).catch(() => null);
-            syncedCategories.add(category);
+            syncedCategorySlugs.add(categorySlug);
           }
 
           let updated;
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
                 data: {
                   name: name,
                   price: Number(price),
-                  category: category || "General",
+                  category: categorySlug,
                   description: description || "",
                   image: image || null,
                   stock: stock !== undefined ? Number(stock) : 999999,
@@ -149,7 +150,7 @@ export async function POST(req: NextRequest) {
                   data: {
                     externalId: String(externalId),
                     price: Number(price),
-                    category: category || "General",
+                    category: categorySlug,
                     description: description || "",
                     image: image || null,
                     stock: stock !== undefined ? Number(stock) : 999999,
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
                     externalId: String(externalId),
                     name: name,
                     price: Number(price),
-                    category: category || "General",
+                    category: categorySlug,
                     description: description || "",
                     image: image || null,
                     stock: stock !== undefined ? Number(stock) : 999999
@@ -181,7 +182,7 @@ export async function POST(req: NextRequest) {
               },
               update: {
                 price: Number(price),
-                category: category || "General",
+                category: categorySlug,
                 description: description || "",
                 image: image || null,
                 stock: stock !== undefined ? Number(stock) : 999999,
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
                 storeId: store.id,
                 name: name,
                 price: Number(price),
-                category: category || "General",
+                category: categorySlug,
                 description: description || "",
                 image: image || null,
                 stock: stock !== undefined ? Number(stock) : 999999

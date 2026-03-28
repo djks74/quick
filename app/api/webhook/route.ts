@@ -1499,9 +1499,11 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ success: true });
           }
 
-          let selectedCategoryName = null;
+          let selectedCategorySlug: string | null = null;
+          let selectedCategoryLabel: string | null = null;
           if (index === 0) {
-              selectedCategoryName = null;
+              selectedCategorySlug = null;
+              selectedCategoryLabel = null;
           } else {
               const categories = await prisma.category.findMany({
                   where: { storeId: targetStore.id },
@@ -1509,7 +1511,8 @@ export async function POST(req: NextRequest) {
               });
               
               if (index > 0 && index <= categories.length) {
-                  selectedCategoryName = categories[index - 1].name;
+                  selectedCategorySlug = categories[index - 1].slug;
+                  selectedCategoryLabel = categories[index - 1].name;
               } else {
                   await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Cek daftar lagi ya.`, `Invalid selection. Please check the list.`), targetStore.id);
                   return NextResponse.json({ success: true });
@@ -1517,8 +1520,8 @@ export async function POST(req: NextRequest) {
           }
 
           const whereClause: any = { storeId: targetStore.id };
-          if (selectedCategoryName) {
-              whereClause.category = { equals: selectedCategoryName, mode: 'insensitive' };
+          if (selectedCategorySlug) {
+              whereClause.category = { equals: selectedCategorySlug, mode: 'insensitive' };
           }
 
           const products = await prisma.product.findMany({
@@ -1536,11 +1539,11 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ success: true });
           }
 
-          const stepValue = selectedCategoryName ? `ORDERING:${selectedCategoryName}` : `ORDERING:ALL`;
+          const stepValue = selectedCategorySlug ? `ORDERING:${selectedCategorySlug}` : `ORDERING:ALL`;
           await updateSession(from, targetStore.id, { step: stepValue });
 
           const menuUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://gercep.click'}/${targetStore.slug}${session.tableNumber ? `?table=${session.tableNumber}` : ''}`;
-          let title = selectedCategoryName ? `${selectedCategoryName}` : l(`Semua Menu`, `All Menu`);
+          let title = selectedCategoryLabel ? `${selectedCategoryLabel}` : l(`Semua Menu`, `All Menu`);
           let menuText = `🍽️ *${title}* 🍽️\n\n`;
           
           products.forEach((p, idx) => {

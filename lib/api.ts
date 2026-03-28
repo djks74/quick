@@ -196,6 +196,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
       where: { id: storeId },
       data: {
         name: data.storeName,
+        storeType: data.storeType || "OTHER",
         whatsapp: data.whatsapp,
         themeColor: data.themeColor,
         enableWhatsApp: data.enableWhatsApp,
@@ -1025,6 +1026,14 @@ export async function triggerReverseSync(productId: number, action: 'upsert' | '
     }
     
     console.log(`[SYNC] Target Webhook URL: ${wpWebhookUrl}`);
+    let categoryName: string | null = product.category;
+    if (categoryName && !["_ARCHIVED_", "System"].includes(categoryName)) {
+      const mapped = await prisma.category.findUnique({
+        where: { storeId_slug: { storeId: product.storeId, slug: categoryName } },
+        select: { name: true }
+      }).catch(() => null);
+      if (mapped?.name) categoryName = mapped.name;
+    }
 
     const res = await fetch(wpWebhookUrl, {
       method: 'POST',
@@ -1038,7 +1047,8 @@ export async function triggerReverseSync(productId: number, action: 'upsert' | '
         name: product.name,
         price: product.price,
         stock: product.stock,
-        category: product.category,
+        category: categoryName,
+        categorySlug: product.category,
         description: product.description,
         image: product.image
       })
@@ -1344,7 +1354,7 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
           where: { storeId_name: { storeId, name } },
           update: {
             price: resolvedPrice,
-            category: categoryName || null,
+            category: categoryName ? categorySlug : null,
             stock,
             barcode: barcode || null,
             image: image || null,
@@ -1359,7 +1369,7 @@ export async function importProductsFromCsvRows(storeId: number, rows: any[]) {
             storeId,
             name,
             price: resolvedPrice,
-            category: categoryName || null,
+            category: categoryName ? categorySlug : null,
             stock,
             barcode: barcode || null,
             image: image || null,

@@ -30,6 +30,7 @@ export async function ensureStoreSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "lastSyncAt" TIMESTAMP(3),
          ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "apiKey" TEXT,
+         ADD COLUMN IF NOT EXISTS "storeType" TEXT NOT NULL DEFAULT 'OTHER',
          ADD COLUMN IF NOT EXISTS "corporateName" TEXT,
          ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true`,
 

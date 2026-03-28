@@ -67,6 +67,7 @@ export default function AdminSettings() {
     storeName: "",
     slug: "",
     name: "",
+    storeType: "OTHER",
     whatsapp: "",
     themeColor: "",
     whatsappToken: "",
@@ -318,6 +319,7 @@ export default function AdminSettings() {
           storeName: data.name || "",
           slug: data.slug || "",
           name: data.name || "",
+          storeType: (data as any).storeType || "OTHER",
           whatsapp: data.whatsapp || "",
           themeColor: data.themeColor || "",
           whatsappToken: data.whatsappToken || "",
@@ -529,6 +531,21 @@ export default function AdminSettings() {
                     value={settings.storeName}
                     onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-300">Store Type</label>
+                  <select
+                    className="w-full md:w-2/3 border border-[#ccd0d4] dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-1.5 focus:border-[#2271b1] outline-none dark:text-white"
+                    value={settings.storeType}
+                    onChange={(e) => setSettings({ ...settings, storeType: e.target.value })}
+                  >
+                    <option value="OTHER">Other</option>
+                    <option value="GROCERY">Grocery</option>
+                    <option value="RESTAURANT">Restaurant</option>
+                    <option value="ELECTRONICS">Electronics</option>
+                    <option value="FASHION">Fashion</option>
+                    <option value="MIXED">Mixed</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-gray-300">WhatsApp Number</label>
