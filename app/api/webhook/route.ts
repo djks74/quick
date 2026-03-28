@@ -23,6 +23,11 @@ const sanitizeWhatsAppAssistantText = (input: string) => {
   text = text.replace(/\*\*(.+?)\*\*/g, "*$1*");
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1: $2");
   text = text.replace(/\*\*/g, "*");
+  const stars = (text.match(/\*/g) || []).length;
+  if (stars % 2 === 1) {
+    const idx = text.lastIndexOf("*");
+    if (idx >= 0) text = text.slice(0, idx) + text.slice(idx + 1);
+  }
   return text;
 };
 

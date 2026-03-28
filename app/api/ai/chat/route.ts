@@ -204,7 +204,7 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
 
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
-const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "384") || 384);
+const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "768") || 768);
 const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "5") || 5);
 const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
 const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "20") || 20);
