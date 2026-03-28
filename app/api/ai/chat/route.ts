@@ -90,6 +90,11 @@ function extractQuickRepliesFromText(text: string) {
   return null;
 }
 
+function isFullMenuRequest(input: string) {
+  const t = String(input || "").toLowerCase();
+  return /\b(menu lengkap|semua menu|daftar menu|list menu|full menu|lihat menu lengkap)\b/.test(t);
+}
+
 function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
   return {
     isActive: true,
@@ -1185,10 +1190,12 @@ export async function POST(req: NextRequest) {
     const storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
     let forcedScopedSlug: string | null = null;
     
+    let scopedStore: any = null;
     if (storeSlug) {
       const store = await prisma.store.findFirst({
         where: buildAssistantStoreEligibilityWhere({ slug: storeSlug })
       }) as any;
+      scopedStore = store;
       if (isPublic && store?.slug) {
         forcedScopedSlug = String(store.slug);
       }
@@ -1196,6 +1203,51 @@ export async function POST(req: NextRequest) {
         geminiKey = store.customGeminiKey;
         console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
       }
+    }
+
+    if (isPublic && isFullMenuRequest(String(message || "")) && scopedStore?.slug) {
+      const products = await prisma.product.findMany({
+        where: {
+          storeId: scopedStore.id,
+          stock: { gt: 0 },
+          category: { notIn: ["_ARCHIVED_", "System"] }
+        },
+        select: { name: true, price: true, category: true },
+        orderBy: [{ category: "asc" }, { name: "asc" }],
+        take: 25
+      });
+      const totalCount = await prisma.product.count({
+        where: {
+          storeId: scopedStore.id,
+          stock: { gt: 0 },
+          category: { notIn: ["_ARCHIVED_", "System"] }
+        }
+      });
+      if (products.length === 0) {
+        return NextResponse.json({
+          text: `Maaf, belum ada produk aktif di ${scopedStore.name}.`,
+          history: validatedHistory
+        });
+      }
+      let text = `Berikut menu di *${scopedStore.name}* (${Math.min(products.length, totalCount)} dari ${totalCount}):\n\n`;
+      products.forEach((p, idx) => {
+        text += `${idx + 1}. ${p.name} — Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}\n`;
+      });
+      if (totalCount > products.length) {
+        text += `\nMasih ada ${totalCount - products.length} produk lagi. Balas "lanjut menu" atau ketik "cari <nama produk>".`;
+      } else {
+        text += `\nKetik "cari <nama produk>" kalau mau langsung item tertentu.`;
+      }
+      const nextHistory = [
+        ...validatedHistory,
+        { role: "user", parts: [{ text: String(message || "") }] },
+        { role: "model", parts: [{ text }] }
+      ];
+      const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+      return NextResponse.json({
+        text,
+        history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
+      });
     }
 
     if (!geminiKey) {
