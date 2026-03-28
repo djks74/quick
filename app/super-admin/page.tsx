@@ -1,4 +1,4 @@
-import { getAllStores, getAllUsers } from "@/lib/super-admin";
+import { getAllStores, getAllUsers, getPlatformSettings } from "@/lib/super-admin";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import StoreTable from "./StoreTable";
@@ -15,9 +15,10 @@ export default async function SuperAdminPage() {
     redirect('/login');
   }
 
-  const [stores, users] = await Promise.all([
+  const [stores, users, platformSettings] = await Promise.all([
     getAllStores(200),
-    getAllUsers(500)
+    getAllUsers(500),
+    getPlatformSettings()
   ]);
 
   return (
@@ -26,7 +27,7 @@ export default async function SuperAdminPage() {
         <h2 className="text-lg font-bold dark:text-white">Active Stores</h2>
         <CreateMerchantButton users={users} />
       </div>
-      <StoreTable stores={stores} users={users} />
+      <StoreTable stores={stores} users={users} storeTypes={(platformSettings as any)?.storeTypes || []} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ensureWaCreditSchema } from "@/lib/wa-credit";
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
-import { ensureDefaultStoreTypes, getDefaultStoreTypes, normalizeStoreTypes } from "@/lib/store-types";
+import { ensureDefaultStoreTypes, getDefaultStoreTypes, normalizeStoreTypeCode, normalizeStoreTypes } from "@/lib/store-types";
 import bcrypt from "bcryptjs";
 
 import { revalidatePath } from 'next/cache';
@@ -75,7 +75,10 @@ export async function getAllStores(limit: number = 200) {
         name: true,
         slug: true,
         isOpen: true,
+        isActive: true,
         subscriptionPlan: true,
+        transactionFeePercent: true,
+        storeType: true,
         balance: true,
         waBalance: true,
         waPricePerMessage: true,
@@ -582,6 +585,24 @@ export async function updateStoreCorporate(storeId: number, corporateName: strin
   } catch (error) {
     console.error('Error updating store corporate:', error);
     return { success: false, error: 'Failed to update corporate name' };
+  }
+}
+
+export async function updateStoreType(storeId: number, storeType: string) {
+  try {
+    await requireSuperAdmin();
+    const normalized = normalizeStoreTypeCode(storeType);
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: { storeType: normalized }
+    });
+    revalidatePath('/super-admin');
+    revalidatePath('/super-admin/wa-usage');
+    revalidatePath(`/${updated.slug}`);
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error updating store type:', error);
+    return { success: false, error: 'Failed to update store type' };
   }
 }
 

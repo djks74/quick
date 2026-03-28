@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Edit, ExternalLink, MoreVertical, Trash2, Loader2, Power, PowerOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive, updateStoreCorporate } from "@/lib/super-admin";
+import { updateStorePlan, deleteStore, setStoreWaBalance, joinStoreToCorporate, toggleStoreActive, updateStoreCorporate, updateStoreType } from "@/lib/super-admin";
 
-export default function StoreTable({ stores, users }: { stores: any[], users?: any[] }) {
+export default function StoreTable({ stores, users, storeTypes }: { stores: any[], users?: any[], storeTypes?: any[] }) {
   const router = useRouter();
   const [editingStore, setEditingStore] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [corporateOwnerId, setCorporateOwnerId] = useState("");
+  const storeTypeOptions = useMemo(() => (Array.isArray(storeTypes) ? storeTypes : []), [storeTypes]);
 
   const handleToggleActive = async (storeId: number, currentActive: boolean) => {
     setTogglingId(storeId);
@@ -49,6 +50,7 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
     
     const form = e.target as HTMLFormElement;
     const plan = (form.elements.namedItem('plan') as HTMLSelectElement).value;
+    const storeType = (form.elements.namedItem('storeType') as HTMLSelectElement | null)?.value;
     const fee = parseFloat((form.elements.namedItem('fee') as HTMLInputElement).value);
     const corporateName = (form.elements.namedItem('corporateName') as HTMLInputElement).value;
     const waBalanceRaw = (form.elements.namedItem('waBalance') as HTMLInputElement | null)?.value;
@@ -63,6 +65,13 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
 
     if (corporateName !== (editingStore.corporateName || "")) {
       await updateStoreCorporate(editingStore.id, corporateName);
+    }
+
+    if (storeType !== undefined && storeType !== null) {
+      const nextType = String(storeType || "").trim();
+      if (nextType && nextType !== String(editingStore.storeType || "")) {
+        await updateStoreType(editingStore.id, nextType);
+      }
     }
 
     if (waBalanceRaw !== undefined) {
@@ -239,6 +248,26 @@ export default function StoreTable({ stores, users }: { stores: any[], users?: a
                   <option value="ENTERPRISE">Enterprise</option>
                   <option value="PRO">Pro</option>
                   <option value="FREE">Free</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1 dark:text-gray-300">Store Type</label>
+                <select
+                  name="storeType"
+                  className="w-full border dark:border-gray-800 dark:bg-gray-800 rounded-lg px-3 py-2 dark:text-white"
+                  defaultValue={String(editingStore.storeType || "OTHER")}
+                >
+                  {storeTypeOptions
+                    .filter((t: any) => t?.active !== false)
+                    .map((t: any) => (
+                      <option key={String(t.code)} value={String(t.code)}>
+                        {String(t.label)}
+                      </option>
+                    ))}
+                  {!storeTypeOptions.some((t: any) => String(t.code) === String(editingStore.storeType)) && editingStore.storeType ? (
+                    <option value={String(editingStore.storeType)}>{String(editingStore.storeType)}</option>
+                  ) : null}
                 </select>
               </div>
               
