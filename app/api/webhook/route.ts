@@ -15,7 +15,7 @@ import { getDistanceMeters } from '@/lib/utils';
 type WaLang = "id" | "en";
 const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
-const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "1600") || 1600);
+const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "2400") || 2400);
 const WA_AI_TIMEOUT_MS = Math.max(5000, Number(process.env.WA_AI_TIMEOUT_MS || "25000") || 25000);
 
 const sanitizeWhatsAppAssistantText = (input: string) => {

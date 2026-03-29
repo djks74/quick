@@ -48,8 +48,7 @@ function isGercepOutOfScopeMessage(input: string) {
   const hasScope = scopeKeywords.some((kw) => text.includes(kw));
   if (hasScope) return false;
   const hasOutOfScopeKeyword = outOfScopeKeywords.some((kw) => text.includes(kw));
-  const looksGeneralQuestion = /^(what|why|how|when|where|who|apa|kenapa|bagaimana|kapan|dimana|siapa)\b/.test(text);
-  return hasOutOfScopeKeyword || looksGeneralQuestion;
+  return hasOutOfScopeKeyword;
 }
 
 function getGercepScopeRefusal(input: string) {
@@ -261,8 +260,8 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
 
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
-const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "768") || 768);
-const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "5") || 5);
+const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "1024") || 1024);
+const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "10") || 10);
 const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
 const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "20") || 20);
 
@@ -399,32 +398,42 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
-  async get_store_products({ slug }: { slug: string }) {
+  async get_store_products({ slug, keyword }: { slug: string; keyword?: string }) {
     await ensureStoreSettingsSchema();
     const store = await prisma.store.findFirst({
       where: buildAssistantStoreEligibilityWhere({ slug }),
       include: {
-        categories: { select: { name: true, slug: true } },
-        products: {
-          where: { 
-            category: { 
-              notIn: ["System", "_ARCHIVED_"] 
-            } 
-          },
-          select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true }
-        }
+        categories: { select: { name: true, slug: true } }
       }
     });
     if (!store) return { error: "Store not found" };
+
+    const products = await prisma.product.findMany({
+      where: { 
+        storeId: store.id,
+        category: { notIn: ["System", "_ARCHIVED_"] },
+        ...(keyword ? {
+          OR: [
+            { name: { contains: keyword, mode: "insensitive" } },
+            { description: { contains: keyword, mode: "insensitive" } },
+            { shortDescription: { contains: keyword, mode: "insensitive" } },
+            { category: { contains: keyword, mode: "insensitive" } }
+          ]
+        } : {})
+      },
+      select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true },
+      take: keyword ? 20 : 100 // Limit result size
+    });
+
     const categoryNameBySlug = new Map<string, string>(
       (store.categories || []).map((c: any) => [String(c.slug), String(c.name)])
     );
-    const products = (store.products || []).map((p: any) => ({
+    const normalizedProducts = (products || []).map((p: any) => ({
       ...p,
       categoryName: p.category ? (categoryNameBySlug.get(String(p.category)) || String(p.category)) : null
     }));
     return { 
-      products,
+      products: normalizedProducts,
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };
@@ -1664,7 +1673,7 @@ WEIGHT / UNIT CLARIFICATION:
 LARGE MENUS (GROCERY / SEMBAKO):
 1. If a store has many products (e.g., more than 50 items or it's a GROCERY/Sembako store), DO NOT list all items.
 2. Instead, tell the user: "Maaf Kak, menu di [Nama Toko] sangat banyak. Untuk membantu Kakak, silakan ketik produk yang sedang dicari (misal: 'cari telur' atau 'cari beras')."
-3. You can still list 3-5 popular items or categories as a quick sample.
+3. You MUST use the 'keyword' parameter in 'get_store_products' to search for specific items the user mentioned. DO NOT call 'get_store_products' without a keyword for large stores as it will be overwhelming.
 4. Encourage the user to search first, add items to cart, then search for more until they are done.
 
 MENU CONFIRMATION:
@@ -1708,11 +1717,12 @@ Once an order is created:
             },
             {
               name: "get_store_products",
-              description: "Get menu items for a store.",
+              description: "Get menu items for a store. You can optionally filter by keyword for large menus.",
               parameters: {
                 type: "object",
                 properties: {
-                  slug: { type: "string", description: "Store slug." }
+                  slug: { type: "string", description: "Store slug." },
+                  keyword: { type: "string", description: "Optional search keyword for products (name, category, or description)." }
                 },
                 required: ["slug"]
               }
