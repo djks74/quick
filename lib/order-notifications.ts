@@ -1,23 +1,27 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredOrderNotificationsSchemaV4: Promise<void> | null = null;
+let ensuredOrderNotificationsSchemaV5: Promise<void> | null = null;
 
 export async function ensureOrderNotificationsSchema() {
-  if (!ensuredOrderNotificationsSchemaV4) {
-    ensuredOrderNotificationsSchemaV4 = (async () => {
-      console.log("[DB_PATCH] Running OrderNotification schema check V4...");
+  if (!ensuredOrderNotificationsSchemaV5) {
+    ensuredOrderNotificationsSchemaV5 = (async () => {
+      console.log("[DB_PATCH] Running OrderNotification schema check V5...");
       
       const commands = [
         `CREATE TABLE IF NOT EXISTS "OrderNotification" (
           "id" SERIAL PRIMARY KEY,
           "storeId" INTEGER NOT NULL REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "orderId" INTEGER NOT NULL REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+          "source" TEXT NOT NULL DEFAULT 'WEB',
           "message" TEXT NOT NULL DEFAULT '',
           "type" TEXT NOT NULL DEFAULT 'NEW_ORDER',
           "isRead" BOOLEAN NOT NULL DEFAULT false,
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )`,
+        `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'WEB'`,
+        `ALTER TABLE "OrderNotification" ALTER COLUMN "source" SET DEFAULT 'WEB'`,
+        `UPDATE "OrderNotification" SET "source" = 'WEB' WHERE "source" IS NULL`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "message" TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'NEW_ORDER'`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT false`,
@@ -37,10 +41,10 @@ export async function ensureOrderNotificationsSchema() {
       console.log("[DB_PATCH] OrderNotification schema patched successfully ✅");
     })().catch((err) => {
       console.error("[DB_PATCH_ERROR] OrderNotification schema patch failed ❌", err);
-      ensuredOrderNotificationsSchemaV4 = null;
+      ensuredOrderNotificationsSchemaV5 = null;
     });
   }
-  await ensuredOrderNotificationsSchemaV4;
+  await ensuredOrderNotificationsSchemaV5;
 }
 
 export async function createOrderNotification(input: {
@@ -78,4 +82,3 @@ export async function createOrderNotification(input: {
     }
   });
 }
-

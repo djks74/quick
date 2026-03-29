@@ -761,11 +761,26 @@ export async function GET(req: NextRequest) {
             };
             debugSet('Action', 'payNow provider=' + shippingProvider + ' total=' + String(finalTotal));
             xhrJson('POST', '/api/checkout', payload, function (ok, data) {
-                if (!ok || !data || !data.success || !data.paymentUrl) {
-                    alert("Checkout failed. Please try again.");
+                if (!ok || !data || !data.success) {
+                    alert(String((data && data.error) ? data.error : "Checkout failed. Please try again."));
                     return;
                 }
-                window.location.href = String(data.paymentUrl);
+
+                if (data && data.isManual && data.orderId) {
+                    window.location.href = "/checkout/pay/" + encodeURIComponent(String(data.orderId));
+                    return;
+                }
+
+                var paymentUrl = data.paymentUrl || data.redirect_url || (data.paymentResult && (data.paymentResult.paymentUrl || data.paymentResult.invoiceUrl || data.paymentResult.redirect_url));
+                if (paymentUrl) {
+                    window.location.href = String(paymentUrl);
+                    return;
+                }
+                if (data && data.orderId) {
+                    window.location.href = "/checkout/pay/" + encodeURIComponent(String(data.orderId));
+                    return;
+                }
+                alert("Payment link unavailable. Please try again.");
             });
         }
 
