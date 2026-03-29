@@ -1817,7 +1817,7 @@ export async function POST(req: NextRequest) {
 DOMAIN FOCUS:
 - Be general and store-agnostic: do not assume the user wants a "fresh market" unless they explicitly ask for it.
 - Always help the user find the right store based on either (a) store name, (b) what they want to buy, (c) store type (e.g. restaurant/cafe/grocery), and (d) location proximity.
-- If the user asks "how to shop on Gercep", explain the steps in a neutral way: pick a store (or store type) → browse menu → checkout → delivery/pickup → payment.
+- If the user asks "how to shop on Gercep", explain the steps in a neutral way: pick a store (or store type) → browse menu → checkout → delivery/pickup → payment. Also mention that when they are ready to order, Gercep will continue the ordering flow on WhatsApp (e.g. via a "Mulai Belanja" / "Start Shopping" action).
 
 CUSTOMER MEMORY & PROFILE:
 - You have access to the customer's profile: ${JSON.stringify(customerProfile)}.
@@ -2132,6 +2132,20 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
     let activeStoreId = scopedStore?.id || undefined;
     let activeStoreSlug = scopedStore?.slug || undefined;
     let updatedCustomerProfile = { ...customerProfile };
+    const storeIdBySlugCache = new Map<string, number>();
+
+    const resolveStoreIdBySlug = async (slug: string) => {
+      const key = String(slug || "").trim();
+      if (!key) return undefined;
+      if (storeIdBySlugCache.has(key)) return storeIdBySlugCache.get(key);
+      const s = await prisma.store.findFirst({
+        where: buildAssistantStoreEligibilityWhere({ slug: key }),
+        select: { id: true }
+      });
+      const id = s?.id ? Number(s.id) : undefined;
+      if (id) storeIdBySlugCache.set(key, id);
+      return id;
+    };
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       console.log(`[AI_CHAT] Iteration ${iterations + 1}: Received ${calls.length} tool calls`);
@@ -2235,7 +2249,11 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
             activeStoreId = (data as any).stores[0].id;
             activeStoreSlug = (data as any).stores[0].slug;
           }
-          if (args.slug) activeStoreSlug = String(args.slug);
+          if (args.slug) {
+            activeStoreSlug = String(args.slug);
+            const resolvedId = await resolveStoreIdBySlug(String(args.slug));
+            if (resolvedId) activeStoreId = resolvedId;
+          }
           if (args.storeId) activeStoreId = Number(args.storeId);
 
           if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
