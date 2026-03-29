@@ -251,15 +251,16 @@ export async function GET(req: NextRequest) {
     </div>
 
     <script>
-        const STORE_WA_NUMBER = "${storeWhatsAppNumber}";
-        const cart = {};
-        let total = 0;
-        let activeCategory = 'all';
-        let searchQuery = '';
+        var STORE_WA_NUMBER = "${storeWhatsAppNumber}";
+        var cart = {};
+        var total = 0;
+        var activeCategory = 'all';
+        var searchQuery = '';
 
         function updateQuantity(productId, change) {
-            const currentQty = cart[productId] || 0;
-            const newQty = Math.max(0, currentQty + change);
+            var currentQty = cart[productId] || 0;
+            var newQty = currentQty + change;
+            if (newQty < 0) newQty = 0;
             
             if (newQty === 0) {
                 delete cart[productId];
@@ -267,7 +268,7 @@ export async function GET(req: NextRequest) {
                 cart[productId] = newQty;
             }
             
-            const qtyEl = document.getElementById("qty-" + productId);
+            var qtyEl = document.getElementById("qty-" + productId);
             if (qtyEl) qtyEl.textContent = String(newQty);
             updateCartTotal();
         }
@@ -276,17 +277,19 @@ export async function GET(req: NextRequest) {
 
         function updateCartTotal() {
             total = 0;
-            Object.entries(cart).forEach(([productId, qty]) => {
-                const productElement = document.querySelector("[data-product-id='" + productId + "']");
-                if (!productElement) return;
-                const price = Number(productElement.getAttribute('data-price') || 0);
+            for (var productId in cart) {
+                if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
+                var qty = cart[productId] || 0;
+                var productElement = document.querySelector("[data-product-id='" + productId + "']");
+                if (!productElement) continue;
+                var price = Number(productElement.getAttribute('data-price') || 0);
                 total += price * Number(qty || 0);
-            });
+            }
             
-            const totalText = "Total: Rp " + total.toLocaleString('id-ID');
-            const totalEl = document.getElementById("cart-total");
+            var totalText = "Total: Rp " + total.toLocaleString('id-ID');
+            var totalEl = document.getElementById("cart-total");
             if (totalEl) totalEl.textContent = totalText;
-            const checkoutBtn = document.querySelector(".checkout-btn");
+            var checkoutBtn = document.querySelector(".checkout-btn");
             if (checkoutBtn) checkoutBtn.textContent = "Checkout - Rp " + total.toLocaleString('id-ID');
         }
 
@@ -296,20 +299,22 @@ export async function GET(req: NextRequest) {
                 return;
             }
             
-            const cartItems = Object.entries(cart).map(([productId, qty]) => ({
-                productId: parseInt(productId),
-                quantity: Number(qty || 0)
-            }));
+            var cartItems = [];
+            for (var productId in cart) {
+                if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
+                cartItems.push({ productId: parseInt(productId, 10), quantity: Number(cart[productId] || 0) });
+            }
             
-            const lines = cartItems
-                .filter(item => item.quantity > 0)
-                .map(item => {
-                    const productElement = document.querySelector("[data-product-id='" + item.productId + "']");
-                    const name = productElement ? (productElement.getAttribute('data-name') || '') : '';
-                    return "- " + item.quantity + "x " + name;
-                })
-                .filter(Boolean);
-            const message = "Saya ingin memesan:\n" + lines.join("\n") + "\n\nTotal: Rp " + total.toLocaleString('id-ID');
+            var lines = [];
+            for (var i = 0; i < cartItems.length; i++) {
+                var item = cartItems[i];
+                if (!item || item.quantity <= 0) continue;
+                var productElement = document.querySelector("[data-product-id='" + item.productId + "']");
+                var name = productElement ? (productElement.getAttribute('data-name') || '') : '';
+                if (!name) continue;
+                lines.push("- " + item.quantity + "x " + name);
+            }
+            var message = "Saya ingin memesan:\n" + lines.join("\n") + "\n\nTotal: Rp " + total.toLocaleString('id-ID');
             
             try {
                 if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -321,8 +326,8 @@ export async function GET(req: NextRequest) {
                 }
             } catch (e) {}
             
-            const waTarget = STORE_WA_NUMBER || "";
-            const waUrl = waTarget
+            var waTarget = STORE_WA_NUMBER || "";
+            var waUrl = waTarget
                 ? ("https://wa.me/" + encodeURIComponent(waTarget) + "?text=" + encodeURIComponent(message))
                 : ("https://wa.me/?text=" + encodeURIComponent(message));
             try {
@@ -331,32 +336,32 @@ export async function GET(req: NextRequest) {
         }
 
         function applyFilters() {
-            document.querySelectorAll('.product-card').forEach(card => {
-                const cardCategory = card.getAttribute('data-category');
-                const name = (card.getAttribute('data-name') || '').toLowerCase();
-                const matchCategory = (activeCategory === 'all' || cardCategory === activeCategory);
-                const matchSearch = (!searchQuery || name.includes(searchQuery));
-                if (matchCategory && matchSearch) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
+            var cards = document.querySelectorAll('.product-card');
+            for (var i = 0; i < cards.length; i++) {
+                var card = cards[i];
+                var cardCategory = card.getAttribute('data-category');
+                var name = (card.getAttribute('data-name') || '');
+                name = String(name).toLowerCase();
+                var matchCategory = (activeCategory === 'all' || cardCategory === activeCategory);
+                var matchSearch = (!searchQuery || name.indexOf(searchQuery) !== -1);
+                card.style.display = (matchCategory && matchSearch) ? 'block' : 'none';
+            }
         }
 
         function setActiveCategory(categoryId) {
             activeCategory = categoryId || 'all';
-            document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
-            const activeTab = document.querySelector(".category-tab[data-category='" + activeCategory + "']") || document.querySelector(".category-tab[data-category='all']");
+            var tabs = document.querySelectorAll('.category-tab');
+            for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+            var activeTab = document.querySelector(".category-tab[data-category='" + activeCategory + "']") || document.querySelector(".category-tab[data-category='all']");
             if (activeTab) activeTab.classList.add('active');
             applyFilters();
         }
 
-        const searchInput = document.getElementById('search-input');
+        var searchInput = document.getElementById('search-input');
         if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                const v = (e && e.target && e.target.value) ? String(e.target.value) : '';
-                searchQuery = v.trim().toLowerCase();
+            searchInput.addEventListener('input', function (e) {
+                var v = (e && e.target && e.target.value) ? String(e.target.value) : '';
+                searchQuery = String(v).replace(/^\s+|\s+$/g, '').toLowerCase();
                 applyFilters();
             });
         }
