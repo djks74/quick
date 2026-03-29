@@ -741,11 +741,6 @@ export async function POST(req: NextRequest) {
               if (selectedStore?.id) {
                 aiStore = selectedStore as any;
                 aiStoreId = Number(selectedStore.id);
-                const categories = await prisma.category.findMany({
-                  where: { storeId: aiStoreId },
-                  select: { name: true, slug: true },
-                  orderBy: { name: "asc" }
-                });
                 if (aiSession?.id) {
                   await prisma.whatsAppSession.update({
                     where: { id: aiSession.id },
@@ -759,30 +754,14 @@ export async function POST(req: NextRequest) {
                     }
                   }).catch(() => null);
                 }
-                const options = categories.length > 0
-                  ? {
-                      list: {
-                        buttonText: l("Pilih Kategori", "Choose Category"),
-                        sections: [
-                          {
-                            title: l("Kategori Produk", "Product Categories"),
-                            rows: [
-                              { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
-                              ...categories.slice(0, 9).map((c: any) => ({
-                                id: `CAT_${c.slug}`,
-                                title: String(c.name).slice(0, 24),
-                                description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
-                              }))
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  : undefined;
+                const options = {
+                  buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+                };
 
                 await sendWhatsAppMessage(
                   from,
-                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Ini kategori di *${String(selectedStore.name)}* — silakan pilih ya.`, `Sure. Here are categories in *${String(selectedStore.name)}* — please choose one.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String(selectedStore.name)}* di webview ya.`, `Sure. I'll open *${String(selectedStore.name)}* menu in the webview.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                   aiStoreId,
                   options as any
                 );
@@ -880,11 +859,6 @@ export async function POST(req: NextRequest) {
             if (candidates.length === 1) {
               aiStore = candidates[0] as any;
               aiStoreId = Number((aiStore as any)?.id || 0);
-              const categories = await prisma.category.findMany({
-                where: { storeId: aiStoreId },
-                select: { name: true, slug: true },
-                orderBy: { name: "asc" }
-              });
 
               if (message.id) {
                 try {
@@ -910,30 +884,16 @@ export async function POST(req: NextRequest) {
                 }).catch(() => null);
               }
 
-              const options = categories.length > 0
+              const options = aiStoreId > 0
                 ? {
-                    list: {
-                      buttonText: l("Pilih Kategori", "Choose Category"),
-                      sections: [
-                        {
-                          title: l("Kategori Produk", "Product Categories"),
-                          rows: [
-                            { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
-                            ...categories.slice(0, 9).map((c: any) => ({
-                              id: `CAT_${c.slug}`,
-                              title: String(c.name).slice(0, 24),
-                              description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
-                            }))
-                          ]
-                        }
-                      ]
-                    }
+                    buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                    buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
                   }
                 : undefined;
 
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Ini kategori di *${String((aiStore as any).name)}* — silakan pilih ya.`, `Sure. Here are categories in *${String((aiStore as any).name)}* — please choose one.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String((aiStore as any).name)}* di webview ya.`, `Sure. I'll open *${String((aiStore as any).name)}* menu in the webview.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                 aiStoreId,
                 options as any
               );
@@ -1035,17 +995,10 @@ export async function POST(req: NextRequest) {
                   lang
                 })
               : [];
-            const options = products.length > 0
+            const options = aiStoreId > 0
               ? {
-                  list: {
-                    buttonText: l("Pilih Produk", "Choose Product"),
-                    sections: [
-                      {
-                        title: l("Daftar Produk", "Product List"),
-                        rows
-                      }
-                    ]
-                  }
+                  buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
                 }
               : undefined;
 
@@ -1163,6 +1116,8 @@ export async function POST(req: NextRequest) {
               title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
             }));
             
+            const webviewStoreId = Number(data.activeStoreId || (metadata as any)?.lockedStoreId || aiStoreId || 0);
+
             let options: any = { imageUrl: data.productImage };
             if (data.paymentUrl) {
               options = {
@@ -1171,34 +1126,23 @@ export async function POST(req: NextRequest) {
                 imageUrl: data.productImage
               };
             } else if (products.length > 0) {
-              // Show products list FIRST if products are returned
-              options = {
-                list: {
-                  buttonText: l("Pilih Produk", "Choose Product"),
-                  sections: createSmartProductSections(products)
-                },
-                imageUrl: data.productImage
-              };
-            } else if (categories.length > 0) {
-              options = {
-                list: {
-                  buttonText: l("Pilih Kategori", "Choose Category"),
-                  sections: [
-                    {
-                      title: l("Kategori Produk", "Product Categories"),
-                      rows: [
-                        { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
-                        ...categories.slice(0, 9).map((c: any) => ({
-                          id: `CAT_${c.slug}`,
-                          title: String(c.name).slice(0, 24),
-                          description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
-                        }))
-                      ]
+              options =
+                webviewStoreId > 0
+                  ? {
+                      buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`,
+                      imageUrl: data.productImage
                     }
-                  ]
-                },
-                imageUrl: data.productImage
-              };
+                  : { imageUrl: data.productImage };
+            } else if (categories.length > 0) {
+              options =
+                webviewStoreId > 0
+                  ? {
+                      buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`,
+                      imageUrl: data.productImage
+                    }
+                  : { imageUrl: data.productImage };
             } else if (shippingOptions.length > 3) {
               options = {
                 list: {
