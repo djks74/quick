@@ -311,11 +311,15 @@ export async function GET(req: NextRequest) {
                 .filter(Boolean);
             const message = "Saya ingin memesan:\n" + lines.join("\n") + "\n\nTotal: Rp " + total.toLocaleString('id-ID');
             
-            window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'CHECKOUT',
-                message: message,
-                cart: cartItems
-            }));
+            try {
+                if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'CHECKOUT',
+                        message: message,
+                        cart: cartItems
+                    }));
+                }
+            } catch (e) {}
             
             const waTarget = STORE_WA_NUMBER || "";
             const waUrl = waTarget
