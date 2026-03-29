@@ -1741,6 +1741,36 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ success: true });
           }
 
+          // Check if this is an AI command that should use interactive buttons instead
+          const isAICommand = 
+            lowerText?.startsWith("ai ") || 
+            lowerText?.startsWith("tanya ") || 
+            lowerText?.startsWith("ask ") || 
+            lowerText?.startsWith("cari ") ||
+            lowerText?.startsWith("search ") || 
+            lowerText?.startsWith("find ") ||
+            lowerText?.startsWith("tolong ") ||
+            lowerText?.startsWith("bantu ") ||
+            (lowerText?.includes("cari ") && lowerText?.length > 8) ||
+            (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
+            (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
+            (lowerText?.includes("tolong ") && lowerText?.length > 8) ||
+            (lowerText?.includes("cari ") && lowerText?.includes("gercep")) ||
+            (lowerText?.includes("find ") && lowerText?.includes("gercep")) ||
+            (lowerText?.includes("?") && lowerText?.length > 10) ||
+            (lowerText?.includes("bagaimana ") && lowerText?.length > 10) ||
+            (lowerText?.includes("apakah ") && lowerText?.length > 10) ||
+            (lowerText?.includes("dimana ") && lowerText?.length > 10);
+
+          // If it's an AI command, let the AI handle it with interactive buttons
+          if (isAICommand) {
+            // Just update the session state but don't send the text list
+            const stepValue = selectedCategorySlug ? `ORDERING:${selectedCategorySlug}` : `ORDERING:ALL`;
+            await updateSession(from, targetStore.id, { step: stepValue });
+            // The AI will send the interactive product list
+            return NextResponse.json({ success: true });
+          }
+
           const stepValue = selectedCategorySlug ? `ORDERING:${selectedCategorySlug}` : `ORDERING:ALL`;
           await updateSession(from, targetStore.id, { step: stepValue });
 
