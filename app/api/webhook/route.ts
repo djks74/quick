@@ -420,6 +420,10 @@ export async function POST(req: NextRequest) {
     }
     
     const lowerText = textBody?.toLowerCase();
+    const listReplyId = String(message.interactive?.list_reply?.id || "");
+    const listReplyTitle = String(message.interactive?.list_reply?.title || "");
+    const isCategoryListTap = listReplyId.startsWith("CAT_");
+    const isProductListTap = listReplyId.startsWith("PROD_");
 
     // Get language early for localization
     // We use a dummy storeId 0 if we don't know the store yet, or try to guess from metadata
@@ -459,6 +463,8 @@ export async function POST(req: NextRequest) {
 
       // --- AI AGENT HANDLER ---
       const isAICommand = 
+        isCategoryListTap ||
+        isProductListTap ||
         lowerText?.startsWith("ai ") || 
         lowerText?.startsWith("tanya ") || 
         lowerText?.startsWith("ask ") || 
@@ -467,10 +473,12 @@ export async function POST(req: NextRequest) {
         lowerText?.startsWith("find ") ||
         lowerText?.startsWith("tolong ") ||
         lowerText?.startsWith("bantu ") ||
+        lowerText?.startsWith("minta ") ||
         (lowerText?.includes("cari ") && lowerText?.length > 8) ||
         (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
         (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
         (lowerText?.includes("tolong ") && lowerText?.length > 8) ||
+        (lowerText?.includes("minta ") && lowerText?.length > 8) ||
         // Special case for searching across all stores
         (lowerText?.includes("cari ") && lowerText?.includes("gercep")) ||
         (lowerText?.includes("find ") && lowerText?.includes("gercep")) ||
@@ -577,6 +585,55 @@ export async function POST(req: NextRequest) {
                   }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
+          if (isCategoryListTap && aiStoreId > 0) {
+            const selectedCategorySlug = listReplyId === "CAT_ALL" ? null : listReplyId.replace(/^CAT_/, "");
+            const whereClause: any = {
+              storeId: aiStoreId,
+              stock: { gt: 0 },
+              category: { not: "_ARCHIVED_" }
+            };
+            if (selectedCategorySlug) {
+              whereClause.category = { equals: selectedCategorySlug, mode: "insensitive" };
+            }
+
+            const products = await prisma.product.findMany({
+              where: whereClause,
+              take: 20,
+              orderBy: { name: "asc" }
+            });
+
+            const categoryLabel = selectedCategorySlug ? (listReplyTitle || selectedCategorySlug) : l("Semua Menu", "All Menu");
+            const responseText = products.length > 0
+              ? l(`Tentu Kak, ini produk untuk kategori *${categoryLabel}*:`, `Sure, here are products in *${categoryLabel}*:`)
+              : l(`Maaf Kak, belum ada produk tersedia di kategori *${categoryLabel}*.`, `Sorry, there are no in-stock products in *${categoryLabel}* right now.`);
+
+            const options = products.length > 0
+              ? {
+                  list: {
+                    buttonText: l("Pilih Produk", "Choose Product"),
+                    sections: [
+                      {
+                        title: l("Daftar Produk", "Product List"),
+                        rows: products.map((p: any) => ({
+                          id: `PROD_${p.id}`,
+                          title: String(p.name).slice(0, 24),
+                          description: `Rp ${new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}`.slice(0, 72)
+                        }))
+                      }
+                    ]
+                  }
+                }
+              : undefined;
+
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
+              aiStoreId,
+              options as any
+            );
+            return NextResponse.json({ success: true });
+          }
+
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
           const aiAbortController = new AbortController();
           const aiTimeout = setTimeout(() => aiAbortController.abort(), WA_AI_TIMEOUT_MS);
@@ -1628,6 +1685,7 @@ export async function POST(req: NextRequest) {
             }
 
             await updateSession(from, targetStore.id, { step: 'ORDERING' });
+
             const products = await prisma.product.findMany({ 
               where: { 
                 storeId: targetStore.id, 
@@ -1739,36 +1797,6 @@ export async function POST(req: NextRequest) {
           if (products.length === 0) {
              await sendWhatsAppMessage(from, l(`Tidak ada item tersedia di kategori ini.`, `No in-stock items found in this category.`), targetStore.id);
              return NextResponse.json({ success: true });
-          }
-
-          // Check if this is an AI command that should use interactive buttons instead
-          const isAICommand = 
-            lowerText?.startsWith("ai ") || 
-            lowerText?.startsWith("tanya ") || 
-            lowerText?.startsWith("ask ") || 
-            lowerText?.startsWith("cari ") ||
-            lowerText?.startsWith("search ") || 
-            lowerText?.startsWith("find ") ||
-            lowerText?.startsWith("tolong ") ||
-            lowerText?.startsWith("bantu ") ||
-            (lowerText?.includes("cari ") && lowerText?.length > 8) ||
-            (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
-            (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
-            (lowerText?.includes("tolong ") && lowerText?.length > 8) ||
-            (lowerText?.includes("cari ") && lowerText?.includes("gercep")) ||
-            (lowerText?.includes("find ") && lowerText?.includes("gercep")) ||
-            (lowerText?.includes("?") && lowerText?.length > 10) ||
-            (lowerText?.includes("bagaimana ") && lowerText?.length > 10) ||
-            (lowerText?.includes("apakah ") && lowerText?.length > 10) ||
-            (lowerText?.includes("dimana ") && lowerText?.length > 10);
-
-          // If it's an AI command, let the AI handle it with interactive buttons
-          if (isAICommand) {
-            // Just update the session state but don't send the text list
-            const stepValue = selectedCategorySlug ? `ORDERING:${selectedCategorySlug}` : `ORDERING:ALL`;
-            await updateSession(from, targetStore.id, { step: stepValue });
-            // The AI will send the interactive product list
-            return NextResponse.json({ success: true });
           }
 
           const stepValue = selectedCategorySlug ? `ORDERING:${selectedCategorySlug}` : `ORDERING:ALL`;
