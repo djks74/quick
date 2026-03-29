@@ -586,6 +586,15 @@ export async function POST(req: NextRequest) {
         where: { phoneNumber: { in: senderPhoneVariants } },
         include: { stores: true }
       });
+      let isMerchantSender =
+        !!dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER" || dbUser.role === "SUPER_ADMIN");
+      if (!isMerchantSender) {
+        const storeByPhoneForAi = await prisma.store.findFirst({
+          where: { whatsapp: { in: senderPhoneVariants } },
+          select: { id: true }
+        });
+        if (storeByPhoneForAi?.id) isMerchantSender = true;
+      }
 
       // --- AI AGENT HANDLER ---
       const isAICommand = 
@@ -602,11 +611,27 @@ export async function POST(req: NextRequest) {
         lowerText?.startsWith("tolong ") ||
         lowerText?.startsWith("bantu ") ||
         lowerText?.startsWith("minta ") ||
+        (isMerchantSender && lowerText?.startsWith("ongkir")) ||
+        (isMerchantSender && lowerText?.startsWith("biaya kirim")) ||
+        (isMerchantSender && lowerText?.startsWith("kurir")) ||
+        (isMerchantSender && lowerText?.startsWith("shipping")) ||
+        (isMerchantSender && lowerText?.startsWith("pembayaran")) ||
+        (isMerchantSender && lowerText?.startsWith("payment")) ||
+        (isMerchantSender && lowerText?.startsWith("bayar")) ||
         (lowerText?.includes("cari ") && lowerText?.length > 8) ||
         (lowerText?.includes("tanya ") && lowerText?.length > 8) ||
         (lowerText?.includes("bantu ") && lowerText?.length > 8) ||
         (lowerText?.includes("tolong ") && lowerText?.length > 8) ||
         (lowerText?.includes("minta ") && lowerText?.length > 8) ||
+        (isMerchantSender && lowerText?.includes("ongkir") && lowerText?.length > 4) ||
+        (isMerchantSender && lowerText?.includes("biaya kirim") && lowerText?.length > 8) ||
+        (isMerchantSender && lowerText?.includes("kurir") && lowerText?.length > 4) ||
+        (isMerchantSender && lowerText?.includes("shipping") && lowerText?.length > 6) ||
+        (isMerchantSender && lowerText?.includes("qris") && lowerText?.length > 3) ||
+        (isMerchantSender && lowerText?.includes("transfer") && lowerText?.length > 7) ||
+        (isMerchantSender && lowerText?.includes("pembayaran") && lowerText?.length > 8) ||
+        (isMerchantSender && lowerText?.includes("payment") && lowerText?.length > 6) ||
+        (isMerchantSender && lowerText?.includes("bayar") && lowerText?.length > 4) ||
         // Special case for searching across all stores
         (lowerText?.includes("cari ") && lowerText?.includes("gercep")) ||
         (lowerText?.includes("find ") && lowerText?.includes("gercep")) ||

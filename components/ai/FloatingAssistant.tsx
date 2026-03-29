@@ -452,7 +452,11 @@ export default function FloatingAssistant({
                         ))}
                       </div>
                     )}
-                    {m.role !== "user" && ((m.activeStoreId && m.activeStoreId > 0) || (lastActiveStore?.id && lastActiveStore.id > 0)) && !m.paymentUrl && (
+                    {m.role !== "user" &&
+                      ((m.activeStoreId && m.activeStoreId > 0) || (lastActiveStore?.id && lastActiveStore.id > 0)) &&
+                      !m.paymentUrl &&
+                      !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) &&
+                      ((Array.isArray(m.categories) && m.categories.length > 0) || (Array.isArray(m.products) && m.products.length > 0)) && (
                       <button
                         type="button"
                         onClick={() => window.open(getWhatsAppUrl(m.activeStoreId), "_blank")}
@@ -481,16 +485,27 @@ export default function FloatingAssistant({
 
           {/* Input */}
           <div className="p-3 bg-gray-50 dark:bg-gray-800/20 border-t dark:border-gray-800">
-            {lastActiveStore?.id ? (
-              <button
-                type="button"
-                onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id), "_blank")}
-                disabled={isLoading}
-                className="mb-2 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <MessageCircle className="w-4 h-4" /> Mulai Belanja
-              </button>
-            ) : null}
+            {(() => {
+              const lastAssistant = [...messages].reverse().find((x) => x.role !== "user");
+              const shouldShow =
+                Boolean(lastActiveStore?.id) &&
+                Boolean(lastAssistant) &&
+                !lastAssistant?.paymentUrl &&
+                !(Array.isArray(lastAssistant?.shippingOptions) && lastAssistant.shippingOptions.length > 0) &&
+                ((Array.isArray(lastAssistant?.categories) && lastAssistant.categories.length > 0) ||
+                  (Array.isArray(lastAssistant?.products) && lastAssistant.products.length > 0));
+              if (!shouldShow || !lastActiveStore?.id) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id), "_blank")}
+                  disabled={isLoading}
+                  className="mb-2 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" /> Mulai Belanja
+                </button>
+              );
+            })()}
             <div className="flex gap-2">
               <button
                 onClick={shareLocation}
