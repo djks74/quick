@@ -1909,6 +1909,8 @@ Once an order is created:
     let finalPaymentUrl = undefined;
     let finalProductImage = undefined;
     let lastShippingOptions: any[] | null = null;
+    let activeStoreId = scopedStore?.id || undefined;
+    let activeStoreSlug = scopedStore?.slug || undefined;
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       const toolResponses = [];
@@ -2007,6 +2009,13 @@ Once an order is created:
           });
           
           // Capture structured data for the response
+          if (call.name === "search_stores" && (data as any).stores && (data as any).stores.length === 1) {
+            activeStoreId = (data as any).stores[0].id;
+            activeStoreSlug = (data as any).stores[0].slug;
+          }
+          if (args.slug) activeStoreSlug = String(args.slug);
+          if (args.storeId) activeStoreId = Number(args.storeId);
+
           if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
             lastShippingOptions = (data as any).shippingOptions;
           }
@@ -2088,7 +2097,9 @@ Once an order is created:
       paymentUrl: finalPaymentUrl,
       productImage: finalProductImage,
       quickReplies,
-      shippingOptions: lastShippingOptions
+      shippingOptions: lastShippingOptions,
+      activeStoreId,
+      activeStoreSlug
     });
 
   } catch (error: any) {

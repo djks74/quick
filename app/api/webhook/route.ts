@@ -535,11 +535,18 @@ export async function POST(req: NextRequest) {
 
         try {
           const isPlatformNumberForAi = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
+          
+          // Look for a "locked" store in the session metadata if on platform number
+          let lockedStoreSlug = (aiSession?.metadata as any)?.lockedStoreSlug;
+          let lockedStoreId = (aiSession?.metadata as any)?.lockedStoreId;
+
           const aiStore = phoneNumberId
-            ? (isPlatformNumberForAi ? null : await prisma.store.findFirst({
-                where: { whatsappPhoneId: String(phoneNumberId) },
-                select: { id: true, slug: true }
-              }))
+            ? (isPlatformNumberForAi 
+                ? (lockedStoreId ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true } }) : null)
+                : await prisma.store.findFirst({
+                    where: { whatsappPhoneId: String(phoneNumberId) },
+                    select: { id: true, slug: true }
+                  }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gercep.click";
@@ -588,6 +595,23 @@ export async function POST(req: NextRequest) {
             responseText = sanitizeWhatsAppAssistantText(responseText);
             if (responseText.length > WA_AI_REPLY_CHAR_LIMIT) {
               responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
+            }
+
+            // Update session with active store if identified
+            if (aiSession && (data.activeStoreId || data.activeStoreSlug)) {
+              const currentMetadata = (aiSession.metadata as any) || {};
+              if (data.activeStoreId !== currentMetadata.lockedStoreId || data.activeStoreSlug !== currentMetadata.lockedStoreSlug) {
+                await prisma.whatsAppSession.update({
+                  where: { id: aiSession.id },
+                  data: {
+                    metadata: {
+                      ...currentMetadata,
+                      lockedStoreId: data.activeStoreId || currentMetadata.lockedStoreId,
+                      lockedStoreSlug: data.activeStoreSlug || currentMetadata.lockedStoreSlug
+                    }
+                  }
+                }).catch(() => null);
+              }
             }
 
             const quickReplies = Array.isArray(data.quickReplies)
