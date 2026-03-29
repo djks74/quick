@@ -506,12 +506,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     if (normalizedKeyword) {
       if (categoryMatches.length > 0) {
         // If we have category matches, filter by them
-        // We use AND to combine with the notIn filter
-        whereClause.AND = [
-          { category: { in: categoryMatches } }
-        ];
+        whereClause.category = { in: categoryMatches };
       } else {
-        // Search by keyword across multiple fields
+        // Broad search by keyword across multiple fields
         const orConditions: any[] = [
           { name: { contains: normalizedKeyword, mode: "insensitive" } },
           { description: { contains: normalizedKeyword, mode: "insensitive" } },
@@ -525,11 +522,28 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       }
     }
 
-    const products = await prisma.product.findMany({
+    let products = await prisma.product.findMany({
       where: whereClause,
       select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true },
       take: normalizedKeyword ? 20 : 100
     });
+
+    // Fallback: If category search returned 0 products, try a keyword search instead
+    if (normalizedKeyword && categoryMatches.length > 0 && products.length === 0) {
+      const fallbackWhere: any = {
+        storeId: store.id,
+        category: { notIn: ["System", "_ARCHIVED_"] },
+        OR: [
+          { name: { contains: normalizedKeyword, mode: "insensitive" } },
+          { category: { contains: normalizedKeyword, mode: "insensitive" } }
+        ]
+      };
+      products = await prisma.product.findMany({
+        where: fallbackWhere,
+        select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true },
+        take: 20
+      });
+    }
 
     const categoryNameBySlug = new Map<string, string>(
       (store.categories || []).map((c: any) => [String(c.slug), String(c.name)])
@@ -1743,9 +1757,10 @@ RESPONSE STYLE:
 FLOW & LOGIC:
 1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
 2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), STAY focused on this store. Do not suggest other stores or call 'search_stores' unless the user explicitly asks to "cari toko lain" or "pindah toko".
-3. LARGE MENUS: For stores with 700+ items, do not list products as TEXT. Instead, you MUST use 'get_store_products' with a keyword or category filter. This tool automatically generates a scrollable "Pilih Produk" (List Message) button for the user.
-4. CATEGORY SELECTION: When a user selects or asks a category (e.g., "Bahan Pokok"), you MUST call 'get_store_products' with that category name as the keyword. If the category text has minor typos (e.g., "bahan pohok"), still treat it as that category. DO NOT just describe the category in text; the user needs the "Pilih Produk" button to add items to their cart. Once you have the product list from the tool, STOP calling tools and provide the final response to the user.
-5. NO PRODUCTS FOUND: If you call 'get_store_products' and it returns 0 products, do not loop. Just say: "Maaf Kak, saya tidak menemukan produk tersebut. Kakak mau cari yang lain atau lihat kategori yang tersedia?" and show the category list using 'get_store_categories'.
+3. LARGE MENUS: For stores with many items, you MUST NEVER list products or categories in your text response as bullets. Instead, you MUST call 'get_store_products' (for products) or 'get_store_categories' (for categories). These tools automatically generate the required interactive buttons.
+4. CATEGORY SELECTION: When a user selects or asks about a category (e.g., "Bahan Pokok" or "Bumbu Dapur"), you MUST call 'get_store_products' with that category name as the keyword. This ensures the "Pilih Produk" button appears. DO NOT summarize the category in text.
+5. NO LISTING IN TEXT: It is strictly forbidden to list products, categories, or options manually in your text response if a tool can provide them. Your response should be a brief confirmation (e.g., "Tentu Kak, ini beberapa pilihan Bumbu Dapur untuk Kakak:") followed by the tool call.
+6. NO PRODUCTS FOUND: If you call 'get_store_products' and it returns 0 products, do not just give up. Try searching for a broader keyword or show the category list instead.
 6. LIST MESSAGES:
    - Use 'get_store_categories' to show a tappable category list.
    - Use 'get_store_products' to show a tappable product list.
