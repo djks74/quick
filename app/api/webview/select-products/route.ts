@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         slug: true,
-        themeColor: true
+        themeColor: true,
+        whatsapp: true
       }
     });
 
@@ -66,6 +67,10 @@ export async function GET(req: NextRequest) {
           })()
         : "99,102,241";
 
+    const storeWhatsAppNumber = String(store.whatsapp || "")
+      .replace(/\D/g, "")
+      .replace(/^0/, "62");
+
     const categorySlugs = new Set<string>(categories.map((c) => c.slug).filter(Boolean) as any);
     const hasUncategorized = allProducts.some((p) => !p.category || !categorySlugs.has(String(p.category)));
 
@@ -90,6 +95,7 @@ export async function GET(req: NextRequest) {
             --brand2: #22c55e;
             --danger: #ef4444;
         }
+        a, button, input { -webkit-tap-highlight-color: transparent; }
         body { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
         .container { max-width: 520px; margin: 0 auto; min-height: 100vh; width: 100%; padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
         .header { padding: 18px 16px 12px; }
@@ -155,6 +161,7 @@ export async function GET(req: NextRequest) {
             background: rgba(${brandRgb},0.35); color: white; border: 1px solid rgba(${brandRgb},0.40);
             display: flex; align-items: center; justify-content: center;
             font-size: 18px; cursor: pointer; line-height: 1;
+            touch-action: manipulation;
         }
         .qty-btn:active { transform: scale(0.98); }
         .qty-display { 
@@ -164,6 +171,7 @@ export async function GET(req: NextRequest) {
             width: 100%; padding: 10px 12px; background: #10b981; 
             color: white; border: none; border-radius: 6px;
             font-weight: 700; cursor: pointer;
+            touch-action: manipulation;
         }
         .add-btn { background: linear-gradient(135deg, var(--brand2) 0%, var(--brand) 100%); border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; }
         .add-btn:active { transform: scale(0.99); }
@@ -185,6 +193,7 @@ export async function GET(req: NextRequest) {
             width: 100%; padding: 14px; background: #3b82f6;
             color: white; border: none; border-radius: 8px;
             font-size: 16px; font-weight: 800; cursor: pointer;
+            touch-action: manipulation;
         }
         .checkout-btn { background: linear-gradient(135deg, var(--brand) 0%, #111827 100%); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; }
         .checkout-btn:active { transform: scale(0.99); }
@@ -204,11 +213,11 @@ export async function GET(req: NextRequest) {
         
         <div class="categories">
             <div class="category-tabs">
-                <div class="category-tab active" data-category="all">Semua</div>
+                <div class="category-tab active" data-category="all" onclick="setActiveCategory('all')">Semua</div>
                 ${categories.map(cat => 
-                    `<div class="category-tab" data-category="${cat.slug}">${cat.name}</div>`
+                    `<div class="category-tab" data-category="${cat.slug}" onclick="setActiveCategory('${String(cat.slug).replace(/'/g, "\\'")}')">${cat.name}</div>`
                 ).join('')}
-                ${hasUncategorized ? `<div class="category-tab" data-category="uncategorized">Lainnya</div>` : ""}
+                ${hasUncategorized ? `<div class="category-tab" data-category="uncategorized" onclick="setActiveCategory('uncategorized')">Lainnya</div>` : ""}
             </div>
         </div>
         
@@ -224,11 +233,11 @@ export async function GET(req: NextRequest) {
                         </div>
                         <div class="product-actions">
                             <div class="qty-row">
-                                <button class="qty-btn" type="button" data-action="qty" data-delta="-1" data-product-id="${product.id}">-</button>
+                                <button class="qty-btn" type="button" data-action="qty" data-delta="-1" data-product-id="${product.id}" onclick="updateQuantity(${product.id}, -1)">-</button>
                                 <span class="qty-display" id="qty-${product.id}">0</span>
-                                <button class="qty-btn" type="button" data-action="qty" data-delta="1" data-product-id="${product.id}">+</button>
+                                <button class="qty-btn" type="button" data-action="qty" data-delta="1" data-product-id="${product.id}" onclick="updateQuantity(${product.id}, 1)">+</button>
                             </div>
-                            <button class="add-btn" type="button" data-action="add" data-product-id="${product.id}">Tambah</button>
+                            <button class="add-btn" type="button" data-action="add" data-product-id="${product.id}" onclick="addToCart(${product.id})">Tambah</button>
                         </div>
                     </div>
                 `).join('')}
@@ -237,11 +246,12 @@ export async function GET(req: NextRequest) {
         
         <div class="cart-bar">
             <div class="cart-total" id="cart-total">Total: Rp 0</div>
-            <button class="checkout-btn" type="button" data-action="checkout">Checkout - Rp 0</button>
+            <button class="checkout-btn" type="button" data-action="checkout" onclick="checkout()">Checkout - Rp 0</button>
         </div>
     </div>
 
     <script>
+        const STORE_WA_NUMBER = "${storeWhatsAppNumber}";
         const cart = {};
         let total = 0;
         let activeCategory = 'all';
@@ -307,7 +317,10 @@ export async function GET(req: NextRequest) {
                 cart: cartItems
             }));
             
-            const waUrl = "https://wa.me/" + encodeURIComponent("${String(phone).replace(/\D/g, "")}") + "?text=" + encodeURIComponent(message);
+            const waTarget = STORE_WA_NUMBER || "";
+            const waUrl = waTarget
+                ? ("https://wa.me/" + encodeURIComponent(waTarget) + "?text=" + encodeURIComponent(message))
+                : ("https://wa.me/?text=" + encodeURIComponent(message));
             try {
                 window.location.href = waUrl;
             } catch (e) {}
@@ -333,36 +346,6 @@ export async function GET(req: NextRequest) {
             const activeTab = document.querySelector(".category-tab[data-category='" + activeCategory + "']") || document.querySelector(".category-tab[data-category='all']");
             if (activeTab) activeTab.classList.add('active');
             applyFilters();
-        }
-
-        function bindClickAndTouch(el, handler) {
-            el.addEventListener('click', handler);
-            el.addEventListener('touchend', handler, { passive: true });
-            el.addEventListener('pointerup', handler, { passive: true });
-        }
-
-        document.querySelectorAll('.category-tab').forEach(tab => {
-            bindClickAndTouch(tab, () => setActiveCategory(tab.getAttribute('data-category') || 'all'));
-        });
-
-        document.querySelectorAll("button[data-action='add']").forEach(btn => {
-            bindClickAndTouch(btn, () => {
-                const pid = Number(btn.getAttribute('data-product-id') || 0);
-                if (pid) addToCart(pid);
-            });
-        });
-
-        document.querySelectorAll("button[data-action='qty']").forEach(btn => {
-            bindClickAndTouch(btn, () => {
-                const pid = Number(btn.getAttribute('data-product-id') || 0);
-                const delta = Number(btn.getAttribute('data-delta') || 0);
-                if (pid && delta) updateQuantity(pid, delta);
-            });
-        });
-
-        const checkoutBtn = document.querySelector("button[data-action='checkout']");
-        if (checkoutBtn) {
-            bindClickAndTouch(checkoutBtn, () => checkout());
         }
 
         const searchInput = document.getElementById('search-input');
