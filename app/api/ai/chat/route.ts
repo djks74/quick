@@ -40,7 +40,7 @@ function isGercepOutOfScopeMessage(input: string) {
     "delivery", "pengiriman", "kurir", "checkout", "bayar", "payment", "qris", "transfer", "stok",
     "inventory", "kasir", "cashier", "outlet", "meja", "table", "wa", "whatsapp", "promo", "diskon",
     "sales", "omzet", "performa", "topup", "saldo", "cara", "help", "bantuan", "panduan", "guide",
-    "pasar segar", "sayur", "buah", "daging", "ikan", "sembako", "belanja"
+    "pasar segar", "sayur", "buah", "daging", "ikan", "sembako", "belanja", "pokok", "bahan", "minta", "list", "daftar"
   ];
 
   // These are strictly prohibited topics (not related to fresh market/grocery at all)
@@ -526,7 +526,13 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }));
     return { 
       products: normalizedProducts,
-      categories: normalizedKeyword ? [] : store.categories,
+      // If we found specific category matches, let the AI know it succeeded
+      categoryMatches: categoryMatches.map(slug => ({
+        slug,
+        name: categoryNameBySlug.get(slug) || slug
+      })),
+      // Always include categories to avoid AI re-requesting them in a loop
+      categories: store.categories,
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };
@@ -1722,10 +1728,11 @@ RESPONSE STYLE:
 
 FLOW & LOGIC:
 1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
-2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), do not suggest other stores unless asked.
+2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), STAY focused on this store. Do not suggest other stores or call 'search_stores' unless the user explicitly asks to "cari toko lain" or "pindah toko".
 3. LARGE MENUS: For stores with 700+ items, do not list products as TEXT. Instead, you MUST use 'get_store_products' with a keyword or category filter. This tool automatically generates a scrollable "Pilih Produk" (List Message) button for the user.
- 4. CATEGORY SELECTION: When a user selects or asks a category (e.g., "Bahan Pokok"), you MUST call 'get_store_products' with that category name as the keyword. If the category text has minor typos (e.g., "bahan pohok"), still treat it as that category. DO NOT just describe the category in text; the user needs the "Pilih Produk" button to add items to their cart.
-5. LIST MESSAGES:
+4. CATEGORY SELECTION: When a user selects or asks a category (e.g., "Bahan Pokok"), you MUST call 'get_store_products' with that category name as the keyword. If the category text has minor typos (e.g., "bahan pohok"), still treat it as that category. DO NOT just describe the category in text; the user needs the "Pilih Produk" button to add items to their cart. Once you have the product list from the tool, STOP calling tools and provide the final response to the user.
+5. NO PRODUCTS FOUND: If you call 'get_store_products' and it returns 0 products, do not loop. Just say: "Maaf Kak, saya tidak menemukan produk tersebut. Kakak mau cari yang lain atau lihat kategori yang tersedia?" and show the category list using 'get_store_categories'.
+6. LIST MESSAGES:
    - Use 'get_store_categories' to show a tappable category list.
    - Use 'get_store_products' to show a tappable product list.
    - When the user selects a product from the list, ALWAYS ask for the quantity (e.g., "Mau berapa banyak Kak?") and any specific variations if available.
@@ -2019,6 +2026,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
     let updatedCustomerProfile = { ...customerProfile };
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
+      console.log(`[AI_CHAT] Iteration ${iterations + 1}: Received ${calls.length} tool calls`);
       const toolResponses = [];
       for (const call of calls) {
         const toolFn = tools[call.name];
