@@ -323,31 +323,25 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const baseWhere: any = buildAssistantStoreEligibilityWhere(
       scopedSlug ? { slug: String(scopedSlug) } : {}
     );
-    const strictWhere: any = { ...baseWhere };
-    if (keywordOr.length > 0) strictWhere.OR = keywordOr;
-    if (locationOr.length > 0) strictWhere.AND = [{ OR: locationOr }];
-
+    
+    // Combine into a single query with weighted logic via Prisma's OR
     let stores = await prisma.store.findMany({
-      where: strictWhere,
+      where: {
+        ...baseWhere,
+        ...( (keywordOr.length > 0 || locationOr.length > 0) ? {
+          OR: [
+            // Priority 1: Keyword AND Location
+            ...( (keywordOr.length > 0 && locationOr.length > 0) ? [{ AND: [{ OR: keywordOr }, { OR: locationOr }] }] : [] ),
+            // Priority 2: Keyword only
+            ...( keywordOr.length > 0 ? keywordOr : [] ),
+            // Priority 3: Location only
+            ...( locationOr.length > 0 ? locationOr : [] )
+          ]
+        } : {} )
+      },
       select: selectShape,
       take: 20
     });
-
-    if (stores.length === 0 && locationOr.length > 0) {
-      stores = await prisma.store.findMany({
-        where: { ...baseWhere, OR: locationOr },
-        select: selectShape,
-        take: 20
-      });
-    }
-
-    if (stores.length === 0 && keywordOr.length > 0) {
-      stores = await prisma.store.findMany({
-        where: { ...baseWhere, OR: keywordOr },
-        select: selectShape,
-        take: 20
-      });
-    }
 
     if (latitude && longitude) {
       const mapped = stores.map(s => {
@@ -1633,8 +1627,8 @@ CUSTOMER ASSISTANCE:
 
 GREETING & INITIAL FLOW:
 1. If store context is available (from QR scan or explicit store selection), greet with the store name: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
-2. If store context is NOT available, NEVER claim the user is connected to a specific store. Use platform onboarding style: "Halo! Saya bantu cari toko/resto terdekat, lihat menu, pilih pengiriman, dan pembayaran."
-3. If the store context is available, ask them early what they'd like to do: "Mau makan di sini (DINE_IN), pesan antar (DELIVERY), atau ambil sendiri (TAKEAWAY)?"
+2. If store context is available, you MUST stay focused on this store. Use 'get_store_products' with keywords to find items. NEVER use 'search_stores' to look for other stores unless the user explicitly asks to "cari toko lain" or "pindah toko".
+3. If store context is NOT available, NEVER claim the user is connected to a specific store. Use platform onboarding style: "Halo! Saya bantu cari toko/resto terdekat, lihat menu, pilih pengiriman, dan pembayaran."
 
 PRODUCT IMAGES & DETAILS:
 1. When a user asks about a product, or if you are showing the menu, you should mention that you can show pictures of the products.
