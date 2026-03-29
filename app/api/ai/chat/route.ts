@@ -552,6 +552,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       ...p,
       categoryName: p.category ? (categoryNameBySlug.get(String(p.category)) || String(p.category)) : null
     }));
+    // Only return categories if NO products were found AND there wasn't a specific keyword search
+    // This prevents the webhook from accidentally rendering the category list instead of the product list
+    const shouldReturnCategories = products.length === 0 && !normalizedKeyword;
+
     return { 
       products: normalizedProducts,
       // If we found specific category matches, let the AI know it succeeded
@@ -559,8 +563,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         slug,
         name: categoryNameBySlug.get(slug) || slug
       })),
-      // Always include categories to avoid AI re-requesting them in a loop
-      categories: store.categories,
+      categories: shouldReturnCategories ? store.categories : [],
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };

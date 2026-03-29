@@ -676,13 +676,14 @@ export async function POST(req: NextRequest) {
                 imageUrl: data.productImage
               };
             } else if (products.length > 0) {
+              // Show products list FIRST if products are returned
               options = {
                 list: {
                   buttonText: l("Pilih Produk", "Choose Product"),
                   sections: [
                     {
                       title: l("Daftar Produk", "Product List"),
-                      rows: products.slice(0, 10).map((p: any) => ({
+                      rows: products.slice(0, 20).map((p: any) => ({
                         id: `PROD_${p.id}`,
                         title: String(p.name).slice(0, 24),
                         description: `Rp ${new Intl.NumberFormat('id-ID').format(p.price || 0)}`
