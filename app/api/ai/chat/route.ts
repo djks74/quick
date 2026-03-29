@@ -272,6 +272,82 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
   };
 }
 
+function normalizeLooseText(input: string) {
+  return String(input || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSlugText(input: string) {
+  return String(input || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .trim();
+}
+
+function levenshteinDistance(a: string, b: string) {
+  const aa = String(a || "");
+  const bb = String(b || "");
+  const matrix = Array.from({ length: aa.length + 1 }, () => new Array<number>(bb.length + 1).fill(0));
+  for (let i = 0; i <= aa.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= bb.length; j += 1) matrix[0][j] = j;
+  for (let i = 1; i <= aa.length; i += 1) {
+    for (let j = 1; j <= bb.length; j += 1) {
+      const cost = aa[i - 1] === bb[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[aa.length][bb.length];
+}
+
+function findMatchedCategorySlugs(categories: Array<{ name: string; slug: string }>, keyword?: string) {
+  const rawKeyword = String(keyword || "").trim();
+  if (!rawKeyword) return [] as string[];
+  const looseKeyword = normalizeLooseText(rawKeyword);
+  const slugKeyword = normalizeSlugText(rawKeyword);
+  const matched = new Set<string>();
+  for (const category of categories || []) {
+    const catName = normalizeLooseText(category.name);
+    const catSlug = normalizeSlugText(category.slug);
+    if (!catSlug) continue;
+    const directMatch =
+      looseKeyword === catName ||
+      slugKeyword === catSlug ||
+      looseKeyword.includes(catName) ||
+      catName.includes(looseKeyword) ||
+      slugKeyword.includes(catSlug) ||
+      catSlug.includes(slugKeyword);
+    if (directMatch) {
+      matched.add(category.slug);
+      continue;
+    }
+    const distName = levenshteinDistance(looseKeyword, catName);
+    const distSlug = levenshteinDistance(slugKeyword, catSlug);
+    if (distName <= 2 || distSlug <= 2) {
+      matched.add(category.slug);
+      continue;
+    }
+    const keywordTokens = looseKeyword.split(" ").filter(Boolean);
+    const catTokens = catName.split(" ").filter(Boolean);
+    let tokenScore = 0;
+    for (const k of keywordTokens) {
+      if (catTokens.some((ct) => ct === k || levenshteinDistance(ct, k) <= 1)) tokenScore += 1;
+    }
+    if (tokenScore > 0 && tokenScore >= Math.min(keywordTokens.length, catTokens.length)) {
+      matched.add(category.slug);
+    }
+  }
+  return Array.from(matched);
+}
+
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
 const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "1024") || 1024);
@@ -416,21 +492,29 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     });
     if (!store) return { error: "Store not found" };
 
+    const normalizedKeyword = String(keyword || "").trim();
+    const categoryMatches = findMatchedCategorySlugs(store.categories as any[], normalizedKeyword);
+    const slugKeyword = normalizeSlugText(normalizedKeyword);
     const products = await prisma.product.findMany({
       where: { 
         storeId: store.id,
         category: { notIn: ["System", "_ARCHIVED_"] },
-        ...(keyword ? {
-          OR: [
-            { name: { contains: keyword, mode: "insensitive" } },
-            { description: { contains: keyword, mode: "insensitive" } },
-            { shortDescription: { contains: keyword, mode: "insensitive" } },
-            { category: { contains: keyword, mode: "insensitive" } }
-          ]
-        } : {})
+        ...(normalizedKeyword ? (
+          categoryMatches.length > 0
+            ? { category: { in: categoryMatches } }
+            : {
+                OR: [
+                  { name: { contains: normalizedKeyword, mode: "insensitive" } },
+                  { description: { contains: normalizedKeyword, mode: "insensitive" } },
+                  { shortDescription: { contains: normalizedKeyword, mode: "insensitive" } },
+                  { category: { contains: normalizedKeyword, mode: "insensitive" } },
+                  ...(slugKeyword ? [{ category: { contains: slugKeyword, mode: "insensitive" } }] : [])
+                ]
+              }
+        ) : {})
       },
       select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true },
-      take: keyword ? 20 : 100 // Limit result size
+      take: normalizedKeyword ? 20 : 100
     });
 
     const categoryNameBySlug = new Map<string, string>(
@@ -442,7 +526,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }));
     return { 
       products: normalizedProducts,
-      categories: store.categories, // Also return categories so AI knows what's available
+      categories: normalizedKeyword ? [] : store.categories,
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };
@@ -1640,7 +1724,7 @@ FLOW & LOGIC:
 1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
 2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), do not suggest other stores unless asked.
 3. LARGE MENUS: For stores with 700+ items, do not list products as TEXT. Instead, you MUST use 'get_store_products' with a keyword or category filter. This tool automatically generates a scrollable "Pilih Produk" (List Message) button for the user.
-4. CATEGORY SELECTION: When a user selects a category (e.g., "Bahan Pokok"), you MUST call 'get_store_products' with that category name as the keyword. DO NOT just describe the category in text; the user needs the "Pilih Produk" button to add items to their cart.
+ 4. CATEGORY SELECTION: When a user selects or asks a category (e.g., "Bahan Pokok"), you MUST call 'get_store_products' with that category name as the keyword. If the category text has minor typos (e.g., "bahan pohok"), still treat it as that category. DO NOT just describe the category in text; the user needs the "Pilih Produk" button to add items to their cart.
 5. LIST MESSAGES:
    - Use 'get_store_categories' to show a tappable category list.
    - Use 'get_store_products' to show a tappable product list.
