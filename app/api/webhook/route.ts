@@ -1070,7 +1070,8 @@ export async function POST(req: NextRequest) {
               responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
             }
 
-            // Update session with active store and history
+            let lockedStoreIdForReply = Number((metadata as any)?.lockedStoreId || 0);
+
             if (aiSession) {
               const updatedMetadata = {
                 ...metadata,
@@ -1091,6 +1092,8 @@ export async function POST(req: NextRequest) {
                 updatedMetadata.lockedStoreSlug = data.activeStoreSlug || (metadata as any)?.lockedStoreSlug;
                 updatedMetadata.lockedStoreAt = new Date().toISOString();
               }
+
+              lockedStoreIdForReply = Number((updatedMetadata as any)?.lockedStoreId || lockedStoreIdForReply || 0);
 
               await prisma.whatsAppSession.update({
                 where: { id: aiSession.id },
@@ -1116,7 +1119,15 @@ export async function POST(req: NextRequest) {
               title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
             }));
             
-            const webviewStoreId = Number(data.activeStoreId || (metadata as any)?.lockedStoreId || aiStoreId || 0);
+            let activeStoreIdForReply = Number(data.activeStoreId || 0);
+            if (!activeStoreIdForReply && data.activeStoreSlug) {
+              const storeBySlug = await prisma.store.findFirst({
+                where: { slug: String(data.activeStoreSlug) },
+                select: { id: true }
+              });
+              activeStoreIdForReply = Number(storeBySlug?.id || 0);
+            }
+            const webviewStoreId = Number(activeStoreIdForReply || lockedStoreIdForReply || aiStoreId || 0);
 
             let options: any = { imageUrl: data.productImage };
             if (data.paymentUrl) {
