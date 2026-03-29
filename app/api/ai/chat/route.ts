@@ -1640,7 +1640,10 @@ FLOW & LOGIC:
 1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
 2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), do not suggest other stores unless asked.
 3. LARGE MENUS: For stores with 700+ items, do not list all. Use 'get_store_categories' to show categories first, or ask the user to "cari <produk>" (e.g., "cari bawang").
-4. CATEGORY LIST: When you want to show a list of categories, use 'get_store_categories'. If the user is on WhatsApp, the system will automatically render them as a tappable List Message.
+4. LIST MESSAGES:
+   - Use 'get_store_categories' to show a tappable category list.
+   - Use 'get_store_products' with a keyword or category filter to show a tappable product list.
+   - When the user selects a product from the list, ALWAYS ask for the quantity (e.g., "Mau berapa banyak Kak?") and any specific variations if available.
 5. SHIPPING: Always call 'get_shipping_rates' once you have a physical address and coordinates (latitude/longitude). If the user has a 'preferredAddress' in their profile and hasn't provided a new one, you can ask: "Kak, mau dikirim ke [Preferred Address] seperti biasa?"
 6. PAYMENT: Ask for payment method ('qris' or 'bank_transfer') only AFTER items and shipping are confirmed.
 7. ORDER RECAP: For long lists (5+ items), use 'get_order_recap' to show a clear summary instead of listing them manually.
@@ -1924,6 +1927,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
     let finalProductImage = undefined;
     let lastShippingOptions: any[] | null = null;
     let lastCategories: any[] | null = null;
+    let lastProducts: any[] | null = null;
     let orderRecap: string | null = null;
     let activeStoreId = scopedStore?.id || undefined;
     let activeStoreSlug = scopedStore?.slug || undefined;
@@ -2036,6 +2040,9 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
           if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
             lastShippingOptions = (data as any).shippingOptions;
           }
+          if (call.name === "get_store_products" && Array.isArray((data as any)?.products)) {
+            lastProducts = (data as any).products;
+          }
           if (call.name === "get_store_categories" && Array.isArray((data as any)?.categories)) {
             lastCategories = (data as any).categories;
           }
@@ -2125,6 +2132,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
       quickReplies,
       shippingOptions: lastShippingOptions,
       categories: lastCategories,
+      products: lastProducts,
       orderRecap,
       activeStoreId,
       activeStoreSlug,

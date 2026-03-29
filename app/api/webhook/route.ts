@@ -411,6 +411,12 @@ export async function POST(req: NextRequest) {
       const catName = message.interactive.list_reply.title;
       textBody = `Saya memilih kategori: ${catName}`;
     }
+
+    // If it's a product selection from a list, make it clear for the AI
+    if (message.interactive?.list_reply?.id?.startsWith("PROD_")) {
+      const prodName = message.interactive.list_reply.title;
+      textBody = `Saya ingin memesan: ${prodName}`;
+    }
     
     const lowerText = textBody?.toLowerCase();
 
@@ -655,6 +661,7 @@ export async function POST(req: NextRequest) {
               : [];
             
             const categories = Array.isArray(data.categories) ? data.categories : [];
+            const products = Array.isArray(data.products) ? data.products : [];
             const shippingOptions = Array.isArray(data.shippingOptions) ? data.shippingOptions : [];
             const shippingAsButtons = shippingOptions.slice(0, 3).map((s: any, idx: number) => ({
               id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
@@ -666,6 +673,23 @@ export async function POST(req: NextRequest) {
               options = {
                 buttonText: "Pay Now",
                 buttonUrl: data.paymentUrl,
+                imageUrl: data.productImage
+              };
+            } else if (products.length > 0) {
+              options = {
+                list: {
+                  buttonText: l("Pilih Produk", "Choose Product"),
+                  sections: [
+                    {
+                      title: l("Daftar Produk", "Product List"),
+                      rows: products.slice(0, 10).map((p: any) => ({
+                        id: `PROD_${p.id}`,
+                        title: String(p.name).slice(0, 24),
+                        description: `Rp ${new Intl.NumberFormat('id-ID').format(p.price || 0)}`
+                      }))
+                    }
+                  ]
+                },
                 imageUrl: data.productImage
               };
             } else if (categories.length > 0) {
