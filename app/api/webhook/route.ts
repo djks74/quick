@@ -577,16 +577,43 @@ export async function POST(req: NextRequest) {
           let lockedStoreId = metadata?.lockedStoreId;
 
           const aiStore = phoneNumberId
-            ? (isPlatformNumberForAi 
-                ? (lockedStoreId ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true, name: true } }) : null)
+            ? (isPlatformNumberForAi
+                ? (
+                    lockedStoreId
+                      ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true, name: true } })
+                      : await prisma.whatsAppSession.findFirst({
+                          where: { phoneNumber: from, storeId: { gt: 0 } },
+                          orderBy: { updatedAt: "desc" },
+                          select: { storeId: true }
+                        }).then(async (s) => {
+                          if (!s?.storeId) return null;
+                          return prisma.store.findUnique({ where: { id: Number(s.storeId) }, select: { id: true, slug: true, name: true } });
+                        })
+                  )
                 : await prisma.store.findFirst({
                     where: { whatsappPhoneId: String(phoneNumberId) },
                     select: { id: true, slug: true, name: true }
                   }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
-          if (isCategoryListTap && aiStoreId > 0) {
-            const selectedCategorySlug = listReplyId === "CAT_ALL" ? null : listReplyId.replace(/^CAT_/, "");
+          const categoryTextMatch = String(lowerText || "").match(/(?:lihat\s+produk\s+di|produk\s+di)\s+(.+)$/i);
+          const categoryTextRaw = categoryTextMatch?.[1] ? String(categoryTextMatch[1]).trim() : "";
+          if ((isCategoryListTap || categoryTextRaw) && aiStoreId > 0) {
+            const categories = await prisma.category.findMany({
+              where: { storeId: aiStoreId },
+              select: { name: true, slug: true },
+              orderBy: { name: "asc" }
+            });
+            const normalizedCategoryText = categoryTextRaw.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim();
+            const selectedCategoryByText = normalizedCategoryText
+              ? categories.find((c: any) => String(c.name || "").toLowerCase() === normalizedCategoryText)
+                || categories.find((c: any) => String(c.slug || "").toLowerCase() === normalizedCategoryText.replace(/\s+/g, "-"))
+                || categories.find((c: any) => String(c.name || "").toLowerCase().includes(normalizedCategoryText))
+                || categories.find((c: any) => normalizedCategoryText.includes(String(c.name || "").toLowerCase()))
+              : null;
+            const selectedCategorySlug = isCategoryListTap
+              ? (listReplyId === "CAT_ALL" ? null : listReplyId.replace(/^CAT_/, ""))
+              : (selectedCategoryByText?.slug || null);
             const whereClause: any = {
               storeId: aiStoreId,
               stock: { gt: 0 },
@@ -602,7 +629,9 @@ export async function POST(req: NextRequest) {
               orderBy: { name: "asc" }
             });
 
-            const categoryLabel = selectedCategorySlug ? (listReplyTitle || selectedCategorySlug) : l("Semua Menu", "All Menu");
+            const categoryLabel = selectedCategorySlug
+              ? (isCategoryListTap ? (listReplyTitle || selectedCategorySlug) : (selectedCategoryByText?.name || categoryTextRaw || selectedCategorySlug))
+              : l("Semua Menu", "All Menu");
             const responseText = products.length > 0
               ? l(`Tentu Kak, ini produk untuk kategori *${categoryLabel}*:`, `Sure, here are products in *${categoryLabel}*:`)
               : l(`Maaf Kak, belum ada produk tersedia di kategori *${categoryLabel}*.`, `Sorry, there are no in-stock products in *${categoryLabel}* right now.`);
