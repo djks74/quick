@@ -821,7 +821,7 @@ export async function POST(req: NextRequest) {
 
             const products = await prisma.product.findMany({
               where: whereClause,
-              take: 20,
+              take: 10,
               orderBy: { name: "asc" }
             });
 
@@ -839,7 +839,7 @@ export async function POST(req: NextRequest) {
                     sections: [
                       {
                         title: l("Daftar Produk", "Product List"),
-                        rows: products.map((p: any) => ({
+                        rows: products.slice(0, 10).map((p: any) => ({
                           id: `PROD_${p.id}`,
                           title: String(p.name).slice(0, 24),
                           description: `Rp ${new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}`.slice(0, 72)
@@ -979,7 +979,7 @@ export async function POST(req: NextRequest) {
                   sections: [
                     {
                       title: l("Daftar Produk", "Product List"),
-                      rows: products.slice(0, 20).map((p: any) => ({
+                      rows: products.slice(0, 10).map((p: any) => ({
                         id: `PROD_${p.id}`,
                         title: String(p.name).slice(0, 24),
                         description: `Rp ${new Intl.NumberFormat('id-ID').format(p.price || 0)}`

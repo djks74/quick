@@ -265,9 +265,36 @@ export async function sendWhatsAppMessage(
   }
 
   try {
+    const normalizedList = (() => {
+      if (!options?.list) return null;
+      const maxRows = 10;
+      let remaining = maxRows;
+      const sections = (options.list.sections || [])
+        .map((s) => {
+          if (remaining <= 0) return null;
+          const rows = (s.rows || []).slice(0, remaining).map((r) => ({
+            id: String(r.id || "").slice(0, 200),
+            title: String(r.title || "").slice(0, 24),
+            description: r.description != null ? String(r.description).slice(0, 72) : undefined
+          }));
+          remaining -= rows.length;
+          if (rows.length === 0) return null;
+          return {
+            title: String(s.title || "").slice(0, 24),
+            rows
+          };
+        })
+        .filter(Boolean) as WaListSection[];
+      if (sections.length === 0) return null;
+      return {
+        buttonText: String(options.list.buttonText || "").slice(0, 20),
+        sections
+      };
+    })();
+
     const interactive: WaInteractiveOptions | undefined =
-      options?.list
-        ? { type: "list", buttonText: options.list.buttonText, sections: options.list.sections }
+      normalizedList
+        ? { type: "list", buttonText: normalizedList.buttonText, sections: normalizedList.sections }
         : (options?.quickReplies && options.quickReplies.length > 0)
           ? { type: "buttons", buttons: options.quickReplies }
           : (options?.buttonText && options?.buttonUrl)
