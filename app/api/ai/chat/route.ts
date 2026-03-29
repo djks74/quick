@@ -1498,11 +1498,12 @@ export async function POST(req: NextRequest) {
     }
 
     const fullMenuState = getFullMenuStateFromHistory(validatedHistory);
+    const isWhatsAppChannel = context?.channel === "WHATSAPP";
 
     const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);
     const isAskingMenuExplicitly = isPublic && (isFullMenuRequest(String(message || "")) || isAskingWhereMenu(String(message || "")));
 
-    if (isPublic && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
+    if (isPublic && !isWhatsAppChannel && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
       if (!fullMenuState || fullMenuState.storeId !== scopedStore.id) {
         const text = `Ketik "menu lengkap" untuk lihat daftar menu di *${scopedStore.name}*.`;
         const nextHistory = [
@@ -1574,6 +1575,37 @@ export async function POST(req: NextRequest) {
     }
 
     if ((isAskingMenuExplicitly || isAffirmativeToMenu) && scopedStore?.slug) {
+      if (isPublic && isWhatsAppChannel) {
+        const categories = await prisma.category.findMany({
+          where: { storeId: scopedStore.id },
+          select: { name: true, slug: true },
+          orderBy: { name: "asc" }
+        });
+        if (categories.length > 0) {
+          return NextResponse.json({
+            text: `Siap Kak. Aku tampilkan kategori dulu ya biar Kakak bisa pilih (lebih rapi & bisa di-scroll).`,
+            history: validatedHistory,
+            categories
+          });
+        }
+        const products = await prisma.product.findMany({
+          where: {
+            storeId: scopedStore.id,
+            stock: { gt: 0 },
+            category: { notIn: ["_ARCHIVED_", "System"] }
+          },
+          select: { id: true, name: true, price: true },
+          orderBy: { name: "asc" },
+          take: 20
+        });
+        return NextResponse.json({
+          text: products.length > 0
+            ? `Siap Kak. Ini beberapa produk yang tersedia (bisa di-scroll):`
+            : `Maaf Kak, belum ada produk aktif di ${scopedStore.name}.`,
+          history: validatedHistory,
+          products
+        });
+      }
       const products = await prisma.product.findMany({
         where: {
           storeId: scopedStore.id,

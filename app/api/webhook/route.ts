@@ -576,7 +576,7 @@ export async function POST(req: NextRequest) {
           // Look for a "locked" store in the session metadata if on platform number
           let lockedStoreId = metadata?.lockedStoreId;
 
-          const aiStore = phoneNumberId
+          let aiStore = phoneNumberId
             ? (isPlatformNumberForAi
                 ? (
                     lockedStoreId
@@ -595,10 +595,105 @@ export async function POST(req: NextRequest) {
                     select: { id: true, slug: true, name: true }
                   }))
             : null;
-          const aiStoreId = Number(aiStore?.id || 0);
+          let aiStoreId = Number(aiStore?.id || 0);
+
+          const wantsListProduk =
+            /\b(?:list|daftar)\s+(?:produk|menu)\b/i.test(String(lowerText || "")) ||
+            /\b(?:menu|produk)\s+lengkap\b/i.test(String(lowerText || "")) ||
+            /\bsemua\s+(?:produk|menu)\b/i.test(String(lowerText || ""));
+          const storeHint = String(lowerText || "")
+            .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+            .replace(/\b(bisa|minta|tolong|please|dong|ya|kak|kakak|list|daftar|produk|menu|semua|lengkap)\b/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          if (isPlatformNumberForAi && wantsListProduk && storeHint.length >= 3) {
+            const candidates = await prisma.store.findMany({
+              where: {
+                isActive: true,
+                enableWhatsApp: true,
+                name: { contains: storeHint, mode: "insensitive" }
+              },
+              select: { id: true, slug: true, name: true },
+              orderBy: { updatedAt: "desc" },
+              take: 3
+            });
+
+            if (candidates.length === 1) {
+              aiStore = candidates[0] as any;
+              aiStoreId = Number((aiStore as any)?.id || 0);
+              const categories = await prisma.category.findMany({
+                where: { storeId: aiStoreId },
+                select: { name: true, slug: true },
+                orderBy: { name: "asc" }
+              });
+
+              if (message.id) {
+                try {
+                  await prisma.processedMessage.create({ data: { id: `OUT_LIST_${message.id}` } });
+                } catch (e: any) {
+                  if (e.code === "P2002") {
+                    return NextResponse.json({ success: true });
+                  }
+                }
+              }
+
+              if (aiSession?.id) {
+                await prisma.whatsAppSession.update({
+                  where: { id: aiSession.id },
+                  data: {
+                    metadata: {
+                      ...metadata,
+                      lockedStoreId: (aiStore as any).id,
+                      lockedStoreSlug: (aiStore as any).slug,
+                      lockedStoreAt: new Date().toISOString()
+                    } as any
+                  }
+                }).catch(() => null);
+              }
+
+              const options = categories.length > 0
+                ? {
+                    list: {
+                      buttonText: l("Pilih Kategori", "Choose Category"),
+                      sections: [
+                        {
+                          title: l("Kategori Produk", "Product Categories"),
+                          rows: [
+                            { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
+                            ...categories.slice(0, 9).map((c: any) => ({
+                              id: `CAT_${c.slug}`,
+                              title: String(c.name).slice(0, 24),
+                              description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
+                            }))
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                : undefined;
+
+              await sendWhatsAppMessage(
+                from,
+                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Ini kategori di *${String((aiStore as any).name)}* — silakan pilih ya.`, `Sure. Here are categories in *${String((aiStore as any).name)}* — please choose one.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                aiStoreId,
+                options as any
+              );
+              return NextResponse.json({ success: true });
+            }
+          }
           const categoryTextMatch = String(lowerText || "").match(/(?:lihat\s+produk\s+di|produk\s+di)\s+(.+)$/i);
           const categoryTextRaw = categoryTextMatch?.[1] ? String(categoryTextMatch[1]).trim() : "";
           if ((isCategoryListTap || categoryTextRaw) && aiStoreId > 0) {
+            if (message.id) {
+              try {
+                await prisma.processedMessage.create({ data: { id: `OUT_CAT_${message.id}` } });
+              } catch (e: any) {
+                if (e.code === "P2002") {
+                  return NextResponse.json({ success: true });
+                }
+              }
+            }
             const categories = await prisma.category.findMany({
               where: { storeId: aiStoreId },
               select: { name: true, slug: true },
@@ -849,9 +944,21 @@ export async function POST(req: NextRequest) {
                 })
               : Promise.resolve(null)
             ).catch(() => null);
+            let shouldSendAiReply = true;
+            if (message.id) {
+              try {
+                await prisma.processedMessage.create({ data: { id: `OUT_AI_${message.id}` } });
+              } catch (e: any) {
+                if (e.code === "P2002") {
+                  shouldSendAiReply = false;
+                }
+              }
+            }
             await Promise.all([
               persistHistoryPromise,
-              sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any)
+              shouldSendAiReply
+                ? sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any)
+                : Promise.resolve(null)
             ]);
           } else {
             await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", aiStoreId);
