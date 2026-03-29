@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
         name: true,
         slug: true,
         themeColor: true,
-        whatsapp: true
+        whatsapp: true,
+        feePaidBy: true,
+        taxPercent: true,
+        serviceChargePercent: true,
+        qrisFeePercent: true,
+        manualTransferFee: true
       }
     });
 
@@ -396,6 +401,9 @@ export async function GET(req: NextRequest) {
 
                 <div class="summary" id="checkout-summary">
                     <div class="summary-line"><span>Items</span><strong id="sum-items">Rp 0</strong></div>
+                    <div class="summary-line"><span>Tax</span><strong id="sum-tax">Rp 0</strong></div>
+                    <div class="summary-line"><span>Service</span><strong id="sum-service">Rp 0</strong></div>
+                    <div class="summary-line"><span>Fee</span><strong id="sum-fee">Rp 0</strong></div>
                     <div class="summary-line"><span>Shipping</span><strong id="sum-ship">Rp 0</strong></div>
                     <div class="summary-line" style="margin-top:6px;"><span>Total</span><strong id="sum-total">Rp 0</strong></div>
                 </div>
@@ -415,6 +423,11 @@ export async function GET(req: NextRequest) {
     <script>
         var STORE_ID = ${Number(store.id) || 0};
         var STORE_WA_NUMBER = "${storeWhatsAppNumber}";
+        var STORE_FEE_PAID_BY = "${String(store.feePaidBy || "CUSTOMER").replace(/"/g, "&quot;")}";
+        var STORE_TAX_PERCENT = ${Number(store.taxPercent || 0)};
+        var STORE_SERVICE_PERCENT = ${Number(store.serviceChargePercent || 0)};
+        var STORE_QRIS_FEE_PERCENT = ${Number(store.qrisFeePercent || 0)};
+        var STORE_MANUAL_FEE = ${Number(store.manualTransferFee || 0)};
         var cart = {};
         var total = 0;
         var activeCategory = 'all';
@@ -488,6 +501,21 @@ export async function GET(req: NextRequest) {
             return sum;
         }
 
+        function calculateFees(subtotal) {
+            var tax = subtotal * (Number(STORE_TAX_PERCENT || 0) / 100);
+            var service = subtotal * (Number(STORE_SERVICE_PERCENT || 0) / 100);
+            var base = subtotal + tax + service;
+            var fee = 0;
+            if (String(STORE_FEE_PAID_BY || '').toUpperCase() === 'CUSTOMER') {
+                if (paymentSpecificType === 'qris' && Number(STORE_QRIS_FEE_PERCENT || 0)) {
+                    fee = base * (Number(STORE_QRIS_FEE_PERCENT || 0) / 100);
+                } else if (paymentSpecificType === 'bank_transfer' && Number(STORE_MANUAL_FEE || 0)) {
+                    fee = Number(STORE_MANUAL_FEE || 0);
+                }
+            }
+            return { tax: tax, service: service, fee: fee, base: base };
+        }
+
         function cartWeightGrams() {
             var grams = 0;
             for (var productId in cart) {
@@ -501,7 +529,8 @@ export async function GET(req: NextRequest) {
 
         function updateCartTotal() {
             var sub = itemsSubtotal();
-            total = sub + Number(shippingCost || 0);
+            var fees = calculateFees(sub);
+            total = Number(fees.base || 0) + Number(fees.fee || 0) + Number(shippingCost || 0);
             var totalText = "Total: " + formatIdr(total);
             var totalEl = document.getElementById("cart-total");
             if (totalEl) totalEl.textContent = totalText;
@@ -511,6 +540,8 @@ export async function GET(req: NextRequest) {
 
         function setPaymentType(v) {
             paymentSpecificType = String(v || 'qris');
+            updateCartTotal();
+            refreshCheckoutSummary();
         }
 
         function openCheckout() {
@@ -530,12 +561,20 @@ export async function GET(req: NextRequest) {
 
         function refreshCheckoutSummary() {
             var sub = itemsSubtotal();
+            var fees = calculateFees(sub);
             var ship = Number(shippingCost || 0);
-            var tot = sub + ship;
+            var tot = Number(fees.base || 0) + Number(fees.fee || 0) + ship;
             var elItems = document.getElementById('sum-items');
             var elShip = document.getElementById('sum-ship');
             var elTotal = document.getElementById('sum-total');
+            var elTax = document.getElementById('sum-tax');
+            var elService = document.getElementById('sum-service');
+            var elFee = document.getElementById('sum-fee');
+
             if (elItems) elItems.textContent = formatIdr(sub);
+            if (elTax) elTax.textContent = formatIdr(fees.tax || 0);
+            if (elService) elService.textContent = formatIdr(fees.service || 0);
+            if (elFee) elFee.textContent = formatIdr(fees.fee || 0);
             if (elShip) elShip.textContent = formatIdr(ship);
             if (elTotal) elTotal.textContent = formatIdr(tot);
         }
@@ -620,21 +659,33 @@ export async function GET(req: NextRequest) {
         function renderShippingOptions(options) {
             var container = document.getElementById('shipping-options');
             if (!container) return;
-            var html = "";
+            while (container.firstChild) container.removeChild(container.firstChild);
             for (var i = 0; i < options.length; i++) {
                 var o = options[i] || {};
                 var provider = String(o.provider || '');
                 var service = String(o.service || '');
                 var eta = String(o.eta || '');
                 var fee = Number(o.fee || 0);
-                var id = provider + "|" + service;
                 var active = (provider === shippingProvider && service === shippingService);
-                html += "<button type='button' class='opt" + (active ? " active" : "") + "' onclick=\"selectShipping('" + provider.replace(/'/g, \"\\\\'\") + "','" + service.replace(/'/g, \"\\\\'\") + "'," + fee + ",'" + eta.replace(/'/g, \"\\\\'\") + "')\">" +
-                    "<div class='opt-title'>" + provider + " " + service + " • " + formatIdr(fee) + "</div>" +
-                    "<div class='opt-sub'>ETA: " + (eta || '-') + "</div>" +
-                    "</button>";
+
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'opt' + (active ? ' active' : '');
+                btn.onclick = (function (p, s, f, e) {
+                    return function () { selectShipping(p, s, f, e); };
+                })(provider, service, fee, eta);
+
+                var t = document.createElement('div');
+                t.className = 'opt-title';
+                t.textContent = provider + ' ' + service + ' • ' + formatIdr(fee);
+                var sub = document.createElement('div');
+                sub.className = 'opt-sub';
+                sub.textContent = 'ETA: ' + (eta || '-');
+
+                btn.appendChild(t);
+                btn.appendChild(sub);
+                container.appendChild(btn);
             }
-            container.innerHTML = html;
         }
 
         function selectShipping(provider, service, fee, eta) {
@@ -676,7 +727,8 @@ export async function GET(req: NextRequest) {
                 items.push({ id: parseInt(productId, 10), quantity: qty });
             }
 
-            var finalTotal = sub + Number(shippingCost || 0);
+            var fees = calculateFees(sub);
+            var finalTotal = Number(fees.base || 0) + Number(fees.fee || 0) + Number(shippingCost || 0);
             var customerInfo = {
                 phone: customerPhone ? ("62" + customerPhone.replace(/^62/, "")) : "${String(phone).replace(/\D/g, "")}",
                 shippingProvider: shippingProvider,

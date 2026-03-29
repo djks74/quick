@@ -68,9 +68,36 @@ export async function POST(req: NextRequest) {
     const destinationLat = customerInfo?.destinationLatitude ? Number(customerInfo.destinationLatitude) : null;
     const destinationLng = customerInfo?.destinationLongitude ? Number(customerInfo.destinationLongitude) : null;
     const itemsSubtotal = normalizedItems.reduce((sum, it) => sum + (it.price * it.quantity), 0);
-    const minTotal = itemsSubtotal + (Number.isFinite(shippingCost) ? shippingCost : 0);
-    const requestedTotal = Number(total) || 0;
-    const safeTotal = Math.max(requestedTotal, minTotal);
+    const store = await prisma.store.findUnique({ where: { id: numericStoreId } });
+    if (!store) {
+      return NextResponse.json({ error: "Store not found" }, { status: 404 });
+    }
+
+    const taxPercent = Number((store as any).taxPercent || 0);
+    const servicePercent = Number((store as any).serviceChargePercent || 0);
+    const qrisFeePercent = Number((store as any).qrisFeePercent || 0);
+    const manualTransferFee = Number((store as any).manualTransferFee || 0);
+    const feePaidBy = String((store as any).feePaidBy || "CUSTOMER").toUpperCase();
+
+    const taxAmount = itemsSubtotal * (taxPercent / 100);
+    const serviceCharge = itemsSubtotal * (servicePercent / 100);
+    const subtotalWithTaxService = itemsSubtotal + taxAmount + serviceCharge;
+
+    const paymentType = specificType ? String(specificType) : null;
+    let paymentFee = 0;
+    if (feePaidBy === "CUSTOMER") {
+      if (paymentType === "qris" && qrisFeePercent) {
+        paymentFee = subtotalWithTaxService * (qrisFeePercent / 100);
+      } else if (paymentType === "bank_transfer" && manualTransferFee) {
+        paymentFee = manualTransferFee;
+      }
+    }
+
+    const computedTotal =
+      subtotalWithTaxService +
+      (Number.isFinite(paymentFee) ? paymentFee : 0) +
+      (Number.isFinite(shippingCost) ? shippingCost : 0);
+    const safeTotal = Math.max(Number(total) || 0, computedTotal);
 
     let order = await prisma.order.create({
       data: {
@@ -80,6 +107,10 @@ export async function POST(req: NextRequest) {
         totalAmount: safeTotal,
         status: 'PENDING',
         orderType: providedOrderType || (shippingProvider && shippingAddress ? 'DELIVERY' : 'DINE_IN'),
+        paymentMethod: paymentType || undefined,
+        taxAmount,
+        serviceCharge,
+        paymentFee,
         shippingProvider: shippingProvider || undefined,
         shippingService: shippingService || undefined,
         shippingAddress: shippingAddress || undefined,
@@ -98,7 +129,6 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    const store = await prisma.store.findUnique({ where: { id: numericStoreId } });
     if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
       const draft = await createBiteshipDraftForPendingOrder({
         store,
