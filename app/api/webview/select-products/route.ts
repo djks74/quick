@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
     <title>${store.name} - Pilih Produk</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
-        .container { max-width: 480px; margin: 0 auto; background: white; min-height: 100vh; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; overflow-x: hidden; }
+        .container { max-width: 480px; margin: 0 auto; background: white; min-height: 100vh; width: 100%; }
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
         .store-name { font-size: 20px; font-weight: bold; margin-bottom: 5px; }
         .store-desc { font-size: 14px; opacity: 0.9; }
@@ -81,54 +81,59 @@ export async function GET(req: NextRequest) {
         }
         .category-tab.active { background: #3b82f6; color: white; }
         
-        .products { padding: 15px; }
-        .product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .products { padding: 15px; padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+        .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        @media (min-width: 420px) {
+            .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
         .product-card { 
-            background: white; border-radius: 12px; padding: 12px; 
+            background: white; border-radius: 12px; padding: 10px; min-width: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s;
         }
         .product-card:active { transform: scale(0.98); }
         .product-image { 
-            width: 100%; height: 120px; object-fit: cover; 
+            width: 100%; height: 96px; object-fit: cover; 
             border-radius: 8px; background: #f8fafc;
         }
         .product-name { 
-            font-size: 14px; font-weight: 600; margin: 8px 0 4px;
+            font-size: 13px; font-weight: 600; margin: 8px 0 4px; word-break: break-word;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .product-price { 
-            font-size: 16px; font-weight: bold; color: #059669; 
-            margin-bottom: 8px;
+            font-size: 14px; font-weight: 700; color: #059669; 
+            margin-bottom: 10px;
         }
-        .product-actions { display: flex; gap: 8px; align-items: center; }
+        .product-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        .qty-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
         .qty-btn { 
-            width: 32px; height: 32px; border-radius: 50%; 
+            width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
             background: #3b82f6; color: white; border: none;
             display: flex; align-items: center; justify-content: center;
-            font-size: 18px; cursor: pointer;
+            font-size: 18px; cursor: pointer; line-height: 1;
         }
         .qty-display { 
-            min-width: 30px; text-align: center; font-weight: 600;
+            min-width: 24px; text-align: center; font-weight: 700; flex: 1 1 auto;
         }
         .add-btn { 
-            flex: 1; padding: 8px 12px; background: #10b981; 
+            width: 100%; padding: 10px 12px; background: #10b981; 
             color: white; border: none; border-radius: 6px;
-            font-weight: 600; cursor: pointer;
+            font-weight: 700; cursor: pointer;
         }
         
         .cart-bar { 
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: white; padding: 15px; border-top: 1px solid #e5e7eb;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: min(480px, 100%);
+            background: white; padding: 14px 15px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.1); z-index: 20;
         }
         .cart-total { 
-            font-size: 18px; font-weight: bold; color: #059669;
+            font-size: 16px; font-weight: 800; color: #059669;
             margin-bottom: 10px; text-align: center;
         }
         .checkout-btn { 
-            width: 100%; padding: 15px; background: #3b82f6;
+            width: 100%; padding: 14px; background: #3b82f6;
             color: white; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: 600; cursor: pointer;
+            font-size: 16px; font-weight: 800; cursor: pointer;
         }
     </style>
 </head>
@@ -156,9 +161,11 @@ export async function GET(req: NextRequest) {
                         <div class="product-name">${product.name}</div>
                         <div class="product-price">Rp ${new Intl.NumberFormat('id-ID').format(product.price)}</div>
                         <div class="product-actions">
-                            <button class="qty-btn" onclick="updateQuantity(${product.id}, -1)">-</button>
-                            <span class="qty-display" id="qty-${product.id}">0</span>
-                            <button class="qty-btn" onclick="updateQuantity(${product.id}, 1)">+</button>
+                            <div class="qty-row">
+                                <button class="qty-btn" onclick="updateQuantity(${product.id}, -1)">-</button>
+                                <span class="qty-display" id="qty-${product.id}">0</span>
+                                <button class="qty-btn" onclick="updateQuantity(${product.id}, 1)">+</button>
+                            </div>
                             <button class="add-btn" onclick="addToCart(${product.id})">Tambah</button>
                         </div>
                     </div>
