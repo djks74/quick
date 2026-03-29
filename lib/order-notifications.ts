@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-let ensuredOrderNotificationsSchemaV5: Promise<void> | null = null;
+let ensuredOrderNotificationsSchemaV6: Promise<void> | null = null;
 
 export async function ensureOrderNotificationsSchema() {
-  if (!ensuredOrderNotificationsSchemaV5) {
-    ensuredOrderNotificationsSchemaV5 = (async () => {
-      console.log("[DB_PATCH] Running OrderNotification schema check V5...");
+  if (!ensuredOrderNotificationsSchemaV6) {
+    ensuredOrderNotificationsSchemaV6 = (async () => {
+      console.log("[DB_PATCH] Running OrderNotification schema check V6...");
       
       const commands = [
         `CREATE TABLE IF NOT EXISTS "OrderNotification" (
@@ -14,6 +14,7 @@ export async function ensureOrderNotificationsSchema() {
           "orderId" INTEGER NOT NULL REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
           "source" TEXT NOT NULL DEFAULT 'WEB',
           "title" TEXT NOT NULL DEFAULT '',
+          "body" TEXT NOT NULL DEFAULT '',
           "message" TEXT NOT NULL DEFAULT '',
           "type" TEXT NOT NULL DEFAULT 'NEW_ORDER',
           "isRead" BOOLEAN NOT NULL DEFAULT false,
@@ -26,6 +27,9 @@ export async function ensureOrderNotificationsSchema() {
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE "OrderNotification" ALTER COLUMN "title" SET DEFAULT ''`,
         `UPDATE "OrderNotification" SET "title" = '' WHERE "title" IS NULL`,
+        `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL DEFAULT ''`,
+        `ALTER TABLE "OrderNotification" ALTER COLUMN "body" SET DEFAULT ''`,
+        `UPDATE "OrderNotification" SET "body" = '' WHERE "body" IS NULL`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "message" TEXT NOT NULL DEFAULT ''`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'NEW_ORDER'`,
         `ALTER TABLE "OrderNotification" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT false`,
@@ -45,10 +49,10 @@ export async function ensureOrderNotificationsSchema() {
       console.log("[DB_PATCH] OrderNotification schema patched successfully ✅");
     })().catch((err) => {
       console.error("[DB_PATCH_ERROR] OrderNotification schema patch failed ❌", err);
-      ensuredOrderNotificationsSchemaV5 = null;
+      ensuredOrderNotificationsSchemaV6 = null;
     });
   }
-  await ensuredOrderNotificationsSchemaV5;
+  await ensuredOrderNotificationsSchemaV6;
 }
 
 export async function createOrderNotification(input: {
