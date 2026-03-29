@@ -841,15 +841,8 @@ export async function POST(req: NextRequest) {
 
             const options = products.length > 0
               ? {
-                  list: {
-                    buttonText: l("Pilih Produk", "Choose Product"),
-                    sections: [
-                      {
-                        title: l("Daftar Produk", "Product List"),
-                        rows
-                      }
-                    ]
-                  }
+                  buttonText: l("📱 Pilih Produk", "📱 Select Products"),
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || '')}`
                 }
               : undefined;
 
