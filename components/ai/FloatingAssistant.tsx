@@ -14,6 +14,8 @@ interface Message {
   productImage?: string;
   quickReplies?: Array<{ id: string; title: string; value?: string }>;
   shippingOptions?: Array<{ id: string; title: string; provider?: string; service?: string; fee?: number; eta?: string | null }>;
+  categories?: Array<{ name: string; slug: string; image?: string | null }>;
+  products?: Array<{ id: number; name: string; price: number; category?: string | null; categoryName?: string | null; image?: string | null }>;
 }
 
 interface FloatingAssistantProps {
@@ -62,6 +64,8 @@ export default function FloatingAssistant({
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [activeProductListIdx, setActiveProductListIdx] = useState<number | null>(null);
+  const [productQtyById, setProductQtyById] = useState<Record<number, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,6 +73,19 @@ export default function FloatingAssistant({
       scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m.role === "assistant" && Array.isArray((m as any).products) && (m as any).products.length > 0) {
+        if (activeProductListIdx !== i) {
+          setActiveProductListIdx(i);
+          setProductQtyById({});
+        }
+        break;
+      }
+    }
+  }, [messages, activeProductListIdx]);
 
   const formatMessage = (text: string) => {
     // 1. Handle Bold (**text**)
@@ -127,7 +144,9 @@ export default function FloatingAssistant({
             paymentUrl: data.paymentUrl,
             productImage: data.productImage,
             quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
-            shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined
+            shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined,
+            categories: Array.isArray(data.categories) ? data.categories : undefined,
+            products: Array.isArray(data.products) ? data.products : undefined
           }]);
           if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
@@ -178,7 +197,9 @@ export default function FloatingAssistant({
           paymentUrl: data.paymentUrl,
           productImage: data.productImage,
           quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
-          shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined
+          shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined,
+          categories: Array.isArray(data.categories) ? data.categories : undefined,
+          products: Array.isArray(data.products) ? data.products : undefined
         }]);
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
@@ -293,6 +314,109 @@ export default function FloatingAssistant({
                             </div>
                           </button>
                         ))}
+                      </div>
+                    )}
+                    {Array.isArray(m.categories) && m.categories.length > 0 && m.role !== "user" && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {m.categories.slice(0, 20).map((c) => (
+                          <button
+                            key={String(c.slug)}
+                            onClick={() => handleSend(`Saya memilih kategori: ${String(c.name)}`)}
+                            className="px-3 py-1.5 rounded-lg text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(m.products) && m.products.length > 0 && m.role !== "user" && (
+                      <div className="mt-3 flex flex-col gap-2">
+                        <div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                          Pilih produk dan atur qty:
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {m.products.slice(0, 20).map((p) => {
+                            const pid = Number(p.id);
+                            const qty = Number(productQtyById[pid] || 0);
+                            return (
+                              <div
+                                key={String(pid)}
+                                className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-semibold truncate">{p.name}</div>
+                                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                                    Rp {new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    onClick={() =>
+                                      setProductQtyById((prev) => {
+                                        const next = { ...prev };
+                                        const current = Number(next[pid] || 0);
+                                        const updated = Math.max(0, current - 1);
+                                        if (updated === 0) delete next[pid];
+                                        else next[pid] = updated;
+                                        return next;
+                                      })
+                                    }
+                                    className="w-7 h-7 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={qty}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Number(e.target.value || 0));
+                                      setProductQtyById((prev) => {
+                                        const next = { ...prev };
+                                        if (v === 0) delete next[pid];
+                                        else next[pid] = v;
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-12 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-[11px] text-center"
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      setProductQtyById((prev) => {
+                                        const next = { ...prev };
+                                        next[pid] = Number(next[pid] || 0) + 1;
+                                        return next;
+                                      })
+                                    }
+                                    className="w-7 h-7 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {activeProductListIdx === idx && Object.keys(productQtyById).length > 0 && (
+                          <button
+                            onClick={() => {
+                              const selected = m.products
+                                ?.map((p) => ({ p, qty: Number(productQtyById[Number(p.id)] || 0) }))
+                                .filter((x) => x.qty > 0) || [];
+                              if (selected.length === 0) return;
+                              const line = selected
+                                .map((x) => `${x.qty} x ${String(x.p.name)}`)
+                                .join(", ");
+                              setProductQtyById({});
+                              handleSend(`Saya mau pesan: ${line}`);
+                            }}
+                            disabled={isLoading}
+                            className="mt-2 w-full py-2 rounded-xl bg-primary text-white text-[11px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                            style={{ backgroundColor: themeColor || "#f97316" }}
+                          >
+                            Add Selected
+                          </button>
+                        )}
                       </div>
                     )}
                     {Array.isArray(m.quickReplies) && m.quickReplies.length > 0 && !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (

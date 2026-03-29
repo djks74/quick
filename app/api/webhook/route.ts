@@ -14,6 +14,7 @@ import { getDistanceMeters } from '@/lib/utils';
 
 type WaLang = "id" | "en";
 const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
+const STORE_LOCK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
 const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "2400") || 2400);
 const WA_AI_TIMEOUT_MS = Math.max(5000, Number(process.env.WA_AI_TIMEOUT_MS || "50000") || 50000);
@@ -483,10 +484,16 @@ export async function POST(req: NextRequest) {
         where: { phoneNumber: from, step: "AI_MODE" }
       });
       if (aiSession && isSessionExpired(aiSession.updatedAt)) {
+        const meta = (aiSession.metadata as any) || {};
+        const preservedMetadata: any = {};
+        if (meta.lockedStoreId) preservedMetadata.lockedStoreId = meta.lockedStoreId;
+        if (meta.lockedStoreSlug) preservedMetadata.lockedStoreSlug = meta.lockedStoreSlug;
+        if (meta.lockedStoreAt) preservedMetadata.lockedStoreAt = meta.lockedStoreAt;
+        if (meta.customerProfile) preservedMetadata.customerProfile = meta.customerProfile;
         await prisma.whatsAppSession
           .update({
             where: { id: aiSession.id },
-            data: { step: "START", cart: [], metadata: {} as any, tableNumber: null }
+            data: { step: "START", cart: [], metadata: preservedMetadata as any, tableNumber: null }
           })
           .catch(() => null);
         aiSession = null;
@@ -639,9 +646,16 @@ export async function POST(req: NextRequest) {
                 customerProfile
               };
 
-              if (data.activeStoreId || data.activeStoreSlug) {
-                updatedMetadata.lockedStoreId = data.activeStoreId || metadata.lockedStoreId;
-                updatedMetadata.lockedStoreSlug = data.activeStoreSlug || metadata.lockedStoreSlug;
+              const allowStoreSwitch =
+                /\b(?:pindah|ganti)\s+(?:toko|store)\b/i.test(textBody || "") ||
+                /\bcari\s+toko\s+lain\b/i.test(textBody || "") ||
+                /\b(?:toko|store)\s+lain\b/i.test(textBody || "") ||
+                /\b(?:switch|change)\s+store\b/i.test(textBody || "");
+              const hasExistingLock = !!(metadata as any)?.lockedStoreId;
+              if ((data.activeStoreId || data.activeStoreSlug) && (!hasExistingLock || allowStoreSwitch)) {
+                updatedMetadata.lockedStoreId = data.activeStoreId || (metadata as any)?.lockedStoreId;
+                updatedMetadata.lockedStoreSlug = data.activeStoreSlug || (metadata as any)?.lockedStoreSlug;
+                updatedMetadata.lockedStoreAt = new Date().toISOString();
               }
 
               await prisma.whatsAppSession.update({
@@ -904,6 +918,26 @@ export async function POST(req: NextRequest) {
          
          // If a merchant is in USER_MODE, DO NOT auto-resolve to their own store.
          const isMerchantInUserMode = isMerchant && merchantSession?.step === 'USER_MODE';
+         const globalContextSession = isPlatformNumber
+           ? await prisma.whatsAppSession.findUnique({
+               where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } }
+             })
+           : null;
+         const lockedStoreIdFromGlobal = Number((globalContextSession?.metadata as any)?.lockedStoreId || 0);
+         const lockedStoreAtFromGlobal = (globalContextSession?.metadata as any)?.lockedStoreAt || null;
+         const isLockedStoreFresh =
+           lockedStoreIdFromGlobal > 0 &&
+           !isSessionExpired(lockedStoreAtFromGlobal || globalContextSession?.updatedAt, STORE_LOCK_TTL_MS);
+
+         if (!targetStore && isLockedStoreFresh) {
+           const lockedStore = await prisma.store.findFirst({
+             where: { ...assistantStoreEligibilityWhere, id: lockedStoreIdFromGlobal }
+           });
+           if (lockedStore) {
+             targetStore = lockedStore;
+             console.log(`[WHATSAPP] Resolved target store from locked store context: ${targetStore.name}`);
+           }
+         }
 
          if (!targetStore && !isMerchantInUserMode) {
            const storeBySender = await prisma.store.findFirst({
@@ -1746,6 +1780,33 @@ export async function POST(req: NextRequest) {
                data: { updatedAt: new Date(), step: 'START' }
              });
           }
+          const existingGlobalSession = await prisma.whatsAppSession.findUnique({
+            where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } }
+          });
+          await prisma.whatsAppSession
+            .upsert({
+              where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+              create: {
+                phoneNumber: from,
+                storeId: 0,
+                step: "START",
+                cart: [],
+                metadata: {
+                  lockedStoreId: selectedStore.id,
+                  lockedStoreSlug: selectedStore.slug,
+                  lockedStoreAt: new Date().toISOString()
+                } as any
+              },
+              update: {
+                metadata: {
+                  ...((existingGlobalSession?.metadata as any) || {}),
+                  lockedStoreId: selectedStore.id,
+                  lockedStoreSlug: selectedStore.slug,
+                  lockedStoreAt: new Date().toISOString()
+                } as any
+              }
+            })
+            .catch(() => null);
           await sendWhatsAppMessage(from, l(`✅ Berhasil pindah ke *${selectedStore.name}*.\nBalas 'Menu' untuk pesan.`, `✅ Switched to *${selectedStore.name}*.\nReply 'Menu' to order.`), selectedStore.id);
         } else {
           await sendWhatsAppMessage(from, l(`Pilihan tidak valid. Balas dengan angka.`, `Invalid selection. Please reply with a number.`), targetStore.id);
