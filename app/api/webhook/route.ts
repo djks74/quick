@@ -761,7 +761,7 @@ export async function POST(req: NextRequest) {
 
                 await sendWhatsAppMessage(
                   from,
-                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String(selectedStore.name)}* di webview ya.`, `Sure. I'll open *${String(selectedStore.name)}* menu in the webview.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String(selectedStore.name)}* ya.`, `Sure. I'll open *${String(selectedStore.name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                   aiStoreId,
                   options as any
                 );
@@ -893,7 +893,7 @@ export async function POST(req: NextRequest) {
 
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String((aiStore as any).name)}* di webview ya.`, `Sure. I'll open *${String((aiStore as any).name)}* menu in the webview.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String((aiStore as any).name)}* ya.`, `Sure. I'll open *${String((aiStore as any).name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                 aiStoreId,
                 options as any
               );

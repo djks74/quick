@@ -286,15 +286,17 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
   const isCustomerPaysFee = store.feePaidBy === 'CUSTOMER';
 
-  const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cart]);
-  const tax = subtotal * (taxPercent / 100);
-  const serviceCharge = subtotal * (servicePercent / 100);
+  const roundIdr = (n: number) => Math.round(Number.isFinite(n) ? n : 0);
+
+  const subtotal = useMemo(() => roundIdr(cart.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0)), [cart]);
+  const tax = roundIdr(subtotal * (taxPercent / 100));
+  const serviceCharge = roundIdr(subtotal * (servicePercent / 100));
   const totalPrice = subtotal + tax + serviceCharge;
 
   const calculatePlatformFee = (method: 'qris' | 'transfer') => {
       if (!isCustomerPaysFee) return 0;
-      if (method === 'qris') return totalPrice * (qrisFeePercent / 100);
-      if (method === 'transfer') return transferFee; 
+      if (method === 'qris') return roundIdr(totalPrice * (qrisFeePercent / 100));
+      if (method === 'transfer') return roundIdr(transferFee); 
       return 0;
   };
 
@@ -386,8 +388,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }
   };
 
-  const currentShippingCost = orderType === 'DELIVERY' ? Number(selectedQuote?.fee || selectedQuote?.price || 0) : 0;
-  const finalTotalAmount = totalPrice + (isCustomerPaysFee ? (calculatePlatformFee('qris') || calculatePlatformFee('transfer')) : 0) + currentShippingCost;
+  const currentShippingCost = orderType === 'DELIVERY' ? roundIdr(Number(selectedQuote?.fee || selectedQuote?.price || 0)) : 0;
+  const platformFeeForDisplay = isCustomerPaysFee ? (paymentMethod === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
+  const finalTotalAmount = totalPrice + platformFeeForDisplay + currentShippingCost;
 
   const handleWebCheckout = async (method: 'qris' | 'bank') => {
     if (cart.length === 0) return;

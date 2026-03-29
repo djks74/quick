@@ -303,13 +303,20 @@ export async function GET(req: NextRequest) {
             cursor: pointer;
             touch-action: manipulation;
         }
-        .opt.active { border-color: rgba(${brandRgb},0.40); background: rgba(${brandRgb},0.14); }
+        .opt.active { border-color: rgba(${brandRgb},0.55); background: rgba(${brandRgb},0.18); }
         .opt-title { font-weight: 900; font-size: 13px; }
         .opt-sub { margin-top: 4px; font-size: 12px; color: rgba(255,255,255,0.70); }
         .summary { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.05); }
         .summary-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.85); }
         .summary-line strong { color: rgba(255,255,255,0.95); }
         .link { color: rgba(255,255,255,0.88); text-decoration: underline; }
+        .items-list { margin-top: 10px; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.04); }
+        .items-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .items-row:last-child { border-bottom: none; }
+        .items-left { min-width: 0; }
+        .items-name { font-weight: 900; font-size: 12px; color: rgba(255,255,255,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+        .items-qty { margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.66); font-weight: 800; }
+        .items-price { font-weight: 900; font-size: 12px; color: rgba(255,255,255,0.92); white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -402,7 +409,7 @@ export async function GET(req: NextRequest) {
                         <option value="qris">QRIS</option>
                         <option value="bank_transfer">Bank Transfer</option>
                     </select>
-                    <div class="mini">Payment will open inside this webview.</div>
+                    <div class="mini">Payment will open here.</div>
                 </div>
 
                 <div class="summary" id="checkout-summary">
@@ -413,6 +420,8 @@ export async function GET(req: NextRequest) {
                     <div class="summary-line"><span>Shipping</span><strong id="sum-ship">Rp 0</strong></div>
                     <div class="summary-line" style="margin-top:6px;"><span>Total</span><strong id="sum-total">Rp 0</strong></div>
                 </div>
+
+                <div class="items-list" id="items-list"></div>
 
                 <div style="margin-top:12px;">
                     <button class="btn btn-primary" type="button" onclick="payNow()">Pay Now</button>
@@ -471,7 +480,10 @@ export async function GET(req: NextRequest) {
         };
 
         function formatIdr(n) {
-            try { return "Rp " + Number(n || 0).toLocaleString('id-ID'); } catch (e) { return "Rp " + String(n || 0); }
+            var v = Number(n || 0);
+            if (!isFinite(v)) v = 0;
+            v = Math.round(v);
+            try { return "Rp " + v.toLocaleString('id-ID'); } catch (e) { return "Rp " + String(v); }
         }
 
         function updateQuantity(productId, change) {
@@ -508,15 +520,19 @@ export async function GET(req: NextRequest) {
         }
 
         function calculateFees(subtotal) {
-            var tax = subtotal * (Number(STORE_TAX_PERCENT || 0) / 100);
-            var service = subtotal * (Number(STORE_SERVICE_PERCENT || 0) / 100);
-            var base = subtotal + tax + service;
+            var sub = Number(subtotal || 0);
+            if (!isFinite(sub)) sub = 0;
+            sub = Math.round(sub);
+
+            var tax = Math.round(sub * (Number(STORE_TAX_PERCENT || 0) / 100));
+            var service = Math.round(sub * (Number(STORE_SERVICE_PERCENT || 0) / 100));
+            var base = sub + tax + service;
             var fee = 0;
             if (String(STORE_FEE_PAID_BY || '').toUpperCase() === 'CUSTOMER') {
                 if (paymentSpecificType === 'qris' && Number(STORE_QRIS_FEE_PERCENT || 0)) {
-                    fee = base * (Number(STORE_QRIS_FEE_PERCENT || 0) / 100);
+                    fee = Math.round(base * (Number(STORE_QRIS_FEE_PERCENT || 0) / 100));
                 } else if (paymentSpecificType === 'bank_transfer' && Number(STORE_MANUAL_FEE || 0)) {
-                    fee = Number(STORE_MANUAL_FEE || 0);
+                    fee = Math.round(Number(STORE_MANUAL_FEE || 0));
                 }
             }
             return { tax: tax, service: service, fee: fee, base: base };
@@ -536,7 +552,10 @@ export async function GET(req: NextRequest) {
         function updateCartTotal() {
             var sub = itemsSubtotal();
             var fees = calculateFees(sub);
-            total = Number(fees.base || 0) + Number(fees.fee || 0) + Number(shippingCost || 0);
+            var ship = Number(shippingCost || 0);
+            if (!isFinite(ship)) ship = 0;
+            ship = Math.round(ship);
+            total = Number(fees.base || 0) + Number(fees.fee || 0) + ship;
             var totalText = "Total: " + formatIdr(total);
             var totalEl = document.getElementById("cart-total");
             if (totalEl) totalEl.textContent = totalText;
@@ -571,6 +590,8 @@ export async function GET(req: NextRequest) {
             var sub = itemsSubtotal();
             var fees = calculateFees(sub);
             var ship = Number(shippingCost || 0);
+            if (!isFinite(ship)) ship = 0;
+            ship = Math.round(ship);
             var tot = Number(fees.base || 0) + Number(fees.fee || 0) + ship;
             var elItems = document.getElementById('sum-items');
             var elShip = document.getElementById('sum-ship');
@@ -578,6 +599,7 @@ export async function GET(req: NextRequest) {
             var elTax = document.getElementById('sum-tax');
             var elService = document.getElementById('sum-service');
             var elFee = document.getElementById('sum-fee');
+            var elList = document.getElementById('items-list');
 
             if (elItems) elItems.textContent = formatIdr(sub);
             if (elTax) elTax.textContent = formatIdr(fees.tax || 0);
@@ -585,6 +607,22 @@ export async function GET(req: NextRequest) {
             if (elFee) elFee.textContent = formatIdr(fees.fee || 0);
             if (elShip) elShip.textContent = formatIdr(ship);
             if (elTotal) elTotal.textContent = formatIdr(tot);
+
+            if (elList) {
+                var html = '';
+                for (var productId in cart) {
+                    if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
+                    var qty = Number(cart[productId] || 0);
+                    if (!qty) continue;
+                    var productElement = document.querySelector(\"[data-product-id='\" + productId + \"']\");
+                    if (!productElement) continue;
+                    var name = String(productElement.getAttribute('data-name') || '');
+                    var price = Number(productElement.getAttribute('data-price') || 0);
+                    var lineTotal = Math.round(price * qty);
+                    html += \"<div class='items-row'><div class='items-left'><div class='items-name'>\" + name + \"</div><div class='items-qty'>x\" + String(qty) + \"</div></div><div class='items-price'>\" + formatIdr(lineTotal) + \"</div></div>\";
+                }
+                elList.innerHTML = html || \"<div class='items-row'><div class='items-left'><div class='items-name'>No items</div></div><div class='items-price'>\" + formatIdr(0) + \"</div></div>\";
+            }
         }
 
         function shareLocation() {
@@ -679,6 +717,8 @@ export async function GET(req: NextRequest) {
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'opt' + (active ? ' active' : '');
+                btn.setAttribute('data-provider', provider);
+                btn.setAttribute('data-service', service);
                 var handler = (function (p, s, f, e) {
                     return function () { selectShipping(p, s, f, e); };
                 })(provider, service, fee, eta);
@@ -702,11 +742,23 @@ export async function GET(req: NextRequest) {
         function selectShipping(provider, service, fee, eta) {
             shippingProvider = String(provider || '');
             shippingService = String(service || '');
-            shippingCost = Number(fee || 0);
+            shippingCost = Math.round(Number(fee || 0));
             shippingEta = String(eta || '');
             updateCartTotal();
             refreshCheckoutSummary();
             debugSet('Action', 'selectShipping ' + shippingProvider + ' ' + shippingService + ' fee=' + String(shippingCost));
+
+            var container = document.getElementById('shipping-options');
+            if (container) {
+                var buttons = container.querySelectorAll('.opt');
+                for (var i = 0; i < buttons.length; i++) {
+                    var b = buttons[i];
+                    var p = b.getAttribute('data-provider');
+                    var s = b.getAttribute('data-service');
+                    if (p === shippingProvider && s === shippingService) b.classList.add('active');
+                    else b.classList.remove('active');
+                }
+            }
         }
 
         function payNow() {
@@ -739,13 +791,13 @@ export async function GET(req: NextRequest) {
             }
 
             var fees = calculateFees(sub);
-            var finalTotal = Number(fees.base || 0) + Number(fees.fee || 0) + Number(shippingCost || 0);
+            var finalTotal = Math.round(Number(fees.base || 0) + Number(fees.fee || 0) + Number(shippingCost || 0));
             var customerInfo = {
                 phone: customerPhone ? ("62" + customerPhone.replace(/^62/, "")) : "${String(phone).replace(/\D/g, "")}",
                 shippingProvider: shippingProvider,
                 shippingService: shippingService,
                 shippingAddress: address,
-                shippingCost: Number(shippingCost || 0),
+                shippingCost: Math.round(Number(shippingCost || 0)),
                 shippingEta: shippingEta || null,
                 destinationLatitude: (deliveryLat != null ? Number(deliveryLat) : null),
                 destinationLongitude: (deliveryLng != null ? Number(deliveryLng) : null)

@@ -180,19 +180,21 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const qrisFeePercent = parseFloat((store.qrisFeePercent ?? 0).toString());
   const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const roundIdr = (n: number) => Math.round(Number.isFinite(n) ? n : 0);
+
+  const subtotal = roundIdr(cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0));
   const parsedDiscountValue = parseFloat(discountValue) || 0;
-  const discountAmount = Math.max(
+  const discountAmount = roundIdr(Math.max(
     0,
     discountType === "percent"
       ? Math.min(subtotal, subtotal * (Math.min(100, parsedDiscountValue) / 100))
       : Math.min(subtotal, parsedDiscountValue)
-  );
+  ));
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   
   // Tax & Service Charge
-  const tax = discountedSubtotal * (taxPercent / 100);
-  const serviceCharge = discountedSubtotal * (servicePercent / 100);
+  const tax = roundIdr(discountedSubtotal * (taxPercent / 100));
+  const serviceCharge = roundIdr(discountedSubtotal * (servicePercent / 100));
   
   // Payment Fees (POS - Only if Customer Pays, but POS usually handles fees differently or external EDC)
   // User request: Platform fee only on storefront/whatsapp. POS uses own EDC/QRIS.
@@ -205,8 +207,8 @@ export default function PosClient({ store, products, categories, user }: PosClie
   //   }
   // }
 
-  const tip = parseFloat(tipAmount) || 0;
-  const total = discountedSubtotal + tax + serviceCharge + paymentFee + tip;
+  const tip = roundIdr(parseFloat(tipAmount) || 0);
+  const total = roundIdr(discountedSubtotal + tax + serviceCharge + paymentFee + tip);
 
   const configuredPosMethods = useMemo<PosPaymentMethod[]>(() => {
     if (!Array.isArray(store.posPaymentMethods)) return [];

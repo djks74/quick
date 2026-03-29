@@ -162,6 +162,12 @@ export default function FloatingAssistant({
     );
   };
 
+  const getWhatsAppUrl = () => {
+    const platformNumber = "62882003961609";
+    const msg = storeSlug ? `Menu\nToko: ${storeSlug}` : "Menu";
+    return `https://wa.me/${platformNumber}?text=${encodeURIComponent(msg)}`;
+  };
+
   const handleSend = async (forcedMessage?: string) => {
     const source = String(forcedMessage ?? input).trim();
     if (!source || isLoading) return;
@@ -452,6 +458,14 @@ export default function FloatingAssistant({
           {/* Input */}
           <div className="p-3 bg-gray-50 dark:bg-gray-800/20 border-t dark:border-gray-800">
             <div className="flex gap-2">
+              <button
+                onClick={() => window.open(getWhatsAppUrl(), "_blank")}
+                disabled={isLoading}
+                className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-xl transition-all disabled:opacity-50"
+                title="Continue on WhatsApp"
+              >
+                <MessageCircle size={18} />
+              </button>
               <button
                 onClick={shareLocation}
                 disabled={isLoading}
