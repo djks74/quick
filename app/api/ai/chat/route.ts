@@ -90,7 +90,11 @@ function extractQuickRepliesFromText(text: string) {
   const asksPayment =
     (t.includes("bayar") || t.includes("payment") || t.includes("metode pembayaran")) &&
     t.includes("qris") &&
-    (t.includes("bank") || t.includes("transfer"));
+    (t.includes("bank") || t.includes("transfer")) &&
+    // Only show payment buttons if we are NOT still clarifying items or location
+    !t.includes("?") &&
+    !t.includes("apakah") &&
+    !t.includes("bantu konfirmasi");
   if (asksPayment) {
     return [
       { id: "PAY_QRIS", title: "QRIS", value: "qris" },
@@ -1583,6 +1587,7 @@ RESPONSE STYLE (VERY IMPORTANT):
 2. Only show up to 10 bullets if the user asks for "detail", "semua", or "menu lengkap".
 3. Ask at most ONE question at the end. If you need multiple inputs, combine them into one question.
 4. Keep replies short, clear, and actionable. Avoid long explanations and avoid repeating the user's message.
+5. If you are still clarifying items (e.g., "apakah ini yang dimaksud?"), quantity, or location, DO NOT suggest payment yet. Focus on finishing the item selection first.
 CHANNEL FORMATTING:
 1. If the user is chatting via WhatsApp, use WhatsApp formatting only: *bold* (single asterisk). Never use **double-asterisk** markdown.
 2. Avoid markdown links. If you must include a URL, paste the URL plainly.
