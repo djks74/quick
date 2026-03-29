@@ -327,6 +327,45 @@ export async function GET(req: NextRequest) {
 // Fast memory cache for deduplication (fallback if DB fails)
 const memoryCache = new Set<string>();
 
+const WA_LIST_MAX_ROWS = 10;
+const WA_PRODUCT_PAGE_SIZE = 8;
+
+function buildProductListRows(params: {
+  products: Array<{ id: number; name: string; price?: number | null }>;
+  hasPrev: boolean;
+  hasNext: boolean;
+  categoryKey: string;
+  offset: number;
+  lang: "id" | "en";
+}) {
+  const l = (idText: string, enText: string) => (params.lang === "en" ? enText : idText);
+  const rows = params.products.slice(0, WA_PRODUCT_PAGE_SIZE).map((p) => ({
+    id: `PROD_${p.id}`,
+    title: String(p.name).slice(0, 24),
+    description: `Rp ${new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}`.slice(0, 72)
+  }));
+
+  const navRows: Array<{ id: string; title: string; description?: string }> = [];
+  if (params.hasPrev) {
+    const prevOffset = Math.max(0, params.offset - WA_PRODUCT_PAGE_SIZE);
+    navRows.push({
+      id: `PROD_PAGE_PREV:${params.categoryKey}:${prevOffset}`,
+      title: l("⬅️ Sebelumnya", "⬅️ Previous"),
+      description: l("Lihat produk sebelumnya", "See previous products")
+    });
+  }
+  if (params.hasNext) {
+    const nextOffset = params.offset + WA_PRODUCT_PAGE_SIZE;
+    navRows.push({
+      id: `PROD_PAGE_NEXT:${params.categoryKey}:${nextOffset}`,
+      title: l("➡️ Lanjut", "➡️ Next"),
+      description: l("Lihat produk berikutnya", "See more products")
+    });
+  }
+
+  return [...rows, ...navRows].slice(0, WA_LIST_MAX_ROWS);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
@@ -425,6 +464,7 @@ export async function POST(req: NextRequest) {
     const isCategoryListTap = listReplyId.startsWith("CAT_");
     const isProductListTap = listReplyId.startsWith("PROD_");
     const isStoreListTap = listReplyId.startsWith("STORE_");
+    const isProductPageTap = listReplyId.startsWith("PROD_PAGE_");
 
     // Get language early for localization
     // We use a dummy storeId 0 if we don't know the store yet, or try to guess from metadata
@@ -467,6 +507,7 @@ export async function POST(req: NextRequest) {
         isCategoryListTap ||
         isProductListTap ||
         isStoreListTap ||
+        isProductPageTap ||
         lowerText?.startsWith("ai ") || 
         lowerText?.startsWith("tanya ") || 
         lowerText?.startsWith("ask ") || 
@@ -665,6 +706,77 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          if (isProductPageTap && aiStoreId > 0) {
+            if (message.id) {
+              try {
+                await prisma.processedMessage.create({ data: { id: `OUT_PAGE_${message.id}` } });
+              } catch (e: any) {
+                if (e.code === "P2002") {
+                  return NextResponse.json({ success: true });
+                }
+              }
+            }
+
+            const raw = listReplyId.replace(/^PROD_PAGE_/, "");
+            const [dir, categoryKey, offsetRaw] = raw.split(":");
+            const offset = Math.max(0, Number(offsetRaw || 0) || 0);
+            const selectedCategorySlug = categoryKey && categoryKey !== "ALL" ? categoryKey : null;
+            const whereClause: any = {
+              storeId: aiStoreId,
+              stock: { gt: 0 },
+              category: { not: "_ARCHIVED_" }
+            };
+            if (selectedCategorySlug) {
+              whereClause.category = { equals: selectedCategorySlug, mode: "insensitive" };
+            }
+
+            const pageItems = await prisma.product.findMany({
+              where: whereClause,
+              take: WA_PRODUCT_PAGE_SIZE + 1,
+              skip: offset,
+              orderBy: { name: "asc" }
+            });
+            const hasNext = pageItems.length > WA_PRODUCT_PAGE_SIZE;
+            const products = pageItems.slice(0, WA_PRODUCT_PAGE_SIZE) as any[];
+            const hasPrev = offset > 0;
+
+            const categoryLabel = selectedCategorySlug ? selectedCategorySlug : l("Semua Menu", "All Menu");
+            const responseText = products.length > 0
+              ? l(`Tentu Kak, ini produk untuk kategori *${categoryLabel}*:`, `Sure, here are products in *${categoryLabel}*:`)
+              : l(`Maaf Kak, belum ada produk tersedia di kategori *${categoryLabel}*.`, `Sorry, there are no in-stock products in *${categoryLabel}* right now.`);
+
+            const rows = buildProductListRows({
+              products: products.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+              hasPrev,
+              hasNext,
+              categoryKey: selectedCategorySlug ? String(selectedCategorySlug) : "ALL",
+              offset,
+              lang
+            });
+
+            const options = products.length > 0
+              ? {
+                  list: {
+                    buttonText: l("Pilih Produk", "Choose Product"),
+                    sections: [
+                      {
+                        title: l("Daftar Produk", "Product List"),
+                        rows
+                      }
+                    ]
+                  }
+                }
+              : undefined;
+
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
+              aiStoreId,
+              options as any
+            );
+            return NextResponse.json({ success: true });
+          }
+
           const wantsListProduk =
             /\b(?:list|daftar)\s+(?:produk|menu)\b/i.test(String(lowerText || "")) ||
             /\b(?:menu|produk)\s+lengkap\b/i.test(String(lowerText || "")) ||
@@ -819,11 +931,14 @@ export async function POST(req: NextRequest) {
               whereClause.category = { equals: selectedCategorySlug, mode: "insensitive" };
             }
 
-            const products = await prisma.product.findMany({
+            const pageItems = await prisma.product.findMany({
               where: whereClause,
-              take: 10,
+              take: WA_PRODUCT_PAGE_SIZE + 1,
+              skip: 0,
               orderBy: { name: "asc" }
             });
+            const hasNext = pageItems.length > WA_PRODUCT_PAGE_SIZE;
+            const products = pageItems.slice(0, WA_PRODUCT_PAGE_SIZE) as any[];
 
             const categoryLabel = selectedCategorySlug
               ? (isCategoryListTap ? (listReplyTitle || selectedCategorySlug) : (selectedCategoryByText?.name || categoryTextRaw || selectedCategorySlug))
@@ -832,6 +947,16 @@ export async function POST(req: NextRequest) {
               ? l(`Tentu Kak, ini produk untuk kategori *${categoryLabel}*:`, `Sure, here are products in *${categoryLabel}*:`)
               : l(`Maaf Kak, belum ada produk tersedia di kategori *${categoryLabel}*.`, `Sorry, there are no in-stock products in *${categoryLabel}* right now.`);
 
+            const rows = products.length > 0
+              ? buildProductListRows({
+                  products: products.map((p: any) => ({ id: p.id, name: p.name, price: p.price })),
+                  hasPrev: false,
+                  hasNext,
+                  categoryKey: selectedCategorySlug ? String(selectedCategorySlug) : "ALL",
+                  offset: 0,
+                  lang
+                })
+              : [];
             const options = products.length > 0
               ? {
                   list: {
@@ -839,11 +964,7 @@ export async function POST(req: NextRequest) {
                     sections: [
                       {
                         title: l("Daftar Produk", "Product List"),
-                        rows: products.slice(0, 10).map((p: any) => ({
-                          id: `PROD_${p.id}`,
-                          title: String(p.name).slice(0, 24),
-                          description: `Rp ${new Intl.NumberFormat("id-ID").format(Number(p.price || 0))}`.slice(0, 72)
-                        }))
+                        rows
                       }
                     ]
                   }
