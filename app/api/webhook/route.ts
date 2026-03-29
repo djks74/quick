@@ -366,6 +366,91 @@ function buildProductListRows(params: {
   return [...rows, ...navRows].slice(0, WA_LIST_MAX_ROWS);
 }
 
+function createSmartProductSections(products: Array<{ id: number; name: string; price?: number | null }>) {
+  const l = (idText: string, enText: string) => ("id" as const); // Default to Indonesian for section titles
+  
+  if (products.length <= 3) {
+    // For small number of products, use single section
+    return [{
+      title: l("📦 Semua Produk", "📦 All Products"),
+      rows: products.slice(0, 10).map(p => ({
+        id: `PROD_${p.id}`,
+        title: String(p.name).slice(0, 24),
+        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}`.slice(0, 72)
+      }))
+    }];
+  }
+
+  // Calculate price thresholds for smart grouping
+  const prices = products.map(p => Number(p.price || 0)).filter(price => price > 0);
+  const avgPrice = prices.length > 0 ? prices.reduce((sum, price) => sum + price, 0) / prices.length : 0;
+  
+  // Group products into categories
+  const popularProducts = products.filter(p => Number(p.price || 0) > avgPrice * 1.5).slice(0, 4);
+  const affordableProducts = products.filter(p => Number(p.price || 0) <= avgPrice * 0.8).slice(0, 3);
+  const midRangeProducts = products.filter(p => 
+    Number(p.price || 0) > avgPrice * 0.8 && Number(p.price || 0) <= avgPrice * 1.5
+  ).slice(0, 3);
+
+  const sections = [];
+  let remainingRows = WA_LIST_MAX_ROWS;
+
+  // Add popular section if we have products
+  if (popularProducts.length > 0 && remainingRows > 0) {
+    const take = Math.min(popularProducts.length, remainingRows);
+    sections.push({
+      title: l("🔥 Populer", "🔥 Popular"),
+      rows: popularProducts.slice(0, take).map(p => ({
+        id: `PROD_${p.id}`,
+        title: String(p.name).slice(0, 24),
+        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}`.slice(0, 72)
+      }))
+    });
+    remainingRows -= take;
+  }
+
+  // Add affordable section if we have products and space
+  if (affordableProducts.length > 0 && remainingRows > 0) {
+    const take = Math.min(affordableProducts.length, remainingRows);
+    sections.push({
+      title: l("💰 Terjangkau", "💰 Affordable"),
+      rows: affordableProducts.slice(0, take).map(p => ({
+        id: `PROD_${p.id}`,
+        title: String(p.name).slice(0, 24),
+        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}`.slice(0, 72)
+      }))
+    });
+    remainingRows -= take;
+  }
+
+  // Add mid-range section if we have products and space
+  if (midRangeProducts.length > 0 && remainingRows > 0) {
+    const take = Math.min(midRangeProducts.length, remainingRows);
+    sections.push({
+      title: l("💎 Pilihan", "💎 Premium"),
+      rows: midRangeProducts.slice(0, take).map(p => ({
+        id: `PROD_${p.id}`,
+        title: String(p.name).slice(0, 24),
+        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}`.slice(0, 72)
+      }))
+    });
+  }
+
+  // If no smart sections were created, fall back to single section
+  if (sections.length === 0) {
+    sections.push({
+      title: l("📦 Semua Produk", "📦 All Products"),
+      rows: products.slice(0, 10).map(p => ({
+        id: `PROD_${p.id}`,
+        title: String(p.name).slice(0, 24),
+        description: `Rp ${new Intl.NumberFormat('id-ID').format(Number(p.price || 0))}`.slice(0, 72)
+      }))
+    });
+  }
+
+  return sections;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
@@ -1097,16 +1182,7 @@ export async function POST(req: NextRequest) {
               options = {
                 list: {
                   buttonText: l("Pilih Produk", "Choose Product"),
-                  sections: [
-                    {
-                      title: l("Daftar Produk", "Product List"),
-                      rows: products.slice(0, 10).map((p: any) => ({
-                        id: `PROD_${p.id}`,
-                        title: String(p.name).slice(0, 24),
-                        description: `Rp ${new Intl.NumberFormat('id-ID').format(p.price || 0)}`
-                      }))
-                    }
-                  ]
+                  sections: createSmartProductSections(products)
                 },
                 imageUrl: data.productImage
               };
