@@ -214,6 +214,91 @@ export async function GET(req: NextRequest) {
         }
         .debug-title { font-weight: 900; font-size: 12px; margin-bottom: 4px; }
         .debug-line { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; color: rgba(255,255,255,0.78); white-space: pre-wrap; }
+
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 60;
+            display: none;
+            padding: 12px;
+        }
+        .sheet {
+            width: min(520px, 100%);
+            margin: 0 auto;
+            background: rgba(17,24,39,0.96);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            box-shadow: 0 22px 60px rgba(0,0,0,0.55);
+            overflow: hidden;
+        }
+        .sheet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.10);
+        }
+        .sheet-title { font-weight: 900; font-size: 14px; letter-spacing: -0.01em; }
+        .sheet-close {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.10);
+            color: rgba(255,255,255,0.85);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .sheet-body { padding: 14px; }
+        .field { margin-bottom: 12px; }
+        .label { font-size: 12px; font-weight: 900; color: rgba(255,255,255,0.78); margin-bottom: 6px; }
+        .input, .textarea, .select {
+            width: 100%;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 14px;
+            outline: none;
+        }
+        .textarea { min-height: 74px; resize: vertical; }
+        .row { display: flex; gap: 10px; }
+        .row > .field { flex: 1 1 0; }
+        .mini { font-size: 12px; color: var(--muted); margin-top: 6px; }
+        .btn {
+            width: 100%;
+            padding: 12px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.92);
+            font-weight: 900;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--brand) 0%, #111827 100%);
+        }
+        .btn:active { transform: scale(0.99); }
+        .options { display: grid; gap: 10px; margin-top: 10px; }
+        .opt {
+            width: 100%;
+            text-align: left;
+            padding: 12px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.92);
+            cursor: pointer;
+        }
+        .opt.active { border-color: rgba(${brandRgb},0.40); background: rgba(${brandRgb},0.14); }
+        .opt-title { font-weight: 900; font-size: 13px; }
+        .opt-sub { margin-top: 4px; font-size: 12px; color: rgba(255,255,255,0.70); }
+        .summary { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.05); }
+        .summary-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.85); }
+        .summary-line strong { color: rgba(255,255,255,0.95); }
+        .link { color: rgba(255,255,255,0.88); text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -263,7 +348,62 @@ export async function GET(req: NextRequest) {
         
         <div class="cart-bar">
             <div class="cart-total" id="cart-total">Total: Rp 0</div>
-            <button class="checkout-btn" type="button" data-action="checkout" onclick="checkout()">Checkout - Rp 0</button>
+            <button class="checkout-btn" type="button" data-action="checkout" onclick="openCheckout()">Checkout - Rp 0</button>
+        </div>
+    </div>
+
+    <div class="modal" id="checkout-modal">
+        <div class="sheet">
+            <div class="sheet-header">
+                <div class="sheet-title">Checkout</div>
+                <button class="sheet-close" type="button" onclick="closeCheckout()">Close</button>
+            </div>
+            <div class="sheet-body">
+                <div class="field">
+                    <div class="label">Phone</div>
+                    <input class="input" id="customer-phone" type="tel" value="${String(phone).replace(/"/g, "&quot;")}" />
+                    <div class="mini">Used for order receipt & courier contact.</div>
+                </div>
+
+                <div class="field">
+                    <div class="label">Delivery Address</div>
+                    <textarea class="textarea" id="delivery-address" placeholder="Full address + postal code (5 digits)"></textarea>
+                    <div class="row" style="margin-top:10px;">
+                        <div class="field" style="margin-bottom:0;">
+                            <button class="btn" type="button" onclick="shareLocation()">Use my location</button>
+                        </div>
+                        <div class="field" style="margin-bottom:0;">
+                            <button class="btn" type="button" onclick="getShippingQuotes()">Get shipping</button>
+                        </div>
+                    </div>
+                    <div class="mini" id="loc-status">Location: not set</div>
+                    <div class="mini"><a class="link" id="map-link" href="#" target="_blank" rel="noreferrer" style="display:none;">Open map</a></div>
+                </div>
+
+                <div class="field">
+                    <div class="label">Shipping Options</div>
+                    <div class="options" id="shipping-options"></div>
+                </div>
+
+                <div class="field">
+                    <div class="label">Payment</div>
+                    <select class="select" id="payment-type" onchange="setPaymentType(this.value)">
+                        <option value="qris">QRIS</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                    <div class="mini">Payment will open inside this webview.</div>
+                </div>
+
+                <div class="summary" id="checkout-summary">
+                    <div class="summary-line"><span>Items</span><strong id="sum-items">Rp 0</strong></div>
+                    <div class="summary-line"><span>Shipping</span><strong id="sum-ship">Rp 0</strong></div>
+                    <div class="summary-line" style="margin-top:6px;"><span>Total</span><strong id="sum-total">Rp 0</strong></div>
+                </div>
+
+                <div style="margin-top:12px;">
+                    <button class="btn btn-primary" type="button" onclick="payNow()">Pay Now</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -273,11 +413,19 @@ export async function GET(req: NextRequest) {
     </div>
 
     <script>
+        var STORE_ID = ${Number(store.id) || 0};
         var STORE_WA_NUMBER = "${storeWhatsAppNumber}";
         var cart = {};
         var total = 0;
         var activeCategory = 'all';
         var searchQuery = '';
+        var shippingCost = 0;
+        var shippingProvider = '';
+        var shippingService = '';
+        var shippingEta = '';
+        var deliveryLat = null;
+        var deliveryLng = null;
+        var paymentSpecificType = 'qris';
 
         function debugOn() {
             try {
@@ -303,6 +451,10 @@ export async function GET(req: NextRequest) {
             debugSet('JS Error', String(msg || '') + "\\n" + String(src || '') + ":" + String(line || 0) + ":" + String(col || 0));
         };
 
+        function formatIdr(n) {
+            try { return "Rp " + Number(n || 0).toLocaleString('id-ID'); } catch (e) { return "Rp " + String(n || 0); }
+        }
+
         function updateQuantity(productId, change) {
             var currentQty = cart[productId] || 0;
             var newQty = currentQty + change;
@@ -322,64 +474,236 @@ export async function GET(req: NextRequest) {
 
         function addToCart(productId) { updateQuantity(productId, 1); }
 
-        function updateCartTotal() {
-            total = 0;
+        function itemsSubtotal() {
+            var sum = 0;
             for (var productId in cart) {
                 if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
-                var qty = cart[productId] || 0;
+                var qty = Number(cart[productId] || 0);
+                if (!qty) continue;
                 var productElement = document.querySelector("[data-product-id='" + productId + "']");
                 if (!productElement) continue;
                 var price = Number(productElement.getAttribute('data-price') || 0);
-                total += price * Number(qty || 0);
+                sum += price * qty;
             }
-            
-            var totalText = "Total: Rp " + total.toLocaleString('id-ID');
+            return sum;
+        }
+
+        function cartWeightGrams() {
+            var grams = 0;
+            for (var productId in cart) {
+                if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
+                var qty = Number(cart[productId] || 0);
+                if (!qty) continue;
+                grams += qty * 200;
+            }
+            return grams > 0 ? grams : 1000;
+        }
+
+        function updateCartTotal() {
+            var sub = itemsSubtotal();
+            total = sub + Number(shippingCost || 0);
+            var totalText = "Total: " + formatIdr(total);
             var totalEl = document.getElementById("cart-total");
             if (totalEl) totalEl.textContent = totalText;
             var checkoutBtn = document.querySelector(".checkout-btn");
-            if (checkoutBtn) checkoutBtn.textContent = "Checkout - Rp " + total.toLocaleString('id-ID');
+            if (checkoutBtn) checkoutBtn.textContent = "Checkout - " + formatIdr(total);
         }
 
-        function checkout() {
-            if (total === 0) {
-                alert("Silakan pilih produk terlebih dahulu");
+        function setPaymentType(v) {
+            paymentSpecificType = String(v || 'qris');
+        }
+
+        function openCheckout() {
+            if (itemsSubtotal() <= 0) {
+                alert("Please select products first.");
                 return;
             }
-            
-            var cartItems = [];
+            var modal = document.getElementById('checkout-modal');
+            if (modal) modal.style.display = 'block';
+            refreshCheckoutSummary();
+        }
+
+        function closeCheckout() {
+            var modal = document.getElementById('checkout-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function refreshCheckoutSummary() {
+            var sub = itemsSubtotal();
+            var ship = Number(shippingCost || 0);
+            var tot = sub + ship;
+            var elItems = document.getElementById('sum-items');
+            var elShip = document.getElementById('sum-ship');
+            var elTotal = document.getElementById('sum-total');
+            if (elItems) elItems.textContent = formatIdr(sub);
+            if (elShip) elShip.textContent = formatIdr(ship);
+            if (elTotal) elTotal.textContent = formatIdr(tot);
+        }
+
+        function shareLocation() {
+            if (!navigator || !navigator.geolocation) {
+                alert("Geolocation is not supported on this device.");
+                return;
+            }
+            var statusEl = document.getElementById('loc-status');
+            if (statusEl) statusEl.textContent = "Location: detecting...";
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    deliveryLat = pos.coords.latitude;
+                    deliveryLng = pos.coords.longitude;
+                    if (statusEl) statusEl.textContent = "Location: " + String(deliveryLat) + ", " + String(deliveryLng);
+                    var mapLink = document.getElementById('map-link');
+                    if (mapLink) {
+                        mapLink.style.display = 'inline';
+                        mapLink.href = "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(String(deliveryLat)) + "&mlon=" + encodeURIComponent(String(deliveryLng)) + "#map=18/" + encodeURIComponent(String(deliveryLat)) + "/" + encodeURIComponent(String(deliveryLng));
+                    }
+                },
+                function () {
+                    if (statusEl) statusEl.textContent = "Location: not set";
+                    alert("Unable to get your location. Please allow location permission.");
+                },
+                { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+            );
+        }
+
+        function xhrJson(method, url, body, cb) {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open(method, url, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) return;
+                    var ok = xhr.status >= 200 && xhr.status < 300;
+                    var data = null;
+                    try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) { data = { error: xhr.responseText || "Invalid JSON" }; }
+                    cb(ok, data);
+                };
+                xhr.send(body ? JSON.stringify(body) : null);
+            } catch (e) {
+                cb(false, { error: String(e && e.message ? e.message : e) });
+            }
+        }
+
+        function getShippingQuotes() {
+            var addressEl = document.getElementById('delivery-address');
+            var address = addressEl ? String(addressEl.value || '').replace(/^\\s+|\\s+$/g, '') : '';
+            if (!address) {
+                alert("Please enter your delivery address first (include postal code).");
+                return;
+            }
+            var match = address.match(/\\b(\\d{5})\\b/);
+            var postal = match && match[1] ? String(match[1]) : null;
+            var payload = {
+                storeId: STORE_ID,
+                destinationAddress: address,
+                destinationPostalCode: postal || undefined,
+                destinationLatitude: (deliveryLat != null ? Number(deliveryLat) : undefined),
+                destinationLongitude: (deliveryLng != null ? Number(deliveryLng) : undefined),
+                weightGrams: cartWeightGrams()
+            };
+            var container = document.getElementById('shipping-options');
+            if (container) container.innerHTML = "<div class='mini'>Loading shipping options...</div>";
+            xhrJson('POST', '/api/shipping/quote', payload, function (ok, data) {
+                if (!ok || !data || !data.success) {
+                    if (container) container.innerHTML = "<div class='mini'>Failed to load shipping options.</div>";
+                    return;
+                }
+                var options = data.options || [];
+                if (!options || !options.length) {
+                    if (container) container.innerHTML = "<div class='mini'>No shipping options available for this address.</div>";
+                    return;
+                }
+                renderShippingOptions(options);
+            });
+        }
+
+        function renderShippingOptions(options) {
+            var container = document.getElementById('shipping-options');
+            if (!container) return;
+            var html = "";
+            for (var i = 0; i < options.length; i++) {
+                var o = options[i] || {};
+                var provider = String(o.provider || '');
+                var service = String(o.service || '');
+                var eta = String(o.eta || '');
+                var fee = Number(o.fee || 0);
+                var id = provider + "|" + service;
+                var active = (provider === shippingProvider && service === shippingService);
+                html += "<button type='button' class='opt" + (active ? " active" : "") + "' onclick=\"selectShipping('" + provider.replace(/'/g, \"\\\\'\") + "','" + service.replace(/'/g, \"\\\\'\") + "'," + fee + ",'" + eta.replace(/'/g, \"\\\\'\") + "')\">" +
+                    "<div class='opt-title'>" + provider + " " + service + " • " + formatIdr(fee) + "</div>" +
+                    "<div class='opt-sub'>ETA: " + (eta || '-') + "</div>" +
+                    "</button>";
+            }
+            container.innerHTML = html;
+        }
+
+        function selectShipping(provider, service, fee, eta) {
+            shippingProvider = String(provider || '');
+            shippingService = String(service || '');
+            shippingCost = Number(fee || 0);
+            shippingEta = String(eta || '');
+            updateCartTotal();
+            refreshCheckoutSummary();
+            debugSet('Action', 'selectShipping ' + shippingProvider + ' ' + shippingService + ' fee=' + String(shippingCost));
+        }
+
+        function payNow() {
+            var sub = itemsSubtotal();
+            if (sub <= 0) {
+                alert("Please select products first.");
+                return;
+            }
+            var customerPhoneEl = document.getElementById('customer-phone');
+            var customerPhone = customerPhoneEl ? String(customerPhoneEl.value || '').replace(/\\D/g, '') : '';
+
+            var addressEl = document.getElementById('delivery-address');
+            var address = addressEl ? String(addressEl.value || '').replace(/^\\s+|\\s+$/g, '') : '';
+
+            if (!address) {
+                alert("Please fill delivery address.");
+                return;
+            }
+            if (!shippingProvider || !shippingService || !shippingCost) {
+                alert("Please select a shipping option.");
+                return;
+            }
+
+            var items = [];
             for (var productId in cart) {
                 if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
-                cartItems.push({ productId: parseInt(productId, 10), quantity: Number(cart[productId] || 0) });
+                var qty = Number(cart[productId] || 0);
+                if (!qty) continue;
+                items.push({ id: parseInt(productId, 10), quantity: qty });
             }
-            
-            var lines = [];
-            for (var i = 0; i < cartItems.length; i++) {
-                var item = cartItems[i];
-                if (!item || item.quantity <= 0) continue;
-                var productElement = document.querySelector("[data-product-id='" + item.productId + "']");
-                var name = productElement ? (productElement.getAttribute('data-name') || '') : '';
-                if (!name) continue;
-                lines.push("- " + item.quantity + "x " + name);
-            }
-            var message = "Saya ingin memesan:\\n" + lines.join("\\n") + "\\n\\nTotal: Rp " + total.toLocaleString('id-ID');
-            
-            try {
-                if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'CHECKOUT',
-                        message: message,
-                        cart: cartItems
-                    }));
+
+            var finalTotal = sub + Number(shippingCost || 0);
+            var customerInfo = {
+                phone: customerPhone ? ("62" + customerPhone.replace(/^62/, "")) : "${String(phone).replace(/\D/g, "")}",
+                shippingProvider: shippingProvider,
+                shippingService: shippingService,
+                shippingAddress: address,
+                shippingCost: Number(shippingCost || 0),
+                shippingEta: shippingEta || null,
+                destinationLatitude: (deliveryLat != null ? Number(deliveryLat) : null),
+                destinationLongitude: (deliveryLng != null ? Number(deliveryLng) : null)
+            };
+            var payload = {
+                storeId: STORE_ID,
+                items: items,
+                total: finalTotal,
+                customerInfo: customerInfo,
+                paymentMethod: "midtrans",
+                specificType: paymentSpecificType,
+                orderType: "DELIVERY"
+            };
+            debugSet('Action', 'payNow provider=' + shippingProvider + ' total=' + String(finalTotal));
+            xhrJson('POST', '/api/checkout', payload, function (ok, data) {
+                if (!ok || !data || !data.success || !data.paymentUrl) {
+                    alert("Checkout failed. Please try again.");
+                    return;
                 }
-            } catch (e) {}
-            
-            var waTarget = STORE_WA_NUMBER || "";
-            var waUrl = waTarget
-                ? ("https://wa.me/" + encodeURIComponent(waTarget) + "?text=" + encodeURIComponent(message))
-                : ("https://wa.me/?text=" + encodeURIComponent(message));
-            try {
-                window.location.href = waUrl;
-            } catch (e) {}
+                window.location.href = String(data.paymentUrl);
+            });
         }
 
         function applyFilters() {
@@ -416,6 +740,7 @@ export async function GET(req: NextRequest) {
         }
 
         debugSet('Boot', 'script_loaded=true ua=' + String(navigator && navigator.userAgent ? navigator.userAgent : ''));
+        updateCartTotal();
         setActiveCategory('all');
     </script>
 </body>
