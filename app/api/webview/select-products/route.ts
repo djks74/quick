@@ -197,6 +197,23 @@ export async function GET(req: NextRequest) {
         }
         .checkout-btn { background: linear-gradient(135deg, var(--brand) 0%, #111827 100%); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; }
         .checkout-btn:active { transform: scale(0.99); }
+
+        .debug {
+            position: fixed;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(520px, calc(100% - 16px));
+            background: rgba(17,24,39,0.92);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 10px 12px;
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+            display: none;
+        }
+        .debug-title { font-weight: 900; font-size: 12px; margin-bottom: 4px; }
+        .debug-line { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; color: rgba(255,255,255,0.78); white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -250,12 +267,41 @@ export async function GET(req: NextRequest) {
         </div>
     </div>
 
+    <div class="debug" id="debug">
+        <div class="debug-title" id="debug-title">Debug</div>
+        <div class="debug-line" id="debug-line"></div>
+    </div>
+
     <script>
         var STORE_WA_NUMBER = "${storeWhatsAppNumber}";
         var cart = {};
         var total = 0;
         var activeCategory = 'all';
         var searchQuery = '';
+
+        function debugOn() {
+            try {
+                var params = (window.location && window.location.search) ? String(window.location.search) : '';
+                return params.indexOf('debug=1') !== -1;
+            } catch (e) { return false; }
+        }
+
+        function debugSet(title, line) {
+            try {
+                if (!debugOn()) return;
+                var box = document.getElementById('debug');
+                var titleEl = document.getElementById('debug-title');
+                var lineEl = document.getElementById('debug-line');
+                if (!box || !titleEl || !lineEl) return;
+                box.style.display = 'block';
+                titleEl.textContent = String(title || 'Debug');
+                lineEl.textContent = String(line || '');
+            } catch (e) {}
+        }
+
+        window.onerror = function (msg, src, line, col) {
+            debugSet('JS Error', String(msg || '') + "\\n" + String(src || '') + ":" + String(line || 0) + ":" + String(col || 0));
+        };
 
         function updateQuantity(productId, change) {
             var currentQty = cart[productId] || 0;
@@ -271,6 +317,7 @@ export async function GET(req: NextRequest) {
             var qtyEl = document.getElementById("qty-" + productId);
             if (qtyEl) qtyEl.textContent = String(newQty);
             updateCartTotal();
+            debugSet('Action', 'updateQuantity(' + String(productId) + ', ' + String(change) + ') -> ' + String(newQty));
         }
 
         function addToCart(productId) { updateQuantity(productId, 1); }
@@ -346,6 +393,7 @@ export async function GET(req: NextRequest) {
                 var matchSearch = (!searchQuery || name.indexOf(searchQuery) !== -1);
                 card.style.display = (matchCategory && matchSearch) ? 'block' : 'none';
             }
+            debugSet('Filter', 'category=' + String(activeCategory) + ' search=' + String(searchQuery) + ' total=' + String(total));
         }
 
         function setActiveCategory(categoryId) {
@@ -355,6 +403,7 @@ export async function GET(req: NextRequest) {
             var activeTab = document.querySelector(".category-tab[data-category='" + activeCategory + "']") || document.querySelector(".category-tab[data-category='all']");
             if (activeTab) activeTab.classList.add('active');
             applyFilters();
+            debugSet('Action', 'setActiveCategory(' + String(activeCategory) + ')');
         }
 
         var searchInput = document.getElementById('search-input');
@@ -366,6 +415,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
+        debugSet('Boot', 'script_loaded=true ua=' + String(navigator && navigator.userAgent ? navigator.userAgent : ''));
         setActiveCategory('all');
     </script>
 </body>
