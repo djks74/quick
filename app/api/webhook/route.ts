@@ -2053,7 +2053,7 @@ export async function POST(req: NextRequest) {
               `2. You will automatically see the store's menu.\n` +
               `3. Choose items & checkout directly via WhatsApp.\n\n` +
               `🔍 *Find a Store?*\n` +
-              `Reply with *"Find <store name>"* (e.g., "Find Pasar Segar") to shop at nearby stores.\n\n` +
+              `Reply with *"Find <store name>"* (e.g., "Find Coffee" or "Find Grocery") to shop at nearby stores.\n\n` +
               `🤖 *AI Assistant*\n` +
               `You can also ask our AI, e.g.: "Any promos today?" or "Recommend me some good fried rice."`
             );

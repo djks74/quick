@@ -357,7 +357,21 @@ const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTO
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
-  async search_stores({ query, location_context, latitude, longitude, scopedSlug }: { query: string, location_context?: string, latitude?: number, longitude?: number, scopedSlug?: string }) {
+  async search_stores({
+    query,
+    location_context,
+    latitude,
+    longitude,
+    store_type,
+    scopedSlug
+  }: {
+    query: string;
+    location_context?: string;
+    latitude?: number;
+    longitude?: number;
+    store_type?: string;
+    scopedSlug?: string;
+  }) {
     await ensureStoreSettingsSchema();
     const { keyword, effectiveLocation } = normalizeStoreSearchInput(String(query || ""), location_context);
     const productSelect: any = keyword
@@ -406,9 +420,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           { slug: { contains: effectiveLocation, mode: "insensitive" } }
         ]
       : [];
-    const baseWhere: any = buildAssistantStoreEligibilityWhere(
-      scopedSlug ? { slug: String(scopedSlug) } : {}
-    );
+    const baseWhere: any = buildAssistantStoreEligibilityWhere(scopedSlug ? { slug: String(scopedSlug) } : {});
     
     const finalWhere: any = {
       ...baseWhere
@@ -432,6 +444,38 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       take: 20
     });
 
+    await ensurePlatformSettingsSchema().catch(() => null);
+    const platform = (await prisma.platformSettings
+      .findUnique({ where: { key: "default" }, select: { storeTypes: true } })
+      .catch(() => null)) as any;
+    const storeTypes = ensureDefaultStoreTypes(platform?.storeTypes);
+    const storeTypeLabelByCode = getStoreTypeLabelMap(storeTypes);
+
+    const rawStoreType = String(store_type || "").trim();
+    if (rawStoreType) {
+      const want = rawStoreType.toLowerCase();
+      let resolvedCode: string | null = null;
+      for (const st of storeTypes as any[]) {
+        const code = String(st?.code || "").trim();
+        const label = String(st?.label || "").trim();
+        if (!code) continue;
+        if (want === code.toLowerCase() || (label && want === label.toLowerCase())) {
+          resolvedCode = code;
+          break;
+        }
+      }
+
+      if (resolvedCode) {
+        stores = stores.filter((s: any) => String(s?.storeType || "").toLowerCase() === resolvedCode!.toLowerCase());
+      } else {
+        const wantLoose = want.replace(/\s+/g, " ").trim();
+        stores = stores.filter((s: any) => {
+          const label = s?.storeType ? (storeTypeLabelByCode.get(String(s.storeType)) || String(s.storeType)) : "";
+          return String(label || "").toLowerCase().includes(wantLoose);
+        });
+      }
+    }
+
     if (latitude && longitude) {
       const mapped = stores.map(s => {
         let distance = null;
@@ -454,11 +498,6 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       stores = stores.slice(0, 5);
     }
 
-    await ensurePlatformSettingsSchema().catch(() => null);
-    const platform = await prisma.platformSettings
-      .findUnique({ where: { key: "default" }, select: { storeTypes: true } })
-      .catch(() => null) as any;
-    const storeTypeLabelByCode = getStoreTypeLabelMap(ensureDefaultStoreTypes(platform?.storeTypes));
     const normalizedStores = (stores as any[]).map((s) => ({
       ...s,
       storeTypeLabel: s?.storeType ? (storeTypeLabelByCode.get(String(s.storeType)) || String(s.storeType)) : null
@@ -1773,11 +1812,12 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: validatedHistory,
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant, specialized in the "Pasar Segar" (Fresh Market) and grocery domain. Your goal is to be a clever, helpful, and non-restrictive shopping companion.
+        parts: [{ text: `You are the Gercep Platform Assistant. Gercep is a platform used by many different stores that have joined Gercep (restaurants, cafes, groceries, fresh markets, and other store types). Your goal is to be a clever, helpful, and non-restrictive shopping companion.
 
 DOMAIN FOCUS:
-- You operate within the context of Pasar Segar: fresh vegetables, fruits, meat, fish, groceries (sembako), and related household items.
-- While you should stay focused on shopping and orders, do not be "stupidly" restrictive. If a user makes small talk or asks a question related to cooking/ingredients (e.g., "What can I cook with these potatoes?"), answer it and then guide them back to shopping (e.g., "By the way, we have fresh chicken to go with those potatoes!").
+- Be general and store-agnostic: do not assume the user wants a "fresh market" unless they explicitly ask for it.
+- Always help the user find the right store based on either (a) store name, (b) what they want to buy, (c) store type (e.g. restaurant/cafe/grocery), and (d) location proximity.
+- If the user asks "how to shop on Gercep", explain the steps in a neutral way: pick a store (or store type) → browse menu → checkout → delivery/pickup → payment.
 
 CUSTOMER MEMORY & PROFILE:
 - You have access to the customer's profile: ${JSON.stringify(customerProfile)}.
@@ -1794,6 +1834,7 @@ RESPONSE STYLE:
 FLOW & LOGIC:
 1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
 2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), STAY focused on this store. Do not suggest other stores or call 'search_stores' unless the user explicitly asks to "cari toko lain" or "pindah toko".
+2b. STORE TYPE PRIORITY: If the user mentions a store type (e.g. "resto", "cafe", "grocery", "pasar", "bakery"), pass it as 'store_type' to 'search_stores' to prioritize relevant stores.
 3. LARGE MENUS: For stores with many items, you MUST NEVER list products or categories in your text response as bullets. Instead, you MUST call 'get_store_products' (for products) or 'get_store_categories' (for categories). These tools automatically generate the required interactive buttons.
 4. CATEGORY SELECTION: When a user selects or asks about a category (e.g., "Bahan Pokok" or "Bumbu Dapur"), you MUST call 'get_store_products' with that category name as the keyword. This ensures the "Pilih Produk" button appears. DO NOT summarize the category in text.
 5. NO LISTING IN TEXT: It is strictly forbidden to list products, categories, or options manually in your text response if a tool can provide them. Your response should be a brief confirmation (e.g., "Tentu Kak, ini beberapa pilihan Bumbu Dapur untuk Kakak:") followed by the tool call.
@@ -1826,6 +1867,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
                 type: "object",
                 properties: {
                   query: { type: "string", description: "Search keyword (store name, category, or product name)." },
+                  store_type: { type: "string", description: "Optional store type preference (e.g. restaurant, cafe, grocery). Use when the user specifies a type." },
                   location_context: { type: "string", description: "Area, city, or postal code to filter results." },
                   latitude: { type: "number", description: "The customer's latitude for distance sorting." },
                   longitude: { type: "number", description: "The customer's longitude for distance sorting." }
