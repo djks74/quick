@@ -361,7 +361,7 @@ export async function GET(req: NextRequest) {
                 if (!name) continue;
                 lines.push("- " + item.quantity + "x " + name);
             }
-            var message = "Saya ingin memesan:\n" + lines.join("\n") + "\n\nTotal: Rp " + total.toLocaleString('id-ID');
+            var message = "Saya ingin memesan:\\n" + lines.join("\\n") + "\\n\\nTotal: Rp " + total.toLocaleString('id-ID');
             
             try {
                 if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -410,7 +410,7 @@ export async function GET(req: NextRequest) {
         if (searchInput) {
             searchInput.addEventListener('input', function (e) {
                 var v = (e && e.target && e.target.value) ? String(e.target.value) : '';
-                searchQuery = String(v).replace(/^\s+|\s+$/g, '').toLowerCase();
+                searchQuery = String(v).replace(/^\\s+|\\s+$/g, '').toLowerCase();
                 applyFilters();
             });
         }
