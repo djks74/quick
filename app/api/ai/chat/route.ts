@@ -124,7 +124,10 @@ function isContinueMenuRequest(input: string) {
 
 function isAffirmativeReply(input: string) {
   const t = String(input || "").toLowerCase().trim();
-  return /^(ya|iya|y|yes|ok|oke|sip|boleh|silakan|gas|gass)\b/.test(t);
+  // Broadened to include 'yea', 'send', 'kirim', etc. since it's guarded by wasFullMenuOfferedInHistory
+  const isDirectAffirmative = /^(ya|iya|y|yes|yea|yeah|yep|yup|yap|ok|okay|oke|sip|boleh|silakan|sure|gas|gass|yapz|yepz|info|mau|siap)\b/.test(t);
+  const isPositiveRequest = /\b(kirim|send|tampil|lihat|liat|show|kasih|kasi|kasihkan|kasikan)\b/.test(t) && !/\b(jangan|gak|ga|no|tidak|nanti|ntar)\b/.test(t);
+  return isDirectAffirmative || isPositiveRequest;
 }
 
 function isAskingWhereMenu(input: string) {
@@ -134,20 +137,23 @@ function isAskingWhereMenu(input: string) {
 
 function wasFullMenuOfferedInHistory(history: any[]) {
   if (!Array.isArray(history)) return false;
+  let modelMessagesSeen = 0;
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
     if (h?.role !== "model") continue;
+    modelMessagesSeen++;
+
     const parts = Array.isArray(h.parts) ? h.parts : [];
     const text = parts.map((p: any) => (typeof p === "string" ? p : p?.text)).filter(Boolean).join("\n");
     const t = String(text || "").toLowerCase();
     
     // Consistent with offersMenu detection logic
     const isMenuOffer =
-      (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
-      (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat") || t.includes("ingin") || t.includes("?"));
+      (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk") || t.includes("daftar menu")) &&
+      (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat") || t.includes("ingin") || t.includes("?") || t.includes("balas") || t.includes("ketik"));
     
     if (isMenuOffer) return true;
-    return false; // Only allow "Ya" as a reply to the most recent model message
+    if (modelMessagesSeen >= 2) break; // Allow responding even if there's a small intermediary exchange
   }
   return false;
 }
