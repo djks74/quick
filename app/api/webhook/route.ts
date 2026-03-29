@@ -424,6 +424,7 @@ export async function POST(req: NextRequest) {
     const listReplyTitle = String(message.interactive?.list_reply?.title || "");
     const isCategoryListTap = listReplyId.startsWith("CAT_");
     const isProductListTap = listReplyId.startsWith("PROD_");
+    const isStoreListTap = listReplyId.startsWith("STORE_");
 
     // Get language early for localization
     // We use a dummy storeId 0 if we don't know the store yet, or try to guess from metadata
@@ -465,6 +466,7 @@ export async function POST(req: NextRequest) {
       const isAICommand = 
         isCategoryListTap ||
         isProductListTap ||
+        isStoreListTap ||
         lowerText?.startsWith("ai ") || 
         lowerText?.startsWith("tanya ") || 
         lowerText?.startsWith("ask ") || 
@@ -597,6 +599,72 @@ export async function POST(req: NextRequest) {
             : null;
           let aiStoreId = Number(aiStore?.id || 0);
 
+          if (isStoreListTap) {
+            const selectedStoreId = Number(listReplyId.replace(/^STORE_/, "")) || 0;
+            if (selectedStoreId > 0) {
+              if (message.id) {
+                try {
+                  await prisma.processedMessage.create({ data: { id: `OUT_STORE_${message.id}` } });
+                } catch (e: any) {
+                  if (e.code === "P2002") {
+                    return NextResponse.json({ success: true });
+                  }
+                }
+              }
+              const selectedStore = await prisma.store.findUnique({ where: { id: selectedStoreId }, select: { id: true, slug: true, name: true } });
+              if (selectedStore?.id) {
+                aiStore = selectedStore as any;
+                aiStoreId = Number(selectedStore.id);
+                const categories = await prisma.category.findMany({
+                  where: { storeId: aiStoreId },
+                  select: { name: true, slug: true },
+                  orderBy: { name: "asc" }
+                });
+                if (aiSession?.id) {
+                  await prisma.whatsAppSession.update({
+                    where: { id: aiSession.id },
+                    data: {
+                      metadata: {
+                        ...metadata,
+                        lockedStoreId: selectedStore.id,
+                        lockedStoreSlug: selectedStore.slug,
+                        lockedStoreAt: new Date().toISOString()
+                      } as any
+                    }
+                  }).catch(() => null);
+                }
+                const options = categories.length > 0
+                  ? {
+                      list: {
+                        buttonText: l("Pilih Kategori", "Choose Category"),
+                        sections: [
+                          {
+                            title: l("Kategori Produk", "Product Categories"),
+                            rows: [
+                              { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
+                              ...categories.slice(0, 9).map((c: any) => ({
+                                id: `CAT_${c.slug}`,
+                                title: String(c.name).slice(0, 24),
+                                description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
+                              }))
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  : undefined;
+
+                await sendWhatsAppMessage(
+                  from,
+                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Ini kategori di *${String(selectedStore.name)}* — silakan pilih ya.`, `Sure. Here are categories in *${String(selectedStore.name)}* — please choose one.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                  aiStoreId,
+                  options as any
+                );
+                return NextResponse.json({ success: true });
+              }
+            }
+          }
+
           const wantsListProduk =
             /\b(?:list|daftar)\s+(?:produk|menu)\b/i.test(String(lowerText || "")) ||
             /\b(?:menu|produk)\s+lengkap\b/i.test(String(lowerText || "")) ||
@@ -607,7 +675,7 @@ export async function POST(req: NextRequest) {
             .replace(/\s+/g, " ")
             .trim();
 
-          if (isPlatformNumberForAi && wantsListProduk && storeHint.length >= 3) {
+          if (wantsListProduk && storeHint.length >= 3) {
             const candidates = await prisma.store.findMany({
               where: {
                 isActive: true,
@@ -678,6 +746,39 @@ export async function POST(req: NextRequest) {
                 `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Ini kategori di *${String((aiStore as any).name)}* — silakan pilih ya.`, `Sure. Here are categories in *${String((aiStore as any).name)}* — please choose one.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                 aiStoreId,
                 options as any
+              );
+              return NextResponse.json({ success: true });
+            }
+
+            if (candidates.length > 1) {
+              if (message.id) {
+                try {
+                  await prisma.processedMessage.create({ data: { id: `OUT_LIST_${message.id}` } });
+                } catch (e: any) {
+                  if (e.code === "P2002") {
+                    return NextResponse.json({ success: true });
+                  }
+                }
+              }
+              await sendWhatsAppMessage(
+                from,
+                `🤖 *Gercep Assistant*:\n\n${l("Aku nemu beberapa toko yang mirip. Pilih toko dulu ya:", "I found multiple matching stores. Please choose one:")}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                0,
+                {
+                  list: {
+                    buttonText: l("Pilih Toko", "Choose Store"),
+                    sections: [
+                      {
+                        title: l("Daftar Toko", "Stores"),
+                        rows: candidates.slice(0, 10).map((s: any) => ({
+                          id: `STORE_${s.id}`,
+                          title: String(s.name).slice(0, 24),
+                          description: String(s.slug || "").slice(0, 72)
+                        }))
+                      }
+                    ]
+                  }
+                } as any
               );
               return NextResponse.json({ success: true });
             }

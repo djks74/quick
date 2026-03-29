@@ -1498,12 +1498,14 @@ export async function POST(req: NextRequest) {
     }
 
     const fullMenuState = getFullMenuStateFromHistory(validatedHistory);
-    const isWhatsAppChannel = context?.channel === "WHATSAPP";
+    const channelUpper = String((context as any)?.channel || "").toUpperCase();
+    const isWebChannel = channelUpper === "WEB";
+    const isWhatsAppChannel = channelUpper === "WHATSAPP" || (!channelUpper && isPublic);
 
     const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);
     const isAskingMenuExplicitly = isPublic && (isFullMenuRequest(String(message || "")) || isAskingWhereMenu(String(message || "")));
 
-    if (isPublic && !isWhatsAppChannel && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
+    if (isPublic && isWebChannel && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
       if (!fullMenuState || fullMenuState.storeId !== scopedStore.id) {
         const text = `Ketik "menu lengkap" untuk lihat daftar menu di *${scopedStore.name}*.`;
         const nextHistory = [
@@ -1575,7 +1577,7 @@ export async function POST(req: NextRequest) {
     }
 
     if ((isAskingMenuExplicitly || isAffirmativeToMenu) && scopedStore?.slug) {
-      if (isPublic && isWhatsAppChannel) {
+      if (isPublic && !isWebChannel) {
         const categories = await prisma.category.findMany({
           where: { storeId: scopedStore.id },
           select: { name: true, slug: true },
