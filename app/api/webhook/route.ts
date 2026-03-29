@@ -698,6 +698,50 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true });
         }
 
+        const startShoppingMatch = String(finalPrompt || "").trim().match(/^mulai_belanja\s*[:=]\s*(\d+)\s*$/i);
+        if (startShoppingMatch?.[1]) {
+          const requestedStoreId = Number(startShoppingMatch[1]) || 0;
+          if (requestedStoreId > 0) {
+            const s = await prisma.store.findFirst({
+              where: { ...assistantStoreEligibilityWhere, id: requestedStoreId },
+              select: { id: true, slug: true, name: true }
+            });
+            if (s?.id) {
+              if (aiSession?.id) {
+                await prisma.whatsAppSession
+                  .update({
+                    where: { id: aiSession.id },
+                    data: {
+                      metadata: {
+                        ...metadata,
+                        lockedStoreId: s.id,
+                        lockedStoreSlug: s.slug,
+                        lockedStoreAt: new Date().toISOString()
+                      } as any
+                    }
+                  })
+                  .catch(() => null);
+              }
+
+              const options = {
+                buttonText: l("📱 Mulai Belanja", "📱 Start Shopping"),
+                buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${Number(s.id)}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+              };
+
+              await sendWhatsAppMessage(
+                from,
+                `🤖 *Gercep Assistant*:\n\n${l(
+                  `Siap Kak, saya akan melanjutkan belanja kamu di sini untuk *${String(s.name)}*.`,
+                  `Sure — I'll continue your shopping here for *${String(s.name)}*.`
+                )}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                Number(s.id),
+                options as any
+              );
+              return NextResponse.json({ success: true });
+            }
+          }
+        }
+
         try {
           const isPlatformNumberForAi = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
           

@@ -16,6 +16,8 @@ interface Message {
   shippingOptions?: Array<{ id: string; title: string; provider?: string; service?: string; fee?: number; eta?: string | null }>;
   categories?: Array<{ name: string; slug: string; image?: string | null }>;
   products?: Array<{ id: number; name: string; price: number; category?: string | null; categoryName?: string | null; image?: string | null }>;
+  activeStoreId?: number;
+  activeStoreSlug?: string;
 }
 
 interface FloatingAssistantProps {
@@ -66,6 +68,7 @@ export default function FloatingAssistant({
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [activeProductListIdx, setActiveProductListIdx] = useState<number | null>(null);
   const [productQtyById, setProductQtyById] = useState<Record<number, number>>({});
+  const [lastActiveStore, setLastActiveStore] = useState<{ id: number; slug?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -146,8 +149,13 @@ export default function FloatingAssistant({
             quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
             shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined,
             categories: Array.isArray(data.categories) ? data.categories : undefined,
-            products: Array.isArray(data.products) ? data.products : undefined
+            products: Array.isArray(data.products) ? data.products : undefined,
+            activeStoreId: typeof data.activeStoreId === "number" ? data.activeStoreId : undefined,
+            activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined
           }]);
+          if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
+            setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
+          }
           if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
           setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);
@@ -162,9 +170,10 @@ export default function FloatingAssistant({
     );
   };
 
-  const getWhatsAppUrl = () => {
+  const getWhatsAppUrl = (storeId?: number) => {
     const platformNumber = "62882003961609";
-    const msg = storeSlug ? `Menu\nToko: ${storeSlug}` : "Menu";
+    const sid = Number(storeId || lastActiveStore?.id || 0);
+    const msg = sid > 0 ? `MULAI_BELANJA:${sid}` : (storeSlug ? `Menu\nToko: ${storeSlug}` : "Menu");
     return `https://wa.me/${platformNumber}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -205,8 +214,13 @@ export default function FloatingAssistant({
           quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies.slice(0, 3) : undefined,
           shippingOptions: Array.isArray(data.shippingOptions) ? data.shippingOptions : undefined,
           categories: Array.isArray(data.categories) ? data.categories : undefined,
-          products: Array.isArray(data.products) ? data.products : undefined
+          products: Array.isArray(data.products) ? data.products : undefined,
+          activeStoreId: typeof data.activeStoreId === "number" ? data.activeStoreId : undefined,
+          activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined
         }]);
+        if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
+          setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
+        }
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
     } catch (e) {
@@ -438,6 +452,16 @@ export default function FloatingAssistant({
                         ))}
                       </div>
                     )}
+                    {m.role !== "user" && ((m.activeStoreId && m.activeStoreId > 0) || (lastActiveStore?.id && lastActiveStore.id > 0)) && !m.paymentUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(getWhatsAppUrl(m.activeStoreId), "_blank")}
+                        disabled={isLoading}
+                        className="mt-3 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <MessageCircle className="w-4 h-4" /> Mulai Belanja
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -457,15 +481,17 @@ export default function FloatingAssistant({
 
           {/* Input */}
           <div className="p-3 bg-gray-50 dark:bg-gray-800/20 border-t dark:border-gray-800">
-            <div className="flex gap-2">
+            {lastActiveStore?.id ? (
               <button
-                onClick={() => window.open(getWhatsAppUrl(), "_blank")}
+                type="button"
+                onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id), "_blank")}
                 disabled={isLoading}
-                className="p-2 text-gray-500 hover:text-primary hover:bg-primary/10 rounded-xl transition-all disabled:opacity-50"
-                title="Continue on WhatsApp"
+                className="mb-2 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                <MessageCircle size={18} />
+                <MessageCircle className="w-4 h-4" /> Mulai Belanja
               </button>
+            ) : null}
+            <div className="flex gap-2">
               <button
                 onClick={shareLocation}
                 disabled={isLoading}
