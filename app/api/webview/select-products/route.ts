@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
     const allProducts = await prisma.product.findMany({
       where: { 
         storeId: Number(storeId), 
-        stock: { gt: 0 }
+        stock: { gt: 0 },
+        category: { notIn: ["_ARCHIVED_", "System"] }
       },
       select: {
         id: true,
@@ -95,6 +96,19 @@ export async function GET(req: NextRequest) {
         .header-inner { background: linear-gradient(135deg, var(--brand) 0%, #111827 100%); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
         .store-name { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 4px; }
         .store-desc { font-size: 13px; color: var(--muted); }
+        .search { margin-top: 12px; }
+        .search-input {
+            width: 100%;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            border-radius: 12px;
+            padding: 12px 12px;
+            font-size: 14px;
+            outline: none;
+        }
+        .search-input::placeholder { color: rgba(255,255,255,0.55); }
+        .search-input:focus { border-color: rgba(${brandRgb},0.45); box-shadow: 0 0 0 3px rgba(${brandRgb},0.18); }
         
         .categories { padding: 8px 16px 10px; }
         .category-tabs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
@@ -182,6 +196,9 @@ export async function GET(req: NextRequest) {
             <div class="header-inner">
                 <div class="store-name">${store.name}</div>
                 <div class="store-desc">Pilih produk yang ingin dipesan</div>
+                <div class="search">
+                    <input class="search-input" id="search-input" type="search" placeholder="Cari produk..." autocomplete="off" />
+                </div>
             </div>
         </div>
         
@@ -220,7 +237,7 @@ export async function GET(req: NextRequest) {
         
         <div class="cart-bar">
             <div class="cart-total" id="cart-total">Total: Rp 0</div>
-            <button class="checkout-btn" onclick="checkout()">Checkout - Rp 0</button>
+            <button class="checkout-btn" type="button" data-action="checkout">Checkout - Rp 0</button>
         </div>
     </div>
 
@@ -228,6 +245,7 @@ export async function GET(req: NextRequest) {
         const cart = {};
         let total = 0;
         let activeCategory = 'all';
+        let searchQuery = '';
 
         function updateQuantity(productId, change) {
             const currentQty = cart[productId] || 0;
@@ -289,15 +307,19 @@ export async function GET(req: NextRequest) {
                 cart: cartItems
             }));
             
-            alert("Pesanan akan diproses melalui WhatsApp. Silakan tutup halaman ini.");
-            window.close();
+            const waUrl = "https://wa.me/" + encodeURIComponent("${String(phone).replace(/\D/g, "")}") + "?text=" + encodeURIComponent(message);
+            try {
+                window.location.href = waUrl;
+            } catch (e) {}
         }
 
-        function applyCategoryFilter(categoryId) {
-            activeCategory = categoryId || 'all';
+        function applyFilters() {
             document.querySelectorAll('.product-card').forEach(card => {
                 const cardCategory = card.getAttribute('data-category');
-                if (activeCategory === 'all' || cardCategory === activeCategory) {
+                const name = (card.getAttribute('data-name') || '').toLowerCase();
+                const matchCategory = (activeCategory === 'all' || cardCategory === activeCategory);
+                const matchSearch = (!searchQuery || name.includes(searchQuery));
+                if (matchCategory && matchSearch) {
                     card.style.display = 'block';
                 } else {
                     card.style.display = 'none';
@@ -305,33 +327,54 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        document.addEventListener('click', (e) => {
-            const target = e.target;
-            if (!target || !target.closest) return;
-            const tab = target.closest('.category-tab');
-            if (tab) {
-                document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                applyCategoryFilter(tab.getAttribute('data-category') || 'all');
-                return;
-            }
-            const btn = target.closest('button');
-            if (!btn) return;
-            const action = btn.getAttribute('data-action');
-            const pid = Number(btn.getAttribute('data-product-id') || 0);
-            if (!pid) return;
-            if (action === 'add') {
-                addToCart(pid);
-                return;
-            }
-            if (action === 'qty') {
-                const delta = Number(btn.getAttribute('data-delta') || 0);
-                updateQuantity(pid, delta);
-                return;
-            }
-        }, { passive: true });
+        function setActiveCategory(categoryId) {
+            activeCategory = categoryId || 'all';
+            document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+            const activeTab = document.querySelector(".category-tab[data-category='" + activeCategory + "']") || document.querySelector(".category-tab[data-category='all']");
+            if (activeTab) activeTab.classList.add('active');
+            applyFilters();
+        }
 
-        applyCategoryFilter('all');
+        function bindClickAndTouch(el, handler) {
+            el.addEventListener('click', handler);
+            el.addEventListener('touchend', handler, { passive: true });
+            el.addEventListener('pointerup', handler, { passive: true });
+        }
+
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            bindClickAndTouch(tab, () => setActiveCategory(tab.getAttribute('data-category') || 'all'));
+        });
+
+        document.querySelectorAll("button[data-action='add']").forEach(btn => {
+            bindClickAndTouch(btn, () => {
+                const pid = Number(btn.getAttribute('data-product-id') || 0);
+                if (pid) addToCart(pid);
+            });
+        });
+
+        document.querySelectorAll("button[data-action='qty']").forEach(btn => {
+            bindClickAndTouch(btn, () => {
+                const pid = Number(btn.getAttribute('data-product-id') || 0);
+                const delta = Number(btn.getAttribute('data-delta') || 0);
+                if (pid && delta) updateQuantity(pid, delta);
+            });
+        });
+
+        const checkoutBtn = document.querySelector("button[data-action='checkout']");
+        if (checkoutBtn) {
+            bindClickAndTouch(checkoutBtn, () => checkout());
+        }
+
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const v = (e && e.target && e.target.value) ? String(e.target.value) : '';
+                searchQuery = v.trim().toLowerCase();
+                applyFilters();
+            });
+        }
+
+        setActiveCategory('all');
     </script>
 </body>
 </html>`;
