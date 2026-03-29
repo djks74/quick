@@ -410,21 +410,24 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       scopedSlug ? { slug: String(scopedSlug) } : {}
     );
     
+    const finalWhere: any = {
+      ...baseWhere
+    };
+
+    if (keywordOr.length > 0 || locationOr.length > 0) {
+      finalWhere.OR = [
+        // Priority 1: Keyword AND Location
+        ...( (keywordOr.length > 0 && locationOr.length > 0) ? [{ AND: [{ OR: keywordOr }, { OR: locationOr }] }] : [] ),
+        // Priority 2: Keyword only
+        ...( keywordOr.length > 0 ? keywordOr : [] ),
+        // Priority 3: Location only
+        ...( locationOr.length > 0 ? locationOr : [] )
+      ];
+    }
+    
     // Combine into a single query with weighted logic via Prisma's OR
     let stores = await prisma.store.findMany({
-      where: {
-        ...baseWhere,
-        ...( (keywordOr.length > 0 || locationOr.length > 0) ? {
-          OR: [
-            // Priority 1: Keyword AND Location
-            ...( (keywordOr.length > 0 && locationOr.length > 0) ? [{ AND: [{ OR: keywordOr }, { OR: locationOr }] }] : [] ),
-            // Priority 2: Keyword only
-            ...( keywordOr.length > 0 ? keywordOr : [] ),
-            // Priority 3: Location only
-            ...( locationOr.length > 0 ? locationOr : [] )
-          ]
-        } : {} )
-      },
+      where: finalWhere,
       select: selectShape,
       take: 20
     });
@@ -495,24 +498,35 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const normalizedKeyword = String(keyword || "").trim();
     const categoryMatches = findMatchedCategorySlugs(store.categories as any[], normalizedKeyword);
     const slugKeyword = normalizeSlugText(normalizedKeyword);
+    const whereClause: any = {
+      storeId: store.id,
+      category: { notIn: ["System", "_ARCHIVED_"] }
+    };
+
+    if (normalizedKeyword) {
+      if (categoryMatches.length > 0) {
+        // If we have category matches, filter by them
+        // We use AND to combine with the notIn filter
+        whereClause.AND = [
+          { category: { in: categoryMatches } }
+        ];
+      } else {
+        // Search by keyword across multiple fields
+        const orConditions: any[] = [
+          { name: { contains: normalizedKeyword, mode: "insensitive" } },
+          { description: { contains: normalizedKeyword, mode: "insensitive" } },
+          { shortDescription: { contains: normalizedKeyword, mode: "insensitive" } },
+          { category: { contains: normalizedKeyword, mode: "insensitive" } }
+        ];
+        if (slugKeyword) {
+          orConditions.push({ category: { contains: slugKeyword, mode: "insensitive" } });
+        }
+        whereClause.OR = orConditions;
+      }
+    }
+
     const products = await prisma.product.findMany({
-      where: { 
-        storeId: store.id,
-        category: { notIn: ["System", "_ARCHIVED_"] },
-        ...(normalizedKeyword ? (
-          categoryMatches.length > 0
-            ? { category: { in: categoryMatches } }
-            : {
-                OR: [
-                  { name: { contains: normalizedKeyword, mode: "insensitive" } },
-                  { description: { contains: normalizedKeyword, mode: "insensitive" } },
-                  { shortDescription: { contains: normalizedKeyword, mode: "insensitive" } },
-                  { category: { contains: normalizedKeyword, mode: "insensitive" } },
-                  ...(slugKeyword ? [{ category: { contains: slugKeyword, mode: "insensitive" } }] : [])
-                ]
-              }
-        ) : {})
-      },
+      where: whereClause,
       select: { id: true, name: true, price: true, category: true, variations: true, stock: true, image: true, description: true },
       take: normalizedKeyword ? 20 : 100
     });
