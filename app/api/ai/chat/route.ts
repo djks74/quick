@@ -78,6 +78,16 @@ function extractQuickRepliesFromText(text: string) {
     ];
   }
 
+  const offersFullMenu =
+    (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
+    (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat"));
+  if (offersFullMenu) {
+    return [
+      { id: "YES", title: "Ya", value: "Ya" },
+      { id: "NO", title: "Tidak", value: "Tidak" }
+    ];
+  }
+
   const asksPayment =
     (t.includes("bayar") || t.includes("payment") || t.includes("metode pembayaran")) &&
     t.includes("qris") &&
@@ -88,6 +98,17 @@ function extractQuickRepliesFromText(text: string) {
       { id: "PAY_BANK", title: "Bank Transfer", value: "bank transfer" }
     ];
   }
+
+  const offersMenu =
+    (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
+    (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat") || t.includes("ingin") || t.includes("?"));
+  if (offersMenu) {
+    return [
+      { id: "YES", title: "Ya", value: "Ya" },
+      { id: "NO", title: "Tidak", value: "Tidak" }
+    ];
+  }
+
   return null;
 }
 
@@ -99,6 +120,36 @@ function isFullMenuRequest(input: string) {
 function isContinueMenuRequest(input: string) {
   const t = String(input || "").toLowerCase().trim();
   return /\b(lanjut menu|menu lanjut|menu berikutnya|next menu)\b/.test(t);
+}
+
+function isAffirmativeReply(input: string) {
+  const t = String(input || "").toLowerCase().trim();
+  return /^(ya|iya|y|yes|ok|oke|sip|boleh|silakan|gas|gass)\b/.test(t);
+}
+
+function isAskingWhereMenu(input: string) {
+  const t = String(input || "").toLowerCase().trim();
+  return /\b(mana\s+menu(\s+nya)?|menu\s+mana|kok\s+ga\s+ada\s+menu|kok\s+gak\s+ada\s+menu|ga\s+ada\s+menu|gak\s+ada\s+menu)\b/.test(t);
+}
+
+function wasFullMenuOfferedInHistory(history: any[]) {
+  if (!Array.isArray(history)) return false;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h?.role !== "model") continue;
+    const parts = Array.isArray(h.parts) ? h.parts : [];
+    const text = parts.map((p: any) => (typeof p === "string" ? p : p?.text)).filter(Boolean).join("\n");
+    const t = String(text || "").toLowerCase();
+    
+    // Consistent with offersMenu detection logic
+    const isMenuOffer =
+      (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
+      (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat") || t.includes("ingin") || t.includes("?"));
+    
+    if (isMenuOffer) return true;
+    return false; // Only allow "Ya" as a reply to the most recent model message
+  }
+  return false;
 }
 
 function getFullMenuStateFromHistory(history: any[]) {
@@ -1271,6 +1322,9 @@ export async function POST(req: NextRequest) {
 
     const fullMenuState = getFullMenuStateFromHistory(validatedHistory);
 
+    const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);
+    const isAskingMenuExplicitly = isPublic && (isFullMenuRequest(String(message || "")) || isAskingWhereMenu(String(message || "")));
+
     if (isPublic && isContinueMenuRequest(String(message || "")) && scopedStore?.id) {
       if (!fullMenuState || fullMenuState.storeId !== scopedStore.id) {
         const text = `Ketik "menu lengkap" untuk lihat daftar menu di *${scopedStore.name}*.`;
@@ -1342,7 +1396,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (isPublic && isFullMenuRequest(String(message || "")) && scopedStore?.slug) {
+    if ((isAskingMenuExplicitly || isAffirmativeToMenu) && scopedStore?.slug) {
       const products = await prisma.product.findMany({
         where: {
           storeId: scopedStore.id,
@@ -1600,6 +1654,10 @@ PAYMENT & RE-ORDERING:
 WEIGHT / UNIT CLARIFICATION:
 1. If the user orders using weights (kg/gram) but the menu item is sold per pack (e.g., 0.5kg), convert into pack count and ask to confirm.
 2. If conversion is ambiguous, ask the user to choose pack/weight before creating the order.
+
+MENU CONFIRMATION:
+1. When you ask if the user wants to see the full menu (menu lengkap), you MUST mention that they can reply "Ya" to see it.
+2. The system will automatically detect affirmative replies like "Ya", "Ok", or "Boleh" to trigger the menu listing.
 
 Once an order is created:
 1. Show the user the 'breakdown' of the order.
