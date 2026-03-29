@@ -227,6 +227,8 @@ export async function GET(req: NextRequest) {
             z-index: 60;
             display: none;
             padding: 12px;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .sheet {
             width: min(520px, 100%);
@@ -236,6 +238,9 @@ export async function GET(req: NextRequest) {
             border-radius: 16px;
             box-shadow: 0 22px 60px rgba(0,0,0,0.55);
             overflow: hidden;
+            max-height: calc(100vh - 24px);
+            display: flex;
+            flex-direction: column;
         }
         .sheet-header {
             display: flex;
@@ -254,7 +259,7 @@ export async function GET(req: NextRequest) {
             font-weight: 800;
             cursor: pointer;
         }
-        .sheet-body { padding: 14px; }
+        .sheet-body { padding: 14px; overflow: auto; -webkit-overflow-scrolling: touch; }
         .field { margin-bottom: 12px; }
         .label { font-size: 12px; font-weight: 900; color: rgba(255,255,255,0.78); margin-bottom: 6px; }
         .input, .textarea, .select {
@@ -296,6 +301,7 @@ export async function GET(req: NextRequest) {
             background: rgba(255,255,255,0.06);
             color: rgba(255,255,255,0.92);
             cursor: pointer;
+            touch-action: manipulation;
         }
         .opt.active { border-color: rgba(${brandRgb},0.40); background: rgba(${brandRgb},0.14); }
         .opt-title { font-weight: 900; font-size: 13px; }
@@ -551,12 +557,14 @@ export async function GET(req: NextRequest) {
             }
             var modal = document.getElementById('checkout-modal');
             if (modal) modal.style.display = 'block';
+            try { document.body.style.overflow = 'hidden'; } catch (e) {}
             refreshCheckoutSummary();
         }
 
         function closeCheckout() {
             var modal = document.getElementById('checkout-modal');
             if (modal) modal.style.display = 'none';
+            try { document.body.style.overflow = ''; } catch (e) {}
         }
 
         function refreshCheckoutSummary() {
@@ -671,9 +679,12 @@ export async function GET(req: NextRequest) {
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'opt' + (active ? ' active' : '');
-                btn.onclick = (function (p, s, f, e) {
+                var handler = (function (p, s, f, e) {
                     return function () { selectShipping(p, s, f, e); };
                 })(provider, service, fee, eta);
+                btn.onclick = handler;
+                btn.ontouchend = handler;
+                btn.onpointerup = handler;
 
                 var t = document.createElement('div');
                 t.className = 'opt-title';
