@@ -32,23 +32,33 @@ function normalizePhoneNumber(phone: string) {
 function isGercepOutOfScopeMessage(input: string) {
   const text = String(input || "").toLowerCase().trim();
   if (!text) return false;
+  
+  // These are the core topics we MUST allow
   const scopeKeywords = [
     "gercep", "toko", "resto", "restaurant", "store", "menu", "produk", "product", "pesan", "order",
     "ulang", "ulangi", "reorder", "order lagi", "pesan lagi",
     "delivery", "pengiriman", "kurir", "checkout", "bayar", "payment", "qris", "transfer", "stok",
     "inventory", "kasir", "cashier", "outlet", "meja", "table", "wa", "whatsapp", "promo", "diskon",
-    "sales", "omzet", "performa", "topup", "saldo", "cara", "help", "bantuan", "panduan", "guide"
+    "sales", "omzet", "performa", "topup", "saldo", "cara", "help", "bantuan", "panduan", "guide",
+    "pasar segar", "sayur", "buah", "daging", "ikan", "sembako", "belanja"
   ];
-  const outOfScopeKeywords = [
-    "coding", "koding", "programming", "python", "javascript", "react", "nextjs", "typescript", "sql",
+
+  // These are strictly prohibited topics (not related to fresh market/grocery at all)
+  const strictlyOutOfScope = [
+    "coding", "programming", "python", "javascript", "react", "nextjs", "typescript", "sql",
     "algoritma", "algorithm", "matematika", "fisika", "kimia", "biologi", "sejarah", "politik", "agama",
     "berita", "news", "crypto", "saham", "trading", "cuaca", "weather", "ramalan", "horoscope", "game",
-    "recipe", "resep", "masak", "cooking", "how to make", "cara membuat", "write a code", "buatkan kode"
+    "how to make", "cara membuat", "write a code", "buatkan kode"
   ];
+
   const hasScope = scopeKeywords.some((kw) => text.includes(kw));
   if (hasScope) return false;
-  const hasOutOfScopeKeyword = outOfScopeKeywords.some((kw) => text.includes(kw));
-  return hasOutOfScopeKeyword;
+
+  // If it's a very short message or greeting, don't reject it
+  if (text.length < 10) return false;
+
+  const hasStrictlyOutOfScope = strictlyOutOfScope.some((kw) => text.includes(kw));
+  return hasStrictlyOutOfScope;
 }
 
 function getGercepScopeRefusal(input: string) {
@@ -432,9 +442,22 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     }));
     return { 
       products: normalizedProducts,
+      categories: store.categories, // Also return categories so AI knows what's available
       taxPercent: store.taxPercent,
       serviceChargePercent: store.serviceChargePercent
     };
+  },
+
+  async get_store_categories({ slug }: { slug: string }) {
+    await ensureStoreSettingsSchema();
+    const store = await prisma.store.findFirst({
+      where: buildAssistantStoreEligibilityWhere({ slug }),
+      include: {
+        categories: { select: { name: true, slug: true, image: true } }
+      }
+    });
+    if (!store) return { error: "Store not found" };
+    return { categories: store.categories };
   },
 
   async update_product_price({ slug, productName, newPrice, variationName }: any) {
@@ -1215,6 +1238,25 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       breakdown: merchantMsg,
       paymentUrl
     };
+  },
+
+  async update_customer_profile(profile: any) {
+    return { success: true, updatedProfile: profile };
+  },
+
+  async get_order_recap({ items }: { items: any[] }) {
+    if (!items || items.length === 0) return { error: "No items to recap" };
+    
+    let recap = `🛒 *Recap Pesanan Kakak:*\n\n`;
+    let total = 0;
+    items.forEach((item: any, idx: number) => {
+      const subtotal = (item.price || 0) * (item.quantity || 1);
+      total += subtotal;
+      recap += `${idx + 1}. ${item.name} x${item.quantity || 1} - Rp ${new Intl.NumberFormat('id-ID').format(subtotal)}\n`;
+    });
+    recap += `\n*Total Estimasi: Rp ${new Intl.NumberFormat('id-ID').format(total)}*`;
+    
+    return { recap, total };
   }
 };
 
@@ -1229,6 +1271,7 @@ export async function POST(req: NextRequest) {
       internalContextHeader === AI_INTERNAL_CONTEXT_KEY
     );
     const { message, history, isPublic, context } = await req.json();
+    const customerProfile = context?.customerProfile || {};
 
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
@@ -1575,116 +1618,42 @@ export async function POST(req: NextRequest) {
     const chat = model.startChat({
       history: validatedHistory,
       systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. You help manage stores, restaurants, and orders. Use the term 'toko' or 'resto' when referring to businesses. Use the available tools to find information.
-RESPONSE STYLE (VERY IMPORTANT):
-1. Default format: up to 3 bullets (short lines) + 1 question.
-2. Only show up to 10 bullets if the user asks for "detail", "semua", or "menu lengkap".
-3. Ask at most ONE question at the end. If you need multiple inputs, combine them into one question.
-4. Keep replies short, clear, and actionable. Avoid long explanations and avoid repeating the user's message.
-5. If you are still clarifying items (e.g., "apakah ini yang dimaksud?"), quantity, or location, DO NOT suggest payment yet. Focus on finishing the item selection first.
-CHANNEL FORMATTING:
-1. If the user is chatting via WhatsApp, use WhatsApp formatting only: *bold* (single asterisk). Never use **double-asterisk** markdown.
-2. Avoid markdown links. If you must include a URL, paste the URL plainly.
-SCOPE POLICY:
-1. You only answer within Gercep scope: store/resto search, menu/products, ordering, delivery, payment, subscription, and merchant operations.
-2. If user asks coding, learning, or general questions outside Gercep, politely refuse and redirect to Gercep-related help.
-3. Never provide broad general-knowledge tutoring outside Gercep context.
+        parts: [{ text: `You are the Gercep Platform Assistant, specialized in the "Pasar Segar" (Fresh Market) and grocery domain. Your goal is to be a clever, helpful, and non-restrictive shopping companion.
 
-ABOUT GERC EP (company info):
-1. If the user asks "Gercep itu apa?", "fiturnya apa?", "cara kerja", or "help", explain briefly that Gercep is a WhatsApp + Web ordering platform to help customers find nearby stores/restos, view menus/products, place orders, choose delivery, and pay.
-2. If the user asks about the owner/company/founder, answer:
-   - Owner/Company: PT Digitalisasi Kreasi Indonesia
-   - Founder: Sandi Suhendro
-3. Keep it short and practical, then offer next steps within Gercep (search store, see menu, order).
+DOMAIN FOCUS:
+- You operate within the context of Pasar Segar: fresh vegetables, fruits, meat, fish, groceries (sembako), and related household items.
+- While you should stay focused on shopping and orders, do not be "stupidly" restrictive. If a user makes small talk or asks a question related to cooking/ingredients (e.g., "What can I cook with these potatoes?"), answer it and then guide them back to shopping (e.g., "By the way, we have fresh chicken to go with those potatoes!").
 
+CUSTOMER MEMORY & PROFILE:
+- You have access to the customer's profile: ${JSON.stringify(customerProfile)}.
+- If the user provides their name, address, or preferences (e.g., "I prefer organic vegetables"), remember them and use them in future responses.
+- If the user has a "lastLat" and "lastLng" in their profile, use them for 'search_stores' if they ask for something "nearby" and haven't shared a new location.
+- If you identify new information (like a name or preferred address), acknowledge it: "Baik Kak [Nama], saya catat alamatnya ya."
 
-MERCHANT/ADMIN ASSISTANCE:
-If the user is an ADMIN or MERCHANT (see userContextInfo):
-1. Help them manage their outlets. You can check sales using 'get_store_stats' or 'get_corporate_stats'.
-2. You can update product prices ('update_product_price') or add products ('add_new_product').
-3. You can enable/disable stores ('toggle_store_active') or manually open/close them ('toggle_store_open').
-4. If they ask "bagaimana performa toko saya?", use stats tools.
-5. If they are a CORPORATE user, prioritize 'get_corporate_stats' to show them a summary of all their outlets.
-6. Always confirm changes before applying them if they involve data modification.
-7. WHATSAPP CREDIT TOP-UP:
-   - Only ADMIN, MERCHANT, or MANAGER can top up credits.
-   - If a user asks to "topup", "isi saldo", or "beli kredit WhatsApp", check their role.
-   - If they are a CORPORATE user (multi-outlet), you MUST ask: "Toko mana yang ingin di-topup?" and list their stores (slugs).
-   - If they manage only ONE store, you can proceed directly but confirm the store name.
-   - Suggest top-up amounts: Rp 50.000, Rp 100.000, or Rp 250.000 for convenience, but the user CAN fill ANY custom amount as long as it is at least Rp 10.000.
-   - Once the store and amount are confirmed, use 'create_topup_payment_link'.
-   - After calling the tool, provide the payment link to the user.
-8. MERCHANT REGISTRATION:
-   - If a user asks "bagaimana cara mendaftar?", "saya mau jadi merchant", "how to register", or "i want to open a store", tell them they can register at the Gercep Platform.
-   - Provide the registration link: https://gercep.click/register.
-   - Explain that Gercep helps businesses automate orders via WhatsApp and Web with AI.
+RESPONSE STYLE:
+1. Be polite, friendly, and human-like. Use "Kak" to refer to the customer.
+2. Use *bold* (single asterisk) for emphasis (WhatsApp style).
+3. Default format: 2-3 short bullets + 1 clear question.
+4. If the user shares a location ([LOCATION_SHARED] marker), acknowledge it and proceed to the next step (calculating shipping or searching nearby).
 
-CUSTOMER ASSISTANCE:
-1. If a user asks for a specific food (like 'nasi uduk') or "nearby" stores, use 'search_stores'.
-1b. When listing stores, use storeType (if available) to describe what they sell.
-2. If you have the user's location (latitude/longitude) in the context, you MUST pass them to 'search_stores' to ensure results are relevant to their area.
-3. If no stores are found within 50km, tell the user: "Maaf, sepertinya belum ada toko di area kamu yang bergabung dengan Gercep."
+FLOW & LOGIC:
+1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
+2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), do not suggest other stores unless asked.
+3. LARGE MENUS: For stores with 700+ items, do not list all. Use 'get_store_categories' to show categories first, or ask the user to "cari <produk>" (e.g., "cari bawang").
+4. CATEGORY LIST: When you want to show a list of categories, use 'get_store_categories'. If the user is on WhatsApp, the system will automatically render them as a tappable List Message.
+5. SHIPPING: Always call 'get_shipping_rates' once you have a physical address and coordinates (latitude/longitude). If the user has a 'preferredAddress' in their profile and hasn't provided a new one, you can ask: "Kak, mau dikirim ke [Preferred Address] seperti biasa?"
+6. PAYMENT: Ask for payment method ('qris' or 'bank_transfer') only AFTER items and shipping are confirmed.
+7. ORDER RECAP: For long lists (5+ items), use 'get_order_recap' to show a clear summary instead of listing them manually.
 
-GREETING & INITIAL FLOW:
-1. If store context is available (from QR scan or explicit store selection), greet with the store name: "Selamat datang di [Nama Toko]! Ada yang bisa Gercep bantu hari ini?"
-2. If store context is available, you MUST stay focused on this store. Use 'get_store_products' with keywords to find items. NEVER use 'search_stores' to look for other stores unless the user explicitly asks to "cari toko lain" or "pindah toko".
-3. If store context is NOT available, NEVER claim the user is connected to a specific store. Use platform onboarding style: "Halo! Saya bantu cari toko/resto terdekat, lihat menu, pilih pengiriman, dan pembayaran."
+GERCEP INFO:
+- Owner: PT Digitalisasi Kreasi Indonesia
+- Founder: Sandi Suhendro
+- Website: https://gercep.click
 
-PRODUCT IMAGES & DETAILS:
-1. When a user asks about a product, or if you are showing the menu, you should mention that you can show pictures of the products.
-2. If a user asks "boleh lihat fotonya?", "tampilkan gambar [Produk]", or requests an image using informal Indonesian/slang (e.g., "kirolim poto", "spill gambar", "liat ikannya"), you MUST find the product first.
-3. If you have a store context, use 'get_store_products' to find the item and its 'image' field.
-4. If you DO NOT have a store context, use 'search_stores' with the product name as the query to find which store sells it, then use 'get_store_products' for that store.
-5. If a product has an image URL in the tool output, you MUST include it in your response using this exact format: [PRODUCT_IMAGE: https://url-to-image.jpg].
-6. You can also provide a brief description of the product if available in the tool output.
+RE-ORDERING:
+- If the user says "order lagi" or "sama kayak kemarin", use 'get_last_order_by_phone' to see what they bought before.
 
-SHIPPING & LOCATION:
-1. Clarify the order type early: DINE_IN (makan di tempat), TAKEAWAY (ambil sendiri di toko), or DELIVERY (diantar ke rumah).
-2. For DINE_IN (makan di tempat): 
-   - You MUST ask for the table number (nomor meja) if it's not already provided in the context.
-   - If the user provides a table number, confirm it: "Baik, pesanan untuk meja [Nomor Meja] ya."
-   - When calling 'create_customer_order', you MUST pass the 'table_number'.
-3. If the user is looking for a restaurant or food "near them", "in their area", or "nearby", you MUST ask them to share their location (use the 📍 button) or at least provide their area, city, or postal code BEFORE searching. Do not just list all available restaurants globally if they asked for something nearby.
-4. If the user is ordering from home/outside the store (no table number or off-site), you MUST ONLY offer DELIVERY (diantar). TAKEAWAY or DINE_IN are not options for off-site customers.
-5. If the user is AT the store/restaurant (on-site), offer DINE_IN or TAKEAWAY. DELIVERY is NOT needed if they are already there.
-6. For DELIVERY orders, you MUST ask the user to share their location (use the 📍 button on web) AND provide their full physical address string.
-7. DO NOT assume the address from coordinates alone. You MUST have the physical address text for Biteship to process the draft order correctly.
-8. Once you have both the user's location (coordinates) and full address, use 'get_shipping_rates' to show delivery options.
-9. If the user is near the store (within 100m), a 'Store Courier' (Kurir Toko) option might be available (often free or low cost). Explain this to the user if 'get_shipping_rates' returns it.
-10. If 'search_stores' provides 'shippingSenderAddress' or coordinates for a store, use that info to explain where the item is coming from.
-11. IMPORTANT: Always call 'get_shipping_rates' BEFORE 'create_customer_order' for delivery.
-12. IMPORTANT: When calling 'create_customer_order' for a DELIVERY order, you MUST pass the 'address', 'latitude', and 'longitude'.
-13. For TAKEAWAY orders (on-site only), no address or coordinates are needed; just tell them to pick up at the store address.
-
-PAYMENT & RE-ORDERING:
-1. You MUST ask the user for their preferred payment method ('qris' or 'bank_transfer') BEFORE calling 'create_customer_order'.
-2. If a user wants to "re-order" or "order again", use 'get_last_order_by_phone' to find their items, but you MUST still ask for:
-   - Their current location/address (if delivery).
-   - Their preferred payment method.
-   - Their table number (if dine-in).
-3. If a product has variations (like size, flavor, etc.), you MUST pass the correct 'variationName' when calling 'create_customer_order' to ensure the correct price is used.
-4. Do not create an order until the user has confirmed the items, shipping (if applicable), and payment method.
-
-WEIGHT / UNIT CLARIFICATION:
-1. If the user orders using weights (kg/gram) but the menu item is sold per pack (e.g., 0.5kg), convert into pack count and ask to confirm.
-2. If conversion is ambiguous, ask the user to choose pack/weight before creating the order.
-
-LARGE MENUS (GROCERY / SEMBAKO):
-1. If a store has many products (e.g., more than 50 items or it's a GROCERY/Sembako store), DO NOT list all items.
-2. Instead, tell the user: "Maaf Kak, menu di [Nama Toko] sangat banyak. Untuk membantu Kakak, silakan ketik produk yang sedang dicari (misal: 'cari telur' atau 'cari beras')."
-3. You MUST use the 'keyword' parameter in 'get_store_products' to search for specific items the user mentioned. DO NOT call 'get_store_products' without a keyword for large stores as it will be overwhelming.
-4. Encourage the user to search first, add items to cart, then search for more until they are done.
-
-MENU CONFIRMATION:
-1. When you ask if the user wants to see the full menu (menu lengkap), you MUST mention that they can reply "Ya" to see it.
-2. The system will automatically detect affirmative replies like "Ya", "Ok", or "Boleh" to trigger the menu listing.
-
-Once an order is created:
-1. Show the user the 'breakdown' of the order.
-2. Tell them they can pay directly here or have the payment link sent to their WhatsApp.
-3. If they want to pay on WhatsApp, ask for their WhatsApp number and call 'send_order_to_whatsapp'.
-4. If the user is a MERCHANT and asks to send order details or summary to their WhatsApp (or any number), you MUST set 'isMerchant=true' in 'send_order_to_whatsapp' to ensure they receive the merchant summary format.
-5. Ensure all order details (taxes, service charges, fees) are clearly explained to the user before they confirm.${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
+${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
       } as any,
       tools: [
         {
@@ -1722,6 +1691,17 @@ Once an order is created:
                 properties: {
                   slug: { type: "string", description: "Store slug." },
                   keyword: { type: "string", description: "Optional search keyword for products (name, category, or description)." }
+                },
+                required: ["slug"]
+              }
+            },
+            {
+              name: "get_store_categories",
+              description: "Get the list of product categories available in a store.",
+              parameters: {
+                type: "object",
+                properties: {
+                  slug: { type: "string", description: "Store slug." }
                 },
                 required: ["slug"]
               }
@@ -1887,6 +1867,40 @@ Once an order is created:
                 },
                 required: ["phoneNumber"]
               }
+            },
+            {
+              name: "update_customer_profile",
+              description: "Update the customer's persistent profile with new information like name, preferred address, or preferences.",
+              parameters: {
+                type: "object",
+                properties: {
+                  name: { type: "string", description: "The customer's name." },
+                  preferredAddress: { type: "string", description: "The customer's primary delivery address." },
+                  preferences: { type: "string", description: "Any other notes or preferences (e.g. 'likes organic', 'no plastic')." }
+                }
+              }
+            },
+            {
+              name: "get_order_recap",
+              description: "Generate a formatted summary of items currently in the user's shopping history.",
+              parameters: {
+                type: "object",
+                properties: {
+                  items: { 
+                    type: "array", 
+                    description: "List of items to recap, including name, price, and quantity.",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        price: { type: "number" },
+                        quantity: { type: "number" }
+                      }
+                    }
+                  }
+                },
+                required: ["items"]
+              }
             }
           ]
         }
@@ -1909,8 +1923,11 @@ Once an order is created:
     let finalPaymentUrl = undefined;
     let finalProductImage = undefined;
     let lastShippingOptions: any[] | null = null;
+    let lastCategories: any[] | null = null;
+    let orderRecap: string | null = null;
     let activeStoreId = scopedStore?.id || undefined;
     let activeStoreSlug = scopedStore?.slug || undefined;
+    let updatedCustomerProfile = { ...customerProfile };
 
     while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
       const toolResponses = [];
@@ -2019,6 +2036,12 @@ Once an order is created:
           if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
             lastShippingOptions = (data as any).shippingOptions;
           }
+          if (call.name === "get_store_categories" && Array.isArray((data as any)?.categories)) {
+            lastCategories = (data as any).categories;
+          }
+          if (call.name === "get_order_recap" && (data as any)?.recap) {
+            orderRecap = (data as any).recap;
+          }
           if (call.name === "create_customer_order" && data.success) {
             finalBreakdown = data.breakdown;
             finalPaymentUrl = data.paymentUrl;
@@ -2033,6 +2056,9 @@ Once an order is created:
           }
           if (call.name === "create_topup_payment_link" && data.success) {
             finalPaymentUrl = data.paymentUrl;
+          }
+          if (call.name === "update_customer_profile" && data.success) {
+            Object.assign(updatedCustomerProfile, call.args);
           }
         }
       }
@@ -2098,8 +2124,11 @@ Once an order is created:
       productImage: finalProductImage,
       quickReplies,
       shippingOptions: lastShippingOptions,
+      categories: lastCategories,
+      orderRecap,
       activeStoreId,
-      activeStoreSlug
+      activeStoreSlug,
+      customerProfile: updatedCustomerProfile
     });
 
   } catch (error: any) {

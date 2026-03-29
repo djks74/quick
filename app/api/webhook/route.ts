@@ -397,7 +397,7 @@ export async function POST(req: NextRequest) {
     const platformPhoneNumberId = platform?.whatsappPhoneId || process.env.WHATSAPP_PHONE_ID;
 
     const from = message.from;
-    const textBody = String(
+    let textBody = String(
       message.text?.body ||
         message.interactive?.button_reply?.title ||
         message.interactive?.list_reply?.title ||
@@ -405,6 +405,13 @@ export async function POST(req: NextRequest) {
         message.interactive?.list_reply?.id ||
         ""
     ).trim();
+
+    // If it's a category selection from a list, make it clear for the AI
+    if (message.interactive?.list_reply?.id?.startsWith("CAT_")) {
+      const catName = message.interactive.list_reply.title;
+      textBody = `Saya memilih kategori: ${catName}`;
+    }
+    
     const lowerText = textBody?.toLowerCase();
 
     // Get language early for localization
@@ -517,15 +524,24 @@ export async function POST(req: NextRequest) {
         }
 
         // Fetch history from session metadata
-        const historyRaw = ((aiSession as any)?.metadata as any)?.chatHistory || [];
+        const metadata = (aiSession?.metadata as any) || {};
+        const historyRaw = metadata?.chatHistory || [];
+        const customerProfile = metadata?.customerProfile || {};
+        
         const history = (WA_AI_HISTORY_LIMIT > 0 && Array.isArray(historyRaw) && historyRaw.length > WA_AI_HISTORY_LIMIT)
           ? historyRaw.slice(-WA_AI_HISTORY_LIMIT)
           : historyRaw;
+        
         let finalPrompt = textBody;
 
-        // If it's a location message, provide a default prompt for the AI
+        // If it's a location message, provide a richer prompt for the AI
         if (!finalPrompt && (message as any).location) {
-          finalPrompt = l(`Saya telah membagikan lokasi saya 📍`, `I have shared my location 📍`);
+          const loc = (message as any).location;
+          finalPrompt = `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
+          
+          // Update customer profile with last known location if needed
+          customerProfile.lastLat = loc.latitude;
+          customerProfile.lastLng = loc.longitude;
         }
 
         if (!finalPrompt) {
@@ -537,15 +553,14 @@ export async function POST(req: NextRequest) {
           const isPlatformNumberForAi = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
           
           // Look for a "locked" store in the session metadata if on platform number
-          let lockedStoreSlug = (aiSession?.metadata as any)?.lockedStoreSlug;
-          let lockedStoreId = (aiSession?.metadata as any)?.lockedStoreId;
+          let lockedStoreId = metadata?.lockedStoreId;
 
           const aiStore = phoneNumberId
             ? (isPlatformNumberForAi 
-                ? (lockedStoreId ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true } }) : null)
+                ? (lockedStoreId ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true, name: true } }) : null)
                 : await prisma.store.findFirst({
                     where: { whatsappPhoneId: String(phoneNumberId) },
-                    select: { id: true, slug: true }
+                    select: { id: true, slug: true, name: true }
                   }))
             : null;
           const aiStoreId = Number(aiStore?.id || 0);
@@ -567,11 +582,13 @@ export async function POST(req: NextRequest) {
                   channel: "WHATSAPP",
                   slug: (aiStore as any)?.slug || undefined,
                   storeId: aiStoreId || undefined,
+                  storeName: (aiStore as any)?.name || undefined,
                   tableNumber: aiSession?.tableNumber || undefined,
-                  location: (message as any).location, // Pass location if available
+                  location: (message as any).location,
                   userName: dbUser?.name || undefined,
                   userRole: dbUser?.role || undefined,
-                  subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined
+                  subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined,
+                  customerProfile // Pass the customer profile to AI
                 }
               })
             });
@@ -583,10 +600,19 @@ export async function POST(req: NextRequest) {
           }
           const data = await res.json();
           if (data.text) {
-            // If there's a breakdown, show it before the main text
-            const rawResponseText = data.breakdown
-              ? `${data.breakdown}\n\n${data.text}`
-              : data.text;
+            // Update customer profile from AI response if it suggests changes
+            if (data.customerProfile) {
+              Object.assign(customerProfile, data.customerProfile);
+            }
+
+            // If there's a breakdown or recap, show it before the main text
+            let rawResponseText = data.text;
+            if (data.orderRecap) {
+              rawResponseText = `${data.orderRecap}\n\n${data.text}`;
+            } else if (data.breakdown) {
+              rawResponseText = `${data.breakdown}\n\n${data.text}`;
+            }
+            
             let responseText = String(rawResponseText || "")
               .replace(/(\*?Detail Pesanan[\s\S]*)$/i, "")
               .replace(/[\s\n]*(?:silahkan|silakan) bayar menggunakan tautan[:\s]*https?:\/\/\S+/gi, "")
@@ -597,21 +623,25 @@ export async function POST(req: NextRequest) {
               responseText = responseText.slice(0, WA_AI_REPLY_CHAR_LIMIT).trimEnd() + "…";
             }
 
-            // Update session with active store if identified
-            if (aiSession && (data.activeStoreId || data.activeStoreSlug)) {
-              const currentMetadata = (aiSession.metadata as any) || {};
-              if (data.activeStoreId !== currentMetadata.lockedStoreId || data.activeStoreSlug !== currentMetadata.lockedStoreSlug) {
-                await prisma.whatsAppSession.update({
-                  where: { id: aiSession.id },
-                  data: {
-                    metadata: {
-                      ...currentMetadata,
-                      lockedStoreId: data.activeStoreId || currentMetadata.lockedStoreId,
-                      lockedStoreSlug: data.activeStoreSlug || currentMetadata.lockedStoreSlug
-                    }
-                  }
-                }).catch(() => null);
+            // Update session with active store and history
+            if (aiSession) {
+              const updatedMetadata = {
+                ...metadata,
+                chatHistory: (WA_AI_HISTORY_LIMIT > 0 && Array.isArray(data.history) && data.history.length > WA_AI_HISTORY_LIMIT)
+                  ? data.history.slice(-WA_AI_HISTORY_LIMIT)
+                  : (data.history || []),
+                customerProfile
+              };
+
+              if (data.activeStoreId || data.activeStoreSlug) {
+                updatedMetadata.lockedStoreId = data.activeStoreId || metadata.lockedStoreId;
+                updatedMetadata.lockedStoreSlug = data.activeStoreSlug || metadata.lockedStoreSlug;
               }
+
+              await prisma.whatsAppSession.update({
+                where: { id: aiSession.id },
+                data: { metadata: updatedMetadata }
+              }).catch(() => null);
             }
 
             const quickReplies = Array.isArray(data.quickReplies)
@@ -623,16 +653,39 @@ export async function POST(req: NextRequest) {
                   }))
                   .filter((q: any) => q.title)
               : [];
+            
+            const categories = Array.isArray(data.categories) ? data.categories : [];
             const shippingOptions = Array.isArray(data.shippingOptions) ? data.shippingOptions : [];
             const shippingAsButtons = shippingOptions.slice(0, 3).map((s: any, idx: number) => ({
               id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
               title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
             }));
+            
             let options: any = { imageUrl: data.productImage };
             if (data.paymentUrl) {
               options = {
                 buttonText: "Pay Now",
                 buttonUrl: data.paymentUrl,
+                imageUrl: data.productImage
+              };
+            } else if (categories.length > 0) {
+              options = {
+                list: {
+                  buttonText: l("Pilih Kategori", "Choose Category"),
+                  sections: [
+                    {
+                      title: l("Kategori Produk", "Product Categories"),
+                      rows: [
+                        { id: "CAT_ALL", title: l("Semua Menu", "All Menu"), description: l("Lihat semua produk tersedia", "View all available products") },
+                        ...categories.slice(0, 9).map((c: any) => ({
+                          id: `CAT_${c.slug}`,
+                          title: String(c.name).slice(0, 24),
+                          description: l(`Lihat produk di ${c.name}`, `View items in ${c.name}`)
+                        }))
+                      ]
+                    }
+                  ]
+                },
                 imageUrl: data.productImage
               };
             } else if (shippingOptions.length > 3) {
