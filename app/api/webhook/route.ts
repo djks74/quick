@@ -15,7 +15,7 @@ import { getDistanceMeters } from '@/lib/utils';
 type WaLang = "id" | "en";
 const SESSION_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 const WA_AI_HISTORY_LIMIT = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
-const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "900") || 900);
+const WA_AI_REPLY_CHAR_LIMIT = Math.max(200, Number(process.env.WA_AI_REPLY_CHAR_LIMIT || "1600") || 1600);
 const WA_AI_TIMEOUT_MS = Math.max(5000, Number(process.env.WA_AI_TIMEOUT_MS || "25000") || 25000);
 
 const sanitizeWhatsAppAssistantText = (input: string) => {
@@ -582,8 +582,8 @@ export async function POST(req: NextRequest) {
               : data.text;
             let responseText = String(rawResponseText || "")
               .replace(/(\*?Detail Pesanan[\s\S]*)$/i, "")
-              .replace(/^.*silahkan bayar menggunakan tautan.*$/gim, "")
-              .replace(/^.*https?:\/\/\S+.*$/gim, "")
+              .replace(/[\s\n]*(?:silahkan|silakan) bayar menggunakan tautan[:\s]*https?:\/\/\S+/gi, "")
+              .replace(/[\s\n]*https?:\/\/\S+/gi, "")
               .trim();
             responseText = sanitizeWhatsAppAssistantText(responseText);
             if (responseText.length > WA_AI_REPLY_CHAR_LIMIT) {
