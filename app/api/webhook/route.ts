@@ -728,6 +728,17 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true });
         }
 
+        const merchantShippingOnly =
+          isMerchantSender &&
+          /\b(kirim|ongkir|kurir|shipping)\b/i.test(String(finalPrompt || "")) &&
+          !isCategoryListTap &&
+          !isProductListTap &&
+          !isStoreListTap &&
+          !isProductPageTap;
+        if (merchantShippingOnly) {
+          finalPrompt = `[MERCHANT_SHIPPING_ONLY] ${finalPrompt}`;
+        }
+
         const startShoppingMatch = String(finalPrompt || "").trim().match(/^mulai_belanja\s*[:=]\s*(\d+)\s*$/i);
         if (startShoppingMatch?.[1]) {
           const requestedStoreId = Number(startShoppingMatch[1]) || 0;
@@ -1092,7 +1103,12 @@ export async function POST(req: NextRequest) {
           try {
             res = await fetch(`${baseUrl}/api/ai/chat`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(process.env.AI_INTERNAL_CONTEXT_KEY
+                  ? { "x-internal-context-key": String(process.env.AI_INTERNAL_CONTEXT_KEY) }
+                  : {})
+              },
               signal: aiAbortController.signal,
               body: JSON.stringify({ 
                 message: finalPrompt, 
@@ -1101,6 +1117,7 @@ export async function POST(req: NextRequest) {
                 context: {
                   phoneNumber: from,
                   channel: "WHATSAPP",
+                  mode: merchantShippingOnly ? "MERCHANT_SHIPPING_ONLY" : undefined,
                   slug: (aiStore as any)?.slug || undefined,
                   storeId: aiStoreId || undefined,
                   storeName: (aiStore as any)?.name || undefined,

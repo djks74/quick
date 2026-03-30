@@ -1804,6 +1804,18 @@ export async function POST(req: NextRequest) {
         if (userPlan === "CORPORATE") {
            userContextInfo += " They are a CORPORATE user with multi-outlet access.";
         }
+      } else {
+        const storeByWhatsapp = await prisma.store.findFirst({
+          where: { whatsapp: { contains: cleanPhone } },
+          select: { id: true, slug: true, name: true, subscriptionPlan: true }
+        });
+        if (storeByWhatsapp?.id && storeByWhatsapp?.slug) {
+          isMerchantUser = true;
+          currentUserRole = "MERCHANT";
+          allowedStoreSlugs.add(String(storeByWhatsapp.slug));
+          allowedStoreIds.add(Number(storeByWhatsapp.id));
+          userContextInfo = ` The user is chatting from a store WhatsApp number. Treat them as a MERCHANT for store '${storeByWhatsapp.name}' (slug: ${storeByWhatsapp.slug}).`;
+        }
       }
     }
     if (isPublic && forcedScopedSlug) {
@@ -1857,6 +1869,11 @@ CHANNEL HANDOFF (IMPORTANT):
   - SHIPPING ONLY: (merchant/admin only) you may call 'get_shipping_rates' if the user shares location and provides an address, then show the options.
   - PAYMENT ONLY: (merchant/admin only) only for invoices/tagihan. If the user wants to pay an invoice, guide them to generate/receive the invoice payment link and show 'paymentUrl' when available.
   - If the user is not a merchant/admin, do not offer these utilities; guide them to use "Mulai Belanja" for ordering on WhatsApp.
+
+MERCHANT SHIPPING ONLY MODE:
+- If the user message includes "[MERCHANT_SHIPPING_ONLY]" (or context.mode is MERCHANT_SHIPPING_ONLY), do NOT talk about shopping/categories/products.
+- Ask for: destination address, destination coordinate (ask them to share the destination pin), and estimated weight in grams/kg.
+- Once you have address + coordinate + weight, call 'get_shipping_rates' immediately and return the top options.
 
 CUSTOMER MEMORY & PROFILE:
 - You have access to the customer's profile: ${JSON.stringify(customerProfile)}.

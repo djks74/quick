@@ -86,6 +86,14 @@ export async function GET(req: NextRequest) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="dns-prefetch" href="https://app.midtrans.com">
+    <link rel="dns-prefetch" href="https://api.midtrans.com">
+    <link rel="dns-prefetch" href="https://app.sandbox.midtrans.com">
+    <link rel="dns-prefetch" href="https://api.sandbox.midtrans.com">
+    <link rel="preconnect" href="https://app.midtrans.com" crossorigin>
+    <link rel="preconnect" href="https://api.midtrans.com" crossorigin>
+    <link rel="preconnect" href="https://app.sandbox.midtrans.com" crossorigin>
+    <link rel="preconnect" href="https://api.sandbox.midtrans.com" crossorigin>
     <title>${store.name} - Pilih Produk</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -834,7 +842,7 @@ export async function GET(req: NextRequest) {
 
                 var paymentUrl = data.paymentUrl || data.redirect_url || (data.paymentResult && (data.paymentResult.paymentUrl || data.paymentResult.invoiceUrl || data.paymentResult.redirect_url));
                 if (paymentUrl) {
-                    window.location.href = String(paymentUrl);
+                    try { window.location.replace(String(paymentUrl)); } catch (e) { window.location.href = String(paymentUrl); }
                     return;
                 }
                 if (data && data.orderId) {
