@@ -420,16 +420,15 @@ export async function GET(req: NextRequest) {
                     <div class="mini">Payment will open here.</div>
                 </div>
 
+                <div class="items-list" id="items-list"></div>
+
                 <div class="summary" id="checkout-summary">
-                    <div class="summary-line"><span>Items</span><strong id="sum-items">Rp 0</strong></div>
                     <div class="summary-line"><span>Tax</span><strong id="sum-tax">Rp 0</strong></div>
                     <div class="summary-line"><span>Service</span><strong id="sum-service">Rp 0</strong></div>
                     <div class="summary-line"><span>Fee</span><strong id="sum-fee">Rp 0</strong></div>
                     <div class="summary-line"><span>Shipping</span><strong id="sum-ship">Rp 0</strong></div>
                     <div class="summary-line" style="margin-top:6px;"><span>Total</span><strong id="sum-total">Rp 0</strong></div>
                 </div>
-
-                <div class="items-list" id="items-list"></div>
 
                 <div style="margin-top:12px;">
                     <button class="btn btn-primary" id="pay-now-btn" type="button" onclick="payNow()">Pay Now</button>
@@ -602,7 +601,6 @@ export async function GET(req: NextRequest) {
             if (!isFinite(ship)) ship = 0;
             ship = Math.round(ship);
             var tot = Number(fees.base || 0) + Number(fees.fee || 0) + ship;
-            var elItems = document.getElementById('sum-items');
             var elShip = document.getElementById('sum-ship');
             var elTotal = document.getElementById('sum-total');
             var elTax = document.getElementById('sum-tax');
@@ -610,7 +608,6 @@ export async function GET(req: NextRequest) {
             var elFee = document.getElementById('sum-fee');
             var elList = document.getElementById('items-list');
 
-            if (elItems) elItems.textContent = formatIdr(sub);
             if (elTax) elTax.textContent = formatIdr(fees.tax || 0);
             if (elService) elService.textContent = formatIdr(fees.service || 0);
             if (elFee) elFee.textContent = formatIdr(fees.fee || 0);
@@ -618,7 +615,15 @@ export async function GET(req: NextRequest) {
             if (elTotal) elTotal.textContent = formatIdr(tot);
 
             if (elList) {
-                var html = '';
+                var itemCount = 0;
+                for (var pid0 in cart) {
+                    if (!Object.prototype.hasOwnProperty.call(cart, pid0)) continue;
+                    var q0 = Number(cart[pid0] || 0);
+                    if (!q0) continue;
+                    itemCount += q0;
+                }
+
+                var html = "<div class='items-row'><div class='items-left'><div class='items-name'>Items</div><div class='items-qty'>" + (itemCount ? ("x" + String(itemCount)) : "") + "</div></div><div class='items-price'>" + formatIdr(sub) + "</div></div>";
                 for (var productId in cart) {
                     if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
                     var qty = Number(cart[productId] || 0);
@@ -630,7 +635,7 @@ export async function GET(req: NextRequest) {
                     var lineTotal = Math.round(price * qty);
                     html += \"<div class='items-row'><div class='items-left'><div class='items-name'>\" + name + \"</div><div class='items-qty'>x\" + String(qty) + \"</div></div><div class='items-price'>\" + formatIdr(lineTotal) + \"</div></div>\";
                 }
-                elList.innerHTML = html || \"<div class='items-row'><div class='items-left'><div class='items-name'>No items</div></div><div class='items-price'>\" + formatIdr(0) + \"</div></div>\";
+                elList.innerHTML = html || (\"<div class='items-row'><div class='items-left'><div class='items-name'>Items</div></div><div class='items-price'>\" + formatIdr(0) + \"</div></div>\");
             }
         }
 
