@@ -6,10 +6,46 @@ import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 export async function POST(req: NextRequest) {
   try {
     await ensureStoreSettingsSchema();
-    const { name, email, password, storeName, plan } = await req.json();
+
+    const sanitizeName = (input: unknown, maxLen: number) => {
+      const raw = String(input ?? "");
+      const cleaned = raw
+        .replace(/[<>]/g, "")
+        .replace(/[\u0000-\u001F\u007F]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLen);
+      return cleaned;
+    };
+
+    const normalizeEmail = (input: unknown) => String(input ?? "").trim().toLowerCase();
+
+    const slugify = (input: string) => {
+      const ascii = String(input || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return ascii || `store-${Math.floor(Date.now() / 1000)}`;
+    };
+
+    const raw = await req.json();
+    const email = normalizeEmail(raw?.email);
+    const password = String(raw?.password ?? "");
+    const name = sanitizeName(raw?.name, 60);
+    const storeName = sanitizeName(raw?.storeName, 80);
+    const plan = String(raw?.plan ?? "");
 
     if (!name || !email || !password || !storeName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: "Password too short" }, { status: 400 });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
 
     // Validate plan
@@ -27,9 +63,9 @@ export async function POST(req: NextRequest) {
 
     // Create User
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // Generate slug from store name
-    let slug = storeName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    let slug = slugify(storeName);
     // Ensure slug is unique
     const existingSlug = await prisma.store.findUnique({ where: { slug } });
     if (existingSlug) {
@@ -55,7 +91,7 @@ export async function POST(req: NextRequest) {
             {
               name: storeName,
               slug: slug,
-              subscriptionPlan: targetPlan, 
+              subscriptionPlan: targetPlan,
               enableWhatsApp: true,
               waBalance: initialWaCredit,
               enableManualTransfer: false,
