@@ -318,7 +318,7 @@ export async function GET(req: NextRequest) {
         .summary-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.85); }
         .summary-line strong { color: rgba(255,255,255,0.95); }
         .link { color: rgba(255,255,255,0.88); text-decoration: underline; }
-        .items-list { margin-top: 10px; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.04); }
+        .items-list { margin: 0 0 10px 0; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.04); }
         .items-row { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
         .items-row:last-child { border-bottom: none; }
         .items-left { min-width: 0; }
@@ -420,9 +420,8 @@ export async function GET(req: NextRequest) {
                     <div class="mini">Payment will open here.</div>
                 </div>
 
-                <div class="items-list" id="items-list"></div>
-
                 <div class="summary" id="checkout-summary">
+                    <div class="items-list" id="items-list"></div>
                     <div class="summary-line"><span>Tax</span><strong id="sum-tax">Rp 0</strong></div>
                     <div class="summary-line"><span>Service</span><strong id="sum-service">Rp 0</strong></div>
                     <div class="summary-line"><span>Fee</span><strong id="sum-fee">Rp 0</strong></div>
@@ -909,7 +908,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'text/html',
-        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+        'Cache-Control': 'no-store',
       },
     });
 
