@@ -614,15 +614,7 @@ export async function GET(req: NextRequest) {
             if (elTotal) elTotal.textContent = formatIdr(tot);
 
             if (elList) {
-                var itemCount = 0;
-                for (var pid0 in cart) {
-                    if (!Object.prototype.hasOwnProperty.call(cart, pid0)) continue;
-                    var q0 = Number(cart[pid0] || 0);
-                    if (!q0) continue;
-                    itemCount += q0;
-                }
-
-                var html = "<div class='items-row'><div class='items-left'><div class='items-name'>Items</div><div class='items-qty'>" + (itemCount ? ("x" + String(itemCount)) : "") + "</div></div><div class='items-price'>" + formatIdr(sub) + "</div></div>";
+                var html = "";
                 for (var productId in cart) {
                     if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
                     var qty = Number(cart[productId] || 0);
@@ -634,7 +626,7 @@ export async function GET(req: NextRequest) {
                     var lineTotal = Math.round(price * qty);
                     html += \"<div class='items-row'><div class='items-left'><div class='items-name'>\" + name + \"</div><div class='items-qty'>x\" + String(qty) + \"</div></div><div class='items-price'>\" + formatIdr(lineTotal) + \"</div></div>\";
                 }
-                elList.innerHTML = html || (\"<div class='items-row'><div class='items-left'><div class='items-name'>Items</div></div><div class='items-price'>\" + formatIdr(0) + \"</div></div>\");
+                elList.innerHTML = html || (\"<div class='items-row'><div class='items-left'><div class='items-name'>No items</div></div><div class='items-price'>\" + formatIdr(0) + \"</div></div>\");
             }
         }
 
