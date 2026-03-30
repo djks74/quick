@@ -1494,6 +1494,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: getGercepScopeRefusal(message), history: validatedHistory });
     }
 
+    if (isPublic) {
+      const channel = context?.channel === "WHATSAPP" ? "WHATSAPP" : context?.channel === "WEB" ? "WEB" : "UNKNOWN";
+      const loose = normalizeLooseText(String(message || ""));
+      const nearbyIntent =
+        /\b(terdekat|dekat\s+(saya|sini)|sekitar(\s+saya)?|nearby|near\s+me|di\s+sekitar|area\s+saya|lokasi\s+saya)\b/i.test(
+          loose
+        );
+      const { effectiveLocation } = normalizeStoreSearchInput(String(message || ""), context?.location_context);
+      const loc = normalizeLooseText(String(effectiveLocation || ""));
+      const invalidLoc =
+        !loc ||
+        ["saya", "aku", "gue", "gw", "me", "here", "sini", "disini", "di sini", "dekat sini", "sekitar sini"].includes(
+          loc
+        );
+      const hasCoords =
+        Number.isFinite(Number(customerProfile?.lastLat)) &&
+        Number.isFinite(Number(customerProfile?.lastLng)) &&
+        Math.abs(Number(customerProfile?.lastLat)) > 0.0001 &&
+        Math.abs(Number(customerProfile?.lastLng)) > 0.0001;
+      if (channel === "WHATSAPP" && nearbyIntent && !hasCoords && invalidLoc) {
+        return NextResponse.json({
+          text:
+            "Boleh share lokasi (titik) atau sebutkan area Kakak di mana? (contoh: Ciputat, Grogol, BSD) Biar aku carikan toko terdekat.",
+          history: validatedHistory
+        });
+      }
+    }
+
     // If not public, require session
     const session = await getServerSession(authOptions);
     if (!isPublic) {

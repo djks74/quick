@@ -424,7 +424,7 @@ export async function GET(req: NextRequest) {
                 <div class="items-list" id="items-list"></div>
 
                 <div style="margin-top:12px;">
-                    <button class="btn btn-primary" type="button" onclick="payNow()">Pay Now</button>
+                    <button class="btn btn-primary" id="pay-now-btn" type="button" onclick="payNow()">Pay Now</button>
                 </div>
             </div>
         </div>
@@ -767,6 +767,11 @@ export async function GET(req: NextRequest) {
                 alert("Please select products first.");
                 return;
             }
+            var payBtn = document.getElementById('pay-now-btn');
+            if (payBtn) {
+                payBtn.setAttribute('disabled', 'disabled');
+                payBtn.textContent = 'Opening payment...';
+            }
             var customerPhoneEl = document.getElementById('customer-phone');
             var customerPhone = customerPhoneEl ? String(customerPhoneEl.value || '').replace(/\\D/g, '') : '';
 
@@ -815,6 +820,10 @@ export async function GET(req: NextRequest) {
             xhrJson('POST', '/api/checkout', payload, function (ok, data) {
                 if (!ok || !data || !data.success) {
                     alert(String((data && data.error) ? data.error : "Checkout failed. Please try again."));
+                    if (payBtn) {
+                        payBtn.removeAttribute('disabled');
+                        payBtn.textContent = 'Pay Now';
+                    }
                     return;
                 }
 
@@ -833,6 +842,10 @@ export async function GET(req: NextRequest) {
                     return;
                 }
                 alert("Payment link unavailable. Please try again.");
+                if (payBtn) {
+                    payBtn.removeAttribute('disabled');
+                    payBtn.textContent = 'Pay Now';
+                }
             });
         }
 

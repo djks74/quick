@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
     const products = await prisma.product.findMany({
       where: { storeId: numericStoreId, id: { in: productIds } },
-      select: { id: true, price: true, stock: true }
+      select: { id: true, name: true, price: true, stock: true }
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
     if (productMap.size !== productIds.length) {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       const pid = Number.parseInt(String(item?.id), 10);
       const qty = Number.parseInt(String(item?.quantity), 10);
       const prod = productMap.get(pid)!;
-      return { productId: pid, quantity: qty, price: Number(prod.price) || 0 };
+      return { productId: pid, quantity: qty, price: Number(prod.price) || 0, name: String((prod as any).name || "") };
     });
 
     const shippingProvider = customerInfo?.shippingProvider ? String(customerInfo.shippingProvider).toUpperCase() : null;
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       (Number.isFinite(shippingCost) ? shippingCost : 0);
     const safeTotal = Math.max(Number(total) || 0, computedTotal);
 
-    let order = await prisma.order.create({
+    const order = await prisma.order.create({
       data: {
         storeId: numericStoreId,
         customerPhone: customerInfo?.phone || 'GUEST',
@@ -129,43 +129,6 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
-      const draft = await createBiteshipDraftForPendingOrder({
-        store,
-        order,
-        items: (items || []).map((item: any) => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        destinationCoordinate: order.destinationLat && order.destinationLng ? {
-          latitude: order.destinationLat,
-          longitude: order.destinationLng
-        } : undefined
-      });
-      if (draft?.ok && draft?.draftOrderId) {
-        const pendingDraft = draft as any;
-        order = await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            biteshipOrderId: pendingDraft.draftOrderId,
-            shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
-          }
-        });
-      }
-    }
-
-    await createOrderNotification({
-      storeId: parseInt(storeId),
-      orderId: order.id,
-      message: `Order Baru #${order.id}: ${customerInfo?.phone || "GUEST"} • Rp ${Math.round(safeTotal).toLocaleString("id-ID")}`,
-      type: "NEW_ORDER"
-    });
-
-    // Notify Merchant
-    const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)");
-    await sendMerchantWhatsApp(numericStoreId, merchantMsg, order.id).catch(() => null);
-
     // Process Payment
     // If 'gateway' is sent (from old code?), default to midtrans or check settings.
     const method = paymentMethod === 'gateway' ? 'midtrans' : paymentMethod; 
@@ -179,6 +142,48 @@ export async function POST(req: NextRequest) {
     } else {
        result = await processPayment(order.id, safeTotal, customerInfo?.phone || '08123456789', method, numericStoreId, specificType);
     }
+
+    void (async () => {
+      try {
+        if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
+          const draft = await createBiteshipDraftForPendingOrder({
+            store,
+            order,
+            items: normalizedItems.map((item: any) => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price
+            })),
+            destinationCoordinate: order.destinationLat && order.destinationLng ? {
+              latitude: order.destinationLat,
+              longitude: order.destinationLng
+            } : undefined
+          });
+          if (draft?.ok && draft?.draftOrderId) {
+            const pendingDraft = draft as any;
+            await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                biteshipOrderId: pendingDraft.draftOrderId,
+                shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+              }
+            });
+          }
+        }
+
+        await createOrderNotification({
+          storeId: parseInt(storeId),
+          orderId: order.id,
+          message: `Order Baru #${order.id}: ${customerInfo?.phone || "GUEST"} • Rp ${Math.round(safeTotal).toLocaleString("id-ID")}`,
+          type: "NEW_ORDER"
+        });
+
+        const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)");
+        await sendMerchantWhatsApp(numericStoreId, merchantMsg, order.id).catch(() => null);
+      } catch {
+        return;
+      }
+    })();
 
     return NextResponse.json({ success: true, paymentUrl: result.paymentUrl, orderId: order.id });
   } catch (error: any) {

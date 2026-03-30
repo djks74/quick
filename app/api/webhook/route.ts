@@ -615,6 +615,10 @@ export async function POST(req: NextRequest) {
         (isMerchantSender && lowerText?.startsWith("biaya kirim")) ||
         (isMerchantSender && lowerText?.startsWith("kurir")) ||
         (isMerchantSender && lowerText?.startsWith("shipping")) ||
+        (isMerchantSender && lowerText?.startsWith("kirim")) ||
+        (isMerchantSender && lowerText?.includes("mau kirim")) ||
+        (isMerchantSender && lowerText?.includes("kirim barang")) ||
+        (isMerchantSender && lowerText?.includes("kirim paket")) ||
         (isMerchantSender && lowerText?.startsWith("pembayaran")) ||
         (isMerchantSender && lowerText?.startsWith("payment")) ||
         (isMerchantSender && lowerText?.startsWith("bayar")) ||
@@ -627,6 +631,7 @@ export async function POST(req: NextRequest) {
         (isMerchantSender && lowerText?.includes("biaya kirim") && lowerText?.length > 8) ||
         (isMerchantSender && lowerText?.includes("kurir") && lowerText?.length > 4) ||
         (isMerchantSender && lowerText?.includes("shipping") && lowerText?.length > 6) ||
+        (isMerchantSender && lowerText?.includes("kirim") && lowerText?.length > 5) ||
         (isMerchantSender && lowerText?.includes("qris") && lowerText?.length > 3) ||
         (isMerchantSender && lowerText?.includes("transfer") && lowerText?.length > 7) ||
         (isMerchantSender && lowerText?.includes("pembayaran") && lowerText?.length > 8) ||
