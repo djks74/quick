@@ -459,6 +459,7 @@ export async function GET(req: NextRequest) {
         var shippingProvider = '';
         var shippingService = '';
         var shippingEta = '';
+        var shippingKey = '';
         var deliveryLat = null;
         var deliveryLng = null;
         var paymentSpecificType = 'qris';
@@ -720,13 +721,15 @@ export async function GET(req: NextRequest) {
                 var service = String(o.service || '');
                 var eta = String(o.eta || '');
                 var fee = Number(o.fee || 0);
-                var active = (provider === shippingProvider && service === shippingService);
+                var key = provider + "|" + service + "|" + String(Math.round(Number(fee || 0))) + "|" + eta;
+                var active = (key === shippingKey);
 
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'opt' + (active ? ' active' : '');
                 btn.setAttribute('data-provider', provider);
                 btn.setAttribute('data-service', service);
+                btn.setAttribute('data-key', key);
                 var handler = (function (p, s, f, e) {
                     return function () { selectShipping(p, s, f, e); };
                 })(provider, service, fee, eta);
@@ -752,6 +755,7 @@ export async function GET(req: NextRequest) {
             shippingService = String(service || '');
             shippingCost = Math.round(Number(fee || 0));
             shippingEta = String(eta || '');
+            shippingKey = shippingProvider + "|" + shippingService + "|" + String(shippingCost) + "|" + shippingEta;
             updateCartTotal();
             refreshCheckoutSummary();
             debugSet('Action', 'selectShipping ' + shippingProvider + ' ' + shippingService + ' fee=' + String(shippingCost));
@@ -761,9 +765,8 @@ export async function GET(req: NextRequest) {
                 var buttons = container.querySelectorAll('.opt');
                 for (var i = 0; i < buttons.length; i++) {
                     var b = buttons[i];
-                    var p = b.getAttribute('data-provider');
-                    var s = b.getAttribute('data-service');
-                    if (p === shippingProvider && s === shippingService) b.classList.add('active');
+                    var k = b.getAttribute('data-key');
+                    if (k === shippingKey) b.classList.add('active');
                     else b.classList.remove('active');
                 }
             }
