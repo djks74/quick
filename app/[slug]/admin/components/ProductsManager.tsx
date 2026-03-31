@@ -151,6 +151,7 @@ export default function ProductsManager({
         const q = searchQuery.toLowerCase();
         return (
           p.name.toLowerCase().includes(q) ||
+          String(p.barcode || "").toLowerCase().includes(q) ||
           (p.category || "").toLowerCase().includes(q)
         );
       }),

@@ -340,17 +340,19 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
                   />
                   {errors.stock && <p className="text-red-500 text-xs mt-1">{errors.stock.message}</p>}
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Barcode / SKU</label>
-                  <input 
-                    type="text"
-                    {...register("barcode")}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
-                    placeholder="e.g. 123456789"
-                  />
-                </div>
               </div>
             )}
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Barcode / SKU</label>
+              <input 
+                type="text"
+                {...register("barcode")}
+                className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
+                placeholder="e.g. 123456789"
+              />
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Used for POS barcode scanning.</p>
+            </div>
           </div>
 
           {/* Images Section */}

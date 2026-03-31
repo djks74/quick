@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { 
   Search, 
   ShoppingCart, 
@@ -8,6 +8,7 @@ import {
   Plus, 
   Minus, 
   X, 
+  Camera,
   CreditCard, 
   Banknote, 
   Smartphone,
@@ -136,6 +137,13 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [notifications, setNotifications] = useState<any[]>([]);
   const [lastSeenCreatedAt, setLastSeenCreatedAt] = useState<string | null>(null);
   const [scanFlash, setScanFlash] = useState<null | "ok" | "err">(null);
+  const [isCameraScanOpen, setIsCameraScanOpen] = useState(false);
+  const [cameraScanError, setCameraScanError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<any>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastDetectedRef = useRef<{ value: string; at: number } | null>(null);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
@@ -265,8 +273,6 @@ export default function PosClient({ store, products, categories, user }: PosClie
       return [...prev, { ...product, quantity: 1, note }];
     });
     setPreCartNote("");
-    // Keep selection or clear it? User flow: Click -> Add Note -> Add. Likely want to clear selection to prevent accidental double adds.
-    // But for speed, maybe keep it? Let's clear to be safe and give feedback.
     setSelectedProduct(null);
   }, []);
 
@@ -323,6 +329,101 @@ export default function PosClient({ store, products, categories, user }: PosClie
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [processScannedBarcode]);
+
+  const stopCameraScan = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (videoRef.current) {
+      try {
+        (videoRef.current as any).srcObject = null;
+      } catch {}
+    }
+    if (cameraStreamRef.current) {
+      for (const t of cameraStreamRef.current.getTracks()) {
+        try {
+          t.stop();
+        } catch {}
+      }
+    }
+    cameraStreamRef.current = null;
+    detectorRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!isCameraScanOpen) {
+      stopCameraScan();
+      setCameraScanError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const start = async () => {
+      try {
+        if (typeof window === "undefined") return;
+        if (!(window as any).BarcodeDetector) {
+          setCameraScanError("Camera barcode scan is not supported on this browser.");
+          return;
+        }
+
+        detectorRef.current = new (window as any).BarcodeDetector({
+          formats: ["ean_13", "ean_8", "code_128", "code_39", "qr_code", "upc_a", "upc_e"]
+        });
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+        if (cancelled) {
+          for (const t of stream.getTracks()) t.stop();
+          return;
+        }
+        cameraStreamRef.current = stream;
+        const v = videoRef.current;
+        if (!v) return;
+        (v as any).srcObject = stream;
+        await v.play().catch(() => null);
+
+        const loop = async () => {
+          if (cancelled || !isCameraScanOpen) return;
+          const detector = detectorRef.current;
+          const vid = videoRef.current;
+          if (detector && vid && vid.readyState >= 2) {
+            try {
+              const barcodes = await detector.detect(vid);
+              const raw = String(barcodes?.[0]?.rawValue || "").trim();
+              if (raw) {
+                const now = Date.now();
+                const last = lastDetectedRef.current;
+                const isRepeat = last && last.value === raw && now - last.at < 900;
+                if (!isRepeat) {
+                  lastDetectedRef.current = { value: raw, at: now };
+                  const handled = processScannedBarcode(raw);
+                  if (!handled) {
+                    setCameraScanError(`Barcode not found: ${raw}`);
+                    setTimeout(() => setCameraScanError(null), 1200);
+                  } else {
+                    setCameraScanError(null);
+                  }
+                }
+              }
+            } catch {}
+          }
+          rafRef.current = requestAnimationFrame(loop);
+        };
+        rafRef.current = requestAnimationFrame(loop);
+      } catch (e: any) {
+        setCameraScanError(String(e?.message || "Failed to start camera"));
+      }
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      stopCameraScan();
+    };
+  }, [isCameraScanOpen, processScannedBarcode, stopCameraScan]);
 
   const removeFromCart = (productId: number) => {
     setCart(prev => prev.filter(item => item.id !== productId));
@@ -689,6 +790,40 @@ export default function PosClient({ store, products, categories, user }: PosClie
 
   return (
     <div className={cn("h-screen flex flex-col overflow-hidden transition-colors duration-300", isDarkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900")}>
+      {isCameraScanOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div className={cn("w-full max-w-md rounded-2xl overflow-hidden border shadow-2xl", isDarkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200")}>
+            <div className={cn("p-4 flex items-center justify-between border-b", isDarkMode ? "border-gray-800" : "border-gray-100")}>
+              <div className={cn("font-black text-sm uppercase tracking-widest", isDarkMode ? "text-white" : "text-gray-900")}>
+                Scan Barcode
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCameraScanOpen(false)}
+                className={cn("p-2 rounded-lg", isDarkMode ? "hover:bg-gray-800 text-gray-200" : "hover:bg-gray-100 text-gray-700")}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative bg-black">
+              <video ref={videoRef} className="w-full aspect-[3/4] object-cover" playsInline muted />
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-[70%] h-[38%] rounded-2xl border-2 border-white/70" />
+              </div>
+              {cameraScanError && (
+                <div className="absolute left-3 right-3 bottom-3 px-3 py-2 rounded-xl bg-black/70 text-white text-xs font-bold">
+                  {cameraScanError}
+                </div>
+              )}
+            </div>
+
+            <div className={cn("p-4 text-[11px] font-bold", isDarkMode ? "text-gray-300" : "text-gray-600")}>
+              Point the camera at a product barcode. Items will be added automatically.
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className={cn("border-b h-16 md:h-20 flex items-center justify-between px-4 md:px-6 shadow-sm z-10 transition-colors duration-300", isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
         <div className="flex items-center space-x-3 md:space-x-4">
@@ -707,7 +842,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
               type="text" 
               placeholder="Search / Scan barcode..." 
               className={cn(
-                "w-full pl-9 pr-4 py-2 border-transparent rounded-lg transition-all outline-none text-sm",
+                "w-full pl-9 pr-12 py-2 border-transparent rounded-lg transition-all outline-none text-sm",
                 scanFlash === "ok" ? "ring-2 ring-green-500" : "",
                 scanFlash === "err" ? "ring-2 ring-red-500" : "",
                 isDarkMode 
@@ -725,6 +860,17 @@ export default function PosClient({ store, products, categories, user }: PosClie
               autoFocus
             />
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+            <button
+              type="button"
+              onClick={() => setIsCameraScanOpen(true)}
+              className={cn(
+                "absolute right-2 top-1.5 p-2 rounded-lg transition-colors",
+                isDarkMode ? "hover:bg-gray-600 text-gray-200" : "hover:bg-white text-gray-700"
+              )}
+              title="Scan with camera"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
