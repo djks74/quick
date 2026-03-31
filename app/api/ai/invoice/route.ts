@@ -28,13 +28,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Apply Fee Logic (QRIS 1%, Bank 5000)
+    const feePaidBy = String((store as any).feePaidBy || "CUSTOMER").toUpperCase();
+    const qrisFeePercent = Number((store as any).qrisFeePercent || 0);
+    const gopayFeePercent = Number((store as any).gopayFeePercent || 0);
+    const manualTransferFee = Number((store as any).manualTransferFee || 0);
+
+    // Apply Fee Logic
     let paymentFee = 0;
     const itemsAmount = Number(amount);
-    if (payment_method === "qris") {
-      paymentFee = itemsAmount * 0.01;
-    } else if (payment_method === "bank_transfer") {
-      paymentFee = 5000;
+    if (feePaidBy === "CUSTOMER") {
+      if (payment_method === "qris") {
+        paymentFee = itemsAmount * (qrisFeePercent / 100);
+      } else if (payment_method === "gopay") {
+        paymentFee = itemsAmount * (gopayFeePercent / 100);
+      } else if (payment_method === "bank_transfer") {
+        paymentFee = manualTransferFee;
+      }
     }
 
     const finalTotal = itemsAmount + paymentFee;

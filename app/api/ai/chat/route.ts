@@ -998,6 +998,9 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     const subtotal = itemsAmount + taxAmount + serviceCharge + shippingCost;
     if (payment_method === "qris") {
       paymentFee = subtotal * 0.01;
+    } else if (payment_method === "gopay") {
+      const gopayFeePercent = Number((store as any).gopayFeePercent || 0);
+      paymentFee = subtotal * (gopayFeePercent / 100);
     } else if (payment_method === "bank_transfer") {
       paymentFee = 5000;
     }
@@ -1336,11 +1339,20 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       });
     }
 
+    const feePaidBy = String((store as any).feePaidBy || "CUSTOMER").toUpperCase();
+    const qrisFeePercent = Number((store as any).qrisFeePercent || 0);
+    const gopayFeePercent = Number((store as any).gopayFeePercent || 0);
+    const manualTransferFee = Number((store as any).manualTransferFee || 0);
+
     let paymentFee = 0;
-    if (payment_method === "qris") {
-      paymentFee = amount * 0.01;
-    } else if (payment_method === "bank_transfer") {
-      paymentFee = 5000;
+    if (feePaidBy === "CUSTOMER") {
+      if (payment_method === "qris") {
+        paymentFee = amount * (qrisFeePercent / 100);
+      } else if (payment_method === "gopay") {
+        paymentFee = amount * (gopayFeePercent / 100);
+      } else if (payment_method === "bank_transfer") {
+        paymentFee = manualTransferFee;
+      }
     }
 
     const finalAmount = amount + paymentFee;
@@ -1902,7 +1914,7 @@ FLOW & LOGIC:
    - Use 'get_store_products' to show a tappable product list.
    - When the user selects a product from the list, ALWAYS ask for the quantity (e.g., "Mau berapa banyak Kak?") and any specific variations if available.
 6. SHIPPING: Always call 'get_shipping_rates' once you have a physical address and coordinates (latitude/longitude). If the user has a 'preferredAddress' in their profile and hasn't provided a new one, you can ask: "Kak, mau dikirim ke [Preferred Address] seperti biasa?"
-7. PAYMENT: Ask for payment method ('qris' or 'bank_transfer') only AFTER items and shipping are confirmed.
+7. PAYMENT: Ask for payment method ('qris', 'gopay', or 'bank_transfer') only AFTER items and shipping are confirmed.
 8. ORDER RECAP: For long lists (5+ items), use 'get_order_recap' to show a clear summary instead of listing them manually.
 
 GERCEP INFO:
@@ -2083,7 +2095,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
                   shippingProvider: { type: "string" },
                   shippingService: { type: "string" },
                   shippingFee: { type: "number" },
-                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] },
+                  payment_method: { type: "string", enum: ["qris", "gopay", "bank_transfer"] },
                   table_number: { type: "string", description: "Nomor meja jika makan di tempat (DINE_IN)." },
                   isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
                 },
@@ -2099,7 +2111,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
                   amount: { type: "number" },
                   customer_phone: { type: "string" },
                   merchant_phone: { type: "string" },
-                  payment_method: { type: "string", enum: ["qris", "bank_transfer"] }
+                  payment_method: { type: "string", enum: ["qris", "gopay", "bank_transfer"] }
                 },
                 required: ["amount", "customer_phone", "merchant_phone"]
               }
