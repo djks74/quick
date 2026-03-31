@@ -13,6 +13,12 @@ import { triggerPartnerWebhook } from "@/lib/webhook-partner";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
+const makeProductBarcode = (storeId: number, productId: number) => {
+  const s = String(Math.abs(Number(storeId) || 0)).padStart(4, "0").slice(-4);
+  const p = String(Math.abs(Number(productId) || 0)).padStart(8, "0").slice(-8);
+  return `${s}${p}`;
+};
+
 async function ensureRecipeSchema() {
   if (!ensuredRecipeSchema) {
     ensuredRecipeSchema = (async () => {
@@ -902,6 +908,25 @@ export async function getProducts(storeId: number, categorySlug?: string, limit:
       }
     }
 
+    const missingBarcode = products.filter((p) => !p?.barcode);
+    if (missingBarcode.length > 0) {
+      await Promise.all(
+        missingBarcode.map(async (p) => {
+          const computed = makeProductBarcode(storeId, p.id);
+          try {
+            await prisma.product.update({
+              where: { id: p.id },
+              data: { barcode: computed }
+            });
+            p.barcode = computed;
+          } catch (err: any) {
+            const code = err?.code;
+            if (code === "P2022" || code === "P2021") return;
+          }
+        })
+      );
+    }
+
     return products.map(p => ({
       id: p.id,
       name: p.name,
@@ -992,6 +1017,22 @@ export async function createProduct(storeId: number, data: any) {
       }
     }
     console.log("SERVER: Product created", product.id);
+
+    if (product && !product.barcode) {
+      const computed = makeProductBarcode(storeId, product.id);
+      try {
+        await prisma.product.update({
+          where: { id: product.id },
+          data: { barcode: computed }
+        });
+        product.barcode = computed;
+      } catch (err: any) {
+        const code = err?.code;
+        if (code !== "P2022" && code !== "P2021") {
+          console.error("[BARCODE] Failed to set product barcode", err);
+        }
+      }
+    }
 
     if (product) {
       // Trigger Reverse Sync for the new product
