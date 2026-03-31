@@ -22,9 +22,11 @@ function formatIsoHourMinute(iso: string) {
 
 export default function OrderNotificationsPanel({
   storeId,
+  slug,
   initialNotifications = [],
 }: {
   storeId: number;
+  slug: string;
   initialNotifications?: Row[];
 }) {
   const [items, setItems] = useState<Row[]>(initialNotifications);
@@ -32,7 +34,7 @@ export default function OrderNotificationsPanel({
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/order-notifications?slug=${encodeURIComponent(String((window as any).__STORE_SLUG__ || ""))}&limit=25`, { cache: "no-store" });
+      const res = await fetch(`/api/admin/order-notifications?slug=${encodeURIComponent(String(slug || ""))}&limit=25`, { cache: "no-store" });
       const payload = await res.json().catch(() => null);
       if (!res.ok || !payload?.success) {
         throw new Error(payload?.error || "Failed to load notifications");
@@ -44,7 +46,7 @@ export default function OrderNotificationsPanel({
         window.location.reload();
       }
     }
-  }, [storeId]);
+  }, [slug, storeId]);
 
   useEffect(() => {
     refresh();
@@ -53,7 +55,6 @@ export default function OrderNotificationsPanel({
   }, [refresh]);
 
   const markRead = async (id: number) => {
-    const slug = String((window as any).__STORE_SLUG__ || "");
     const res = await fetch("/api/admin/order-notifications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +69,6 @@ export default function OrderNotificationsPanel({
     // Optimistic UI update
     setItems((prev) => prev.map((p) => ({ ...p, isRead: true })));
     
-    const slug = String((window as any).__STORE_SLUG__ || "");
     const res = await fetch("/api/admin/order-notifications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -155,7 +155,7 @@ export default async function AdminDashboard({ params }: { params: Promise<{ slu
           </div>
         </div>
         <div className="lg:col-span-1">
-          <OrderNotificationsPanel storeId={storeId} initialNotifications={notifications as any} />
+          <OrderNotificationsPanel storeId={storeId} slug={slug} initialNotifications={notifications as any} />
         </div>
       </div>
     </div>

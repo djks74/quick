@@ -50,6 +50,29 @@ export async function requireStoreAccessBySlug(slug: string) {
   return { user, store };
 }
 
+export async function requireStoreAccessById(storeId: number) {
+  if (!Number.isFinite(storeId) || storeId <= 0) {
+    throw new GuardError("Missing storeId", 400);
+  }
+  const user = await requireSessionUser();
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { id: true, ownerId: true, slug: true, apiKey: true }
+  });
+  if (!store) {
+    throw new GuardError("Store not found", 404);
+  }
+  const userId = Number(user?.id);
+  const userStoreId = Number(user?.storeId);
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const isOwner = userId === store.ownerId;
+  const isStoreUser = userStoreId === store.id;
+  if (!isSuperAdmin && !isOwner && !isStoreUser) {
+    throw new GuardError("Unauthorized", 403);
+  }
+  return { user, store };
+}
+
 export function requireAiApiKey(headers: Headers) {
   const expected = process.env.AI_API_KEY;
   const provided = headers.get("x-api-key");
