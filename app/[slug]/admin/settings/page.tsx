@@ -82,6 +82,7 @@ export default function AdminSettings() {
     taxPercent: "0",
     serviceChargePercent: "0",
     qrisFeePercent: "0.7",
+    gopayFeePercent: "2.5",
     manualTransferFee: "0",
     feePaidBy: "CUSTOMER",
     posGridColumns: 4,
@@ -339,6 +340,7 @@ export default function AdminSettings() {
           taxPercent: (data.taxPercent ?? 0).toString(),
           serviceChargePercent: (data.serviceChargePercent ?? 0).toString(),
           qrisFeePercent: (data.qrisFeePercent ?? 0.7).toString(),
+          gopayFeePercent: ((data as any).gopayFeePercent ?? 2.5).toString(),
           manualTransferFee: (data.manualTransferFee ?? 0).toString(),
           feePaidBy: data.feePaidBy || "CUSTOMER",
           posGridColumns: data.posGridColumns ?? 4,
@@ -410,6 +412,7 @@ export default function AdminSettings() {
         taxPercent: parseFloat(settings.taxPercent.toString().replace(',', '.')) || 0,
         serviceChargePercent: parseFloat(settings.serviceChargePercent.toString().replace(',', '.')) || 0,
         qrisFeePercent: parseFloat(settings.qrisFeePercent.toString().replace(',', '.')) || 0,
+        gopayFeePercent: parseFloat(settings.gopayFeePercent.toString().replace(',', '.')) || 0,
         manualTransferFee: parseFloat(settings.manualTransferFee.toString().replace(',', '.')) || 0,
         posPaymentMethods: settings.posPaymentMethods,
         biteshipOriginLat: settings.biteshipOriginLat ? parseFloat(settings.biteshipOriginLat.toString().replace(',', '.')) : null,
@@ -432,6 +435,7 @@ export default function AdminSettings() {
             taxPercent: (result.taxPercent ?? 0).toString(),
             serviceChargePercent: (result.serviceChargePercent ?? 0).toString(),
             qrisFeePercent: (result.qrisFeePercent ?? 0).toString(),
+            gopayFeePercent: ((result as any).gopayFeePercent ?? 0).toString(),
             manualTransferFee: (result.manualTransferFee ?? 0).toString(),
             posPassword: "",
         }));
@@ -878,6 +882,18 @@ export default function AdminSettings() {
                                         className="w-full border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-900/10 px-3 py-1.5 outline-none dark:text-white rounded" 
                                         value={settings.qrisFeePercent}
                                         onChange={(e) => setSettings({ ...settings, qrisFeePercent: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1 dark:text-gray-300">GoPay Fee (%) - Admin Only</label>
+                                <div className="relative">
+                                    <input 
+                                        type="text"
+                                        inputMode="decimal"
+                                        className="w-full border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-900/10 px-3 py-1.5 outline-none dark:text-white rounded" 
+                                        value={settings.gopayFeePercent}
+                                        onChange={(e) => setSettings({ ...settings, gopayFeePercent: e.target.value })}
                                     />
                                 </div>
                             </div>

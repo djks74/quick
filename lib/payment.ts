@@ -128,6 +128,8 @@ export async function processPayment(orderId: number, amount: number, customerPh
       };
       if (useSpecificType && specificType === 'qris') {
         parameter.enabled_payments = ['gopay', 'shopeepay', 'qris', 'other_qris'];
+      } else if (useSpecificType && specificType === 'gopay') {
+        parameter.enabled_payments = ['gopay'];
       } else if (useSpecificType && specificType === 'bank_transfer') {
         parameter.enabled_payments = ['bca_va', 'bni_va', 'bri_va', 'permata_va', 'other_va', 'echannel'];
       }
@@ -151,7 +153,7 @@ export async function processPayment(orderId: number, amount: number, customerPh
 
     try {
       let transaction: any;
-      if (specificType === 'qris' || specificType === 'bank_transfer') {
+      if (specificType === 'qris' || specificType === 'gopay' || specificType === 'bank_transfer') {
         try {
           transaction = await tryCreateTransaction(buildParameter(true));
         } catch (specificErr) {

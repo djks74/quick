@@ -122,7 +122,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const [shippingQuotes, setShippingQuotes] = useState<any[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
   const [isFetchingQuotes, setIsFetchingQuotes] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'qris' | 'bank'>('qris');
+  const [paymentMethod, setPaymentMethod] = useState<'qris' | 'gopay' | 'bank'>('qris');
   
   useEffect(() => {
     setMounted(true);
@@ -283,6 +283,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const taxPercent = parseFloat(store.taxPercent?.toString() || "0");
   const servicePercent = parseFloat(store.serviceChargePercent?.toString() || "0");
   const qrisFeePercent = parseFloat((store.qrisFeePercent ?? 0).toString());
+  const gopayFeePercent = parseFloat(((store as any).gopayFeePercent ?? 0).toString());
   const transferFee = parseFloat((store.manualTransferFee ?? 0).toString());
   const isCustomerPaysFee = store.feePaidBy === 'CUSTOMER';
 
@@ -293,24 +294,25 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   const serviceCharge = roundIdr(subtotal * (servicePercent / 100));
   const totalPrice = subtotal + tax + serviceCharge;
 
-  const calculatePlatformFee = (method: 'qris' | 'transfer') => {
+  const calculatePlatformFee = (method: 'qris' | 'gopay' | 'transfer') => {
       if (!isCustomerPaysFee) return 0;
       if (method === 'qris') return roundIdr(totalPrice * (qrisFeePercent / 100));
+      if (method === 'gopay') return roundIdr(totalPrice * (gopayFeePercent / 100));
       if (method === 'transfer') return roundIdr(transferFee); 
       return 0;
   };
 
-  const handleWhatsAppCheckout = (method: 'qris' | 'bank') => {
+  const handleWhatsAppCheckout = (method: 'qris' | 'gopay' | 'bank') => {
     if (cart.length === 0) return;
     if (!store.isOpen) {
         alert("Sorry, the store is currently closed and not accepting orders.");
         return;
     }
-    let fee = isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
+    let fee = isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : (method === 'gopay' ? calculatePlatformFee('gopay') : calculatePlatformFee('transfer'))) : 0;
     const finalTotal = totalPrice + fee;
 
     let message = tableNumber ? `check-in meja ${tableNumber}` : `menu`;
-    message += method === "qris" ? `\n\nsaya mau bayar qris` : `\n\nsaya mau bayar bank`;
+    message += method === "qris" ? `\n\nsaya mau bayar qris` : method === "gopay" ? `\n\nsaya mau bayar gopay` : `\n\nsaya mau bayar bank`;
     const platformNumber = "62882003961609";
     const whatsappUrl = `https://wa.me/${platformNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -389,10 +391,10 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   };
 
   const currentShippingCost = orderType === 'DELIVERY' ? roundIdr(Number(selectedQuote?.fee || selectedQuote?.price || 0)) : 0;
-  const platformFeeForDisplay = isCustomerPaysFee ? (paymentMethod === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0;
+  const platformFeeForDisplay = isCustomerPaysFee ? (paymentMethod === 'qris' ? calculatePlatformFee('qris') : (paymentMethod === 'gopay' ? calculatePlatformFee('gopay') : calculatePlatformFee('transfer'))) : 0;
   const finalTotalAmount = totalPrice + platformFeeForDisplay + currentShippingCost;
 
-  const handleWebCheckout = async (method: 'qris' | 'bank') => {
+  const handleWebCheckout = async (method: 'qris' | 'gopay' | 'bank') => {
     if (cart.length === 0) return;
     if (!store.isOpen) {
       alert("Sorry, the store is currently closed and not accepting orders.");
@@ -427,7 +429,16 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           quantity: item.quantity,
           price: item.price
         })),
-        total: totalPrice + (isCustomerPaysFee ? (method === 'qris' ? calculatePlatformFee('qris') : calculatePlatformFee('transfer')) : 0) + currentShippingCost,
+        total:
+          totalPrice +
+          (isCustomerPaysFee
+            ? method === 'qris'
+              ? calculatePlatformFee('qris')
+              : method === 'gopay'
+                ? calculatePlatformFee('gopay')
+                : calculatePlatformFee('transfer')
+            : 0) +
+          currentShippingCost,
         orderType: orderType,
         customerInfo: {
           phone: checkoutPhone.trim(),
@@ -441,7 +452,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
           destinationLongitude: orderType === 'DELIVERY' ? deliveryLongitude : undefined
         },
         paymentMethod: "midtrans",
-        specificType: method === 'qris' ? 'qris' : 'bank_transfer'
+        specificType: method === 'qris' ? 'qris' : method === 'gopay' ? 'gopay' : 'bank_transfer'
       };
 
       const res = await fetch('/api/checkout', {
@@ -942,7 +953,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
 
                  <div className="space-y-3">
                     <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Payment Method</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                        <button
                          onClick={() => setPaymentMethod('qris')}
                          className={cn(
@@ -955,6 +966,19 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        >
                           <span className="text-[10px] font-black uppercase tracking-widest">QRIS</span>
                           <span className="text-[8px] opacity-60 font-bold uppercase tracking-tighter">Auto-Verify</span>
+                       </button>
+                       <button
+                         onClick={() => setPaymentMethod('gopay')}
+                         className={cn(
+                           "py-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all",
+                           paymentMethod === 'gopay'
+                             ? "bg-gray-900 text-white border-gray-900"
+                             : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                         )}
+                         style={paymentMethod === 'gopay' ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                       >
+                          <span className="text-[10px] font-black uppercase tracking-widest">GoPay</span>
+                          <span className="text-[8px] opacity-60 font-bold uppercase tracking-tighter">Tap to Pay</span>
                        </button>
                        <button
                          onClick={() => setPaymentMethod('bank')}
@@ -1035,14 +1059,14 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     >
                        <div className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4" />
-                          <span className="text-xs">{isProcessing ? "Processing..." : `Pay via ${paymentMethod === 'qris' ? 'QRIS' : 'Bank Transfer'}`}</span>
+                          <span className="text-xs">{isProcessing ? "Processing..." : `Pay via ${paymentMethod === 'qris' ? 'QRIS' : paymentMethod === 'gopay' ? 'GoPay' : 'Bank Transfer'}`}</span>
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') + (orderType === 'DELIVERY' ? currentShippingCost : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer') + (orderType === 'DELIVERY' ? currentShippingCost : 0))}
                           </span>
-                          {calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer') > 0 && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : 'transfer'))})</span>
+                          {calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer') > 0 && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer'))})</span>
                           )}
                        </div>
                     </button>

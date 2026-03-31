@@ -50,6 +50,7 @@ model Store {
   posEnabled                  Boolean             @default(false)
   posGridColumns              Int                 @default(4)
   qrisFeePercent              Float               @default(1.0)
+  gopayFeePercent             Float               @default(2.5)
   serviceChargePercent        Float               @default(0.0)
   taxPercent                  Float               @default(0.0)
   balance                     Float               @default(0.0)

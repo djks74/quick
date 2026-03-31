@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     const taxPercent = Number((store as any).taxPercent || 0);
     const servicePercent = Number((store as any).serviceChargePercent || 0);
     const qrisFeePercent = Number((store as any).qrisFeePercent || 0);
+    const gopayFeePercent = Number((store as any).gopayFeePercent || 0);
     const manualTransferFee = Number((store as any).manualTransferFee || 0);
     const feePaidBy = String((store as any).feePaidBy || "CUSTOMER").toUpperCase();
 
@@ -89,6 +90,8 @@ export async function POST(req: NextRequest) {
     if (feePaidBy === "CUSTOMER") {
       if (paymentType === "qris" && qrisFeePercent) {
         paymentFee = subtotalWithTaxService * (qrisFeePercent / 100);
+      } else if (paymentType === "gopay" && gopayFeePercent) {
+        paymentFee = subtotalWithTaxService * (gopayFeePercent / 100);
       } else if (paymentType === "bank_transfer" && manualTransferFee) {
         paymentFee = manualTransferFee;
       }

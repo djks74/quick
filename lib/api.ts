@@ -229,6 +229,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
         taxPercent: data.taxPercent,
         serviceChargePercent: data.serviceChargePercent,
         qrisFeePercent: data.qrisFeePercent,
+        gopayFeePercent: data.gopayFeePercent,
         manualTransferFee: data.manualTransferFee,
         feePaidBy: data.feePaidBy,
         posGridColumns: data.posGridColumns,

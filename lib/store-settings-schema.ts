@@ -32,7 +32,8 @@ export async function ensureStoreSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "apiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "storeType" TEXT NOT NULL DEFAULT 'OTHER',
          ADD COLUMN IF NOT EXISTS "corporateName" TEXT,
-         ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true`,
+         ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true,
+         ADD COLUMN IF NOT EXISTS "gopayFeePercent" DOUBLE PRECISION NOT NULL DEFAULT 2.5`,
 
         `CREATE UNIQUE INDEX IF NOT EXISTS "Store_apiKey_key" ON "Store"("apiKey")`,
 

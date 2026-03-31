@@ -413,6 +413,7 @@ export async function createMerchant(data: { name: string, email: string, phoneN
           subscriptionPlan: data.plan,
           enableWhatsApp: true,
           qrisFeePercent: 1.0,
+          gopayFeePercent: 2.5,
           manualTransferFee: 5000,
           posEnabled: true,
           whatsapp: data.phoneNumber
@@ -449,6 +450,7 @@ export async function createStore(data: { ownerId: number, name: string, plan: s
         subscriptionPlan: data.plan,
         enableWhatsApp: true,
         qrisFeePercent: 1.0,
+        gopayFeePercent: 2.5,
         manualTransferFee: 5000,
         posEnabled: true,
         whatsapp: owner.phoneNumber || ""

@@ -415,6 +415,7 @@ export async function GET(req: NextRequest) {
                     <div class="label">Payment</div>
                     <select class="select" id="payment-type" onchange="setPaymentType(this.value)">
                         <option value="qris">QRIS</option>
+                        <option value="gopay">GoPay</option>
                         <option value="bank_transfer">Bank Transfer</option>
                     </select>
                     <div class="mini">Payment will open here.</div>
@@ -448,6 +449,7 @@ export async function GET(req: NextRequest) {
         var STORE_TAX_PERCENT = ${Number(store.taxPercent || 0)};
         var STORE_SERVICE_PERCENT = ${Number(store.serviceChargePercent || 0)};
         var STORE_QRIS_FEE_PERCENT = ${Number(store.qrisFeePercent || 0)};
+        var STORE_GOPAY_FEE_PERCENT = ${Number((store as any).gopayFeePercent || 0)};
         var STORE_MANUAL_FEE = ${Number(store.manualTransferFee || 0)};
         var cart = {};
         var total = 0;
@@ -538,6 +540,8 @@ export async function GET(req: NextRequest) {
             if (String(STORE_FEE_PAID_BY || '').toUpperCase() === 'CUSTOMER') {
                 if (paymentSpecificType === 'qris' && Number(STORE_QRIS_FEE_PERCENT || 0)) {
                     fee = Math.round(base * (Number(STORE_QRIS_FEE_PERCENT || 0) / 100));
+                } else if (paymentSpecificType === 'gopay' && Number(STORE_GOPAY_FEE_PERCENT || 0)) {
+                    fee = Math.round(base * (Number(STORE_GOPAY_FEE_PERCENT || 0) / 100));
                 } else if (paymentSpecificType === 'bank_transfer' && Number(STORE_MANUAL_FEE || 0)) {
                     fee = Math.round(Number(STORE_MANUAL_FEE || 0));
                 }
