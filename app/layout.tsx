@@ -30,7 +30,9 @@ export default function RootLayout({
               (function() {
                 try {
                   const theme = localStorage.getItem('theme');
-                  const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  const ua = navigator.userAgent || '';
+                  const isWhatsApp = /WhatsApp/i.test(ua);
+                  const isDark = isWhatsApp || theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
                   if (isDark) {
                     document.documentElement.classList.add('dark');
                   } else {
@@ -42,7 +44,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-sans antialiased min-h-screen bg-white">
+      <body className="font-sans antialiased min-h-screen bg-white dark:bg-[#0b1220]">
         <Providers>
           {children}
           <FloatingAssistant />
