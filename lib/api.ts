@@ -13,10 +13,27 @@ import { triggerPartnerWebhook } from "@/lib/webhook-partner";
 
 let ensuredRecipeSchema: Promise<void> | null = null;
 
-const makeProductBarcode = (storeId: number, productId: number) => {
+const computeEan13CheckDigit = (digits12: string) => {
+  const d = String(digits12 || "").replace(/\D/g, "");
+  if (d.length !== 12) return null;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const n = Number(d[i]);
+    sum += i % 2 === 0 ? n : n * 3;
+  }
+  return String((10 - (sum % 10)) % 10);
+};
+
+const makeProductBarcodeBase12 = (storeId: number, productId: number) => {
   const s = String(Math.abs(Number(storeId) || 0)).padStart(4, "0").slice(-4);
   const p = String(Math.abs(Number(productId) || 0)).padStart(8, "0").slice(-8);
   return `${s}${p}`;
+};
+
+const makeProductBarcode = (storeId: number, productId: number) => {
+  const base = makeProductBarcodeBase12(storeId, productId);
+  const check = computeEan13CheckDigit(base);
+  return check ? `${base}${check}` : base;
 };
 
 async function ensureRecipeSchema() {
@@ -913,6 +930,31 @@ export async function getProducts(storeId: number, categorySlug?: string, limit:
       await Promise.all(
         missingBarcode.map(async (p) => {
           const computed = makeProductBarcode(storeId, p.id);
+          try {
+            await prisma.product.update({
+              where: { id: p.id },
+              data: { barcode: computed }
+            });
+            p.barcode = computed;
+          } catch (err: any) {
+            const code = err?.code;
+            if (code === "P2022" || code === "P2021") return;
+          }
+        })
+      );
+    }
+
+    const upgradeLegacyInternal = products.filter((p) => {
+      const value = String(p?.barcode || "");
+      if (!/^\d{12}$/.test(value)) return false;
+      const base = makeProductBarcodeBase12(storeId, p.id);
+      return value === base;
+    });
+    if (upgradeLegacyInternal.length > 0) {
+      await Promise.all(
+        upgradeLegacyInternal.map(async (p) => {
+          const computed = makeProductBarcode(storeId, p.id);
+          if (!/^\d{13}$/.test(computed)) return;
           try {
             await prisma.product.update({
               where: { id: p.id },

@@ -143,11 +143,132 @@ function buildCode39Layout(rawValue: string) {
   return { width: x, rects, text: value };
 }
 
-function BarcodePreview({ value, height = 36 }: { value?: string; height?: number }) {
-  const layout = buildCode39Layout(String(value || ""));
-  if (!layout) {
-    return <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold tracking-widest uppercase">{String(value || "—")}</div>;
+const EAN13_L: string[] = [
+  "0001101",
+  "0011001",
+  "0010011",
+  "0111101",
+  "0100011",
+  "0110001",
+  "0101111",
+  "0111011",
+  "0110111",
+  "0001011"
+];
+
+const EAN13_G: string[] = [
+  "0100111",
+  "0110011",
+  "0011011",
+  "0100001",
+  "0011101",
+  "0111001",
+  "0000101",
+  "0010001",
+  "0001001",
+  "0010111"
+];
+
+const EAN13_R: string[] = [
+  "1110010",
+  "1100110",
+  "1101100",
+  "1000010",
+  "1011100",
+  "1001110",
+  "1010000",
+  "1000100",
+  "1001000",
+  "1110100"
+];
+
+const EAN13_PARITY: string[] = [
+  "LLLLLL",
+  "LLGLGG",
+  "LLGGLG",
+  "LLGGGL",
+  "LGLLGG",
+  "LGGLLG",
+  "LGGGLL",
+  "LGLGLG",
+  "LGLGGL",
+  "LGGLGL"
+];
+
+const computeEan13CheckDigit = (digits12: string) => {
+  const d = String(digits12 || "").replace(/\D/g, "");
+  if (d.length !== 12) return null;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const n = Number(d[i]);
+    sum += i % 2 === 0 ? n : n * 3;
   }
+  return String((10 - (sum % 10)) % 10);
+};
+
+const isValidEan13 = (digits13: string) => {
+  const d = String(digits13 || "").replace(/\D/g, "");
+  if (d.length !== 13) return false;
+  const check = computeEan13CheckDigit(d.slice(0, 12));
+  return check === d.slice(12, 13);
+};
+
+function buildEan13Layout(rawValue: string) {
+  const digits = String(rawValue || "").replace(/\D/g, "");
+  if (digits.length !== 13) return null;
+  if (!isValidEan13(digits)) return null;
+  const first = Number(digits[0]);
+  const parity = EAN13_PARITY[first];
+  if (!parity) return null;
+
+  let bits = "101";
+  for (let i = 1; i <= 6; i++) {
+    const n = Number(digits[i]);
+    const enc = parity[i - 1] === "G" ? EAN13_G[n] : EAN13_L[n];
+    bits += enc;
+  }
+  bits += "01010";
+  for (let i = 7; i <= 12; i++) {
+    const n = Number(digits[i]);
+    bits += EAN13_R[n];
+  }
+  bits += "101";
+
+  const moduleWidth = 2;
+  const height = 44;
+  const rects: { x: number; width: number }[] = [];
+  let x = 0;
+  let runStart = -1;
+  for (let i = 0; i < bits.length; i++) {
+    const bit = bits[i];
+    if (bit === "1" && runStart === -1) runStart = i;
+    if ((bit === "0" || i === bits.length - 1) && runStart !== -1) {
+      const end = bit === "0" ? i : i + 1;
+      rects.push({ x: runStart * moduleWidth, width: (end - runStart) * moduleWidth });
+      runStart = -1;
+    }
+    x = (i + 1) * moduleWidth;
+  }
+  return { width: x, height, rects, text: digits };
+}
+
+function BarcodePreview({ value, height = 36 }: { value?: string; height?: number }) {
+  const raw = String(value || "");
+  const ean = buildEan13Layout(raw);
+  if (ean) {
+    return (
+      <div className="space-y-1">
+        <svg viewBox={`0 0 ${ean.width} ${ean.height}`} className="w-full max-w-[160px] h-9 bg-white rounded p-1">
+          {ean.rects.map((bar, index) => (
+            <rect key={`${bar.x}-${index}`} x={bar.x} y={0} width={bar.width} height={ean.height} fill="#111827" />
+          ))}
+        </svg>
+        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-black tracking-widest">{ean.text}</div>
+      </div>
+    );
+  }
+  const layout = buildCode39Layout(raw);
+  if (!layout) return <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold tracking-widest uppercase">{String(value || "—")}</div>;
   return (
     <div className="space-y-1">
       <svg viewBox={`0 0 ${layout.width} ${height}`} className="w-full max-w-[160px] h-9 bg-white rounded p-1">
@@ -301,7 +422,15 @@ export default function ProductsManager({
   };
 
   const renderBarcodeSvgMarkup = (barcodeValue: string) => {
-    const layout = buildCode39Layout(String(barcodeValue || ""));
+    const raw = String(barcodeValue || "");
+    const ean = buildEan13Layout(raw);
+    if (ean) {
+      const rects = ean.rects
+        .map((b) => `<rect x="${b.x}" y="0" width="${b.width}" height="${ean.height}" fill="#111827" />`)
+        .join("");
+      return `<svg viewBox="0 0 ${ean.width} ${ean.height}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+    }
+    const layout = buildCode39Layout(raw);
     if (!layout) return "";
     const height = 60;
     const rects = layout.rects

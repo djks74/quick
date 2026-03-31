@@ -88,6 +88,7 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
   const [galleryInput, setGalleryInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [barcodeMessage, setBarcodeMessage] = useState<string | null>(null);
   const normalizeImage = (src?: string | null) => {
     if (!src) return "/placeholder-product.svg";
     if (src === "/placeholder-product.jpg") return "/placeholder-product.svg";
@@ -200,7 +201,51 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
 
   const selectedCategorySlug = watch("category");
   const productType = watch("type");
+  const barcodeValue = watch("barcode");
   const selectedCategory = categories.find(c => c.slug === selectedCategorySlug);
+
+  const computeEan13CheckDigit = (digits12: string) => {
+    const d = String(digits12 || "").replace(/\D/g, "");
+    if (d.length !== 12) return null;
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      const n = Number(d[i]);
+      sum += i % 2 === 0 ? n : n * 3;
+    }
+    return String((10 - (sum % 10)) % 10);
+  };
+
+  const isValidEan13 = (digits13: string) => {
+    const d = String(digits13 || "").replace(/\D/g, "");
+    if (d.length !== 13) return false;
+    const check = computeEan13CheckDigit(d.slice(0, 12));
+    return check === d.slice(12, 13);
+  };
+
+  const handleGenerateEan13 = () => {
+    const d = String(barcodeValue || "").replace(/\D/g, "");
+    if (d.length === 13) {
+      if (!isValidEan13(d)) {
+        setBarcodeMessage("EAN-13 checksum is invalid.");
+        return;
+      }
+      setValue("barcode", d);
+      setBarcodeMessage("EAN-13 is valid.");
+      return;
+    }
+    if (d.length !== 12) {
+      setBarcodeMessage("Enter 12 digits to generate EAN-13 (or 13 digits to validate).");
+      return;
+    }
+    const check = computeEan13CheckDigit(d);
+    if (!check) {
+      setBarcodeMessage("Failed to generate EAN-13.");
+      return;
+    }
+    const ean = `${d}${check}`;
+    setValue("barcode", ean);
+    setBarcodeMessage("Generated EAN-13.");
+  };
 
   const onSubmit = async (data: ProductFormData) => {
     setSubmitError(null);
@@ -345,13 +390,24 @@ export default function ProductForm({ product, categories, inventoryItems = [], 
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Barcode / SKU</label>
-              <input 
-                type="text"
-                {...register("barcode")}
-                className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
-                placeholder="e.g. 123456789"
-              />
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Used for POS barcode scanning.</p>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  {...register("barcode")}
+                  className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all dark:text-white"
+                  placeholder="EAN-13 or SKU"
+                  onFocus={() => setBarcodeMessage(null)}
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateEan13}
+                  className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest"
+                >
+                  Generate EAN
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Used for POS barcode scanning. Use EAN-13 when you have a numeric SKU.</p>
+              {barcodeMessage ? <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{barcodeMessage}</p> : null}
             </div>
           </div>
 
