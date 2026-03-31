@@ -98,7 +98,8 @@ export default async function PosPage({ params }: { params: Promise<{ slug: stri
     price: p.price,
     image: p.image,
     category: p.category || 'uncategorized',
-    stock: p.stock
+    stock: p.stock,
+    barcode: p.barcode
   }));
 
   const serializedCategories = (store.categories || []).map(c => ({

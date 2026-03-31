@@ -56,6 +56,7 @@ interface Product {
   image: string | null;
   category: string;
   stock: number;
+  barcode?: string | null;
 }
 
 interface CartItem extends Product {
@@ -134,6 +135,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [lastSeenCreatedAt, setLastSeenCreatedAt] = useState<string | null>(null);
+  const [scanFlash, setScanFlash] = useState<null | "ok" | "err">(null);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
@@ -168,7 +170,10 @@ export default function PosClient({ store, products, categories, user }: PosClie
   // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        product.name.toLowerCase().includes(q) ||
+        (product.barcode ? String(product.barcode).toLowerCase().includes(q) : false);
       const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -246,7 +251,7 @@ export default function PosClient({ store, products, categories, user }: PosClie
     }
   }, [activePaymentMethod, paymentMethod, paymentMethods]);
 
-  const addToCart = (product: Product, note?: string) => {
+  const addToCart = useCallback((product: Product, note?: string) => {
     playBeep();
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id && item.note === note);
@@ -263,7 +268,61 @@ export default function PosClient({ store, products, categories, user }: PosClie
     // Keep selection or clear it? User flow: Click -> Add Note -> Add. Likely want to clear selection to prevent accidental double adds.
     // But for speed, maybe keep it? Let's clear to be safe and give feedback.
     setSelectedProduct(null);
-  };
+  }, []);
+
+  const processScannedBarcode = useCallback((rawCode: string) => {
+    const code = String(rawCode || "").trim();
+    if (!code) return false;
+    const matches = products.filter((p) => p.barcode && String(p.barcode).trim() === code);
+    if (matches.length >= 1) {
+      addToCart(matches[0]);
+      setScanFlash("ok");
+      setTimeout(() => setScanFlash(null), 180);
+      setSearchQuery("");
+      return true;
+    }
+    setScanFlash("err");
+    setTimeout(() => setScanFlash(null), 220);
+    return false;
+  }, [addToCart, products]);
+
+  useEffect(() => {
+    let buffer = "";
+    let lastTime = 0;
+    const maxGapMs = 90;
+    const minLen = 4;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const key = e.key;
+      if (key === "Enter") {
+        const now = Date.now();
+        if (buffer.length >= minLen && now - lastTime <= 250) {
+          const handled = processScannedBarcode(buffer);
+          buffer = "";
+          lastTime = 0;
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        } else {
+          buffer = "";
+          lastTime = 0;
+        }
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (key.length !== 1) return;
+
+      const now = Date.now();
+      if (now - lastTime > maxGapMs) buffer = "";
+      buffer += key;
+      lastTime = now;
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [processScannedBarcode]);
 
   const removeFromCart = (productId: number) => {
     setCart(prev => prev.filter(item => item.id !== productId));
@@ -646,15 +705,23 @@ export default function PosClient({ store, products, categories, user }: PosClie
           <div className="relative w-full">
             <input 
               type="text" 
-              placeholder="Search..." 
+              placeholder="Search / Scan barcode..." 
               className={cn(
                 "w-full pl-9 pr-4 py-2 border-transparent rounded-lg transition-all outline-none text-sm",
+                scanFlash === "ok" ? "ring-2 ring-green-500" : "",
+                scanFlash === "err" ? "ring-2 ring-red-500" : "",
                 isDarkMode 
                   ? "bg-gray-700 text-white placeholder-gray-400 focus:bg-gray-600 focus:border-[#2271b1]" 
                   : "bg-gray-100 text-gray-900 placeholder-gray-500 focus:bg-white focus:border-[#2271b1]"
               )}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const handled = processScannedBarcode(searchQuery);
+                  if (handled) e.preventDefault();
+                }
+              }}
               autoFocus
             />
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
