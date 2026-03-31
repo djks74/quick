@@ -191,13 +191,35 @@ export async function POST(req: NextRequest) {
           const ok = await acquireNotificationLock(`ORDER_PENDING_CUSTOMER_${order.id}`);
           if (ok) {
             const payUrl = resolvePaymentUrl(order.id, result?.paymentUrl || null);
-            const msg =
-              `🧾 *Order #${order.id} dibuat*\n` +
-              `Toko: *${store.name}*\n` +
-              `Total: *Rp ${Math.round(safeTotal).toLocaleString("id-ID")}*\n` +
-              `Status: *MENUNGGU PEMBAYARAN*\n\n` +
-              `Klik untuk lanjut bayar:\n${payUrl}`;
-            await sendWhatsAppMessage(customerDigits, msg, numericStoreId).catch(() => null);
+            const money = (n: any) => `Rp ${Math.round(Number(n) || 0).toLocaleString("id-ID")}`;
+            const paymentLabel =
+              paymentType === "bank_transfer" ? "Bank Transfer" : paymentType === "gopay" ? "GoPay" : paymentType === "qris" ? "QRIS" : "Payment";
+            const itemLines = normalizedItems
+              .slice(0, 12)
+              .map((it: any) => `- ${it.name} x${it.quantity}: ${money(it.price * it.quantity)}`)
+              .join("\n");
+            const msg = [
+              `🧾 *Order #${order.id} dibuat*`,
+              `Toko: *${store.name}*`,
+              `Status: *MENUNGGU PEMBAYARAN*`,
+              ``,
+              `🛒 *Items*`,
+              itemLines || `- (kosong)`,
+              ``,
+              `💵 *RINGKASAN BIAYA*`,
+              `Subtotal: ${money(itemsSubtotal)}`,
+              taxAmount > 0 ? `Pajak: ${money(taxAmount)}` : null,
+              serviceCharge > 0 ? `Service: ${money(serviceCharge)}` : null,
+              paymentFee > 0 ? `💳 Biaya (${paymentLabel}): ${money(paymentFee)}` : null,
+              shippingCost > 0 ? `🚛 Ongkir: ${money(shippingCost)}` : null,
+              `--------------------------------`,
+              `💰 *TOTAL: ${money(safeTotal)}*`,
+              ``,
+              `Klik tombol *Pay Now* untuk lanjut bayar.`
+            ]
+              .filter(Boolean)
+              .join("\n");
+            await sendWhatsAppMessage(customerDigits, msg, numericStoreId, { buttonText: "Pay Now", buttonUrl: payUrl }).catch(() => null);
           }
         }
       } catch {

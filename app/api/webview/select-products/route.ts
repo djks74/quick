@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
         taxPercent: true,
         serviceChargePercent: true,
         qrisFeePercent: true,
+        gopayFeePercent: true,
         manualTransferFee: true
       }
     });

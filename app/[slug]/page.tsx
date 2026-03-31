@@ -86,6 +86,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     taxPercent: store.taxPercent,
     serviceChargePercent: store.serviceChargePercent,
     qrisFeePercent: store.qrisFeePercent,
+    gopayFeePercent: (store as any).gopayFeePercent,
     manualTransferFee: store.manualTransferFee,
     feePaidBy: store.feePaidBy,
     enableWhatsApp: store.enableWhatsApp,
