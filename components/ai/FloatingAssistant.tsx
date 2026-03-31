@@ -544,8 +544,8 @@ export default function FloatingAssistant({
         <button
           onClick={() => toggleOpen(!isOpen)}
           className={cn(
-            "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95",
-            isOpen ? "bg-white dark:bg-gray-800 text-primary rotate-90" : "text-white"
+            "w-14 h-14 rounded-full items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95",
+            isOpen ? "hidden sm:flex bg-white dark:bg-gray-800 text-primary rotate-90" : "flex text-white"
           )}
           style={!isOpen ? { backgroundColor: themeColor || '#f97316' } : { color: themeColor || '#f97316' }}
         >
