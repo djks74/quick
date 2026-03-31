@@ -10,7 +10,8 @@ import {
   Copy,
   Image as ImageIcon,
   RefreshCcw,
-  Upload
+  Upload,
+  Printer
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import ProductForm from "@/app/[slug]/admin/products/ProductForm";
@@ -70,6 +71,94 @@ const CSV_FIELD_LABELS: Record<string, string> = {
   type: "Type",
   variations: "Variations"
 };
+
+const CODE39_MAP: Record<string, string> = {
+  "0": "nnnwwnwnn",
+  "1": "wnnwnnnnw",
+  "2": "nnwwnnnnw",
+  "3": "wnwwnnnnn",
+  "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn",
+  "6": "nnwwwnnnn",
+  "7": "nnnwnnwnw",
+  "8": "wnnwnnwnn",
+  "9": "nnwwnnwnn",
+  "A": "wnnnnwnnw",
+  "B": "nnwnnwnnw",
+  "C": "wnwnnwnnn",
+  "D": "nnnnwwnnw",
+  "E": "wnnnwwnnn",
+  "F": "nnwnwwnnn",
+  "G": "nnnnnwwnw",
+  "H": "wnnnnwwnn",
+  "I": "nnwnnwwnn",
+  "J": "nnnnwwwnn",
+  "K": "wnnnnnnww",
+  "L": "nnwnnnnww",
+  "M": "wnwnnnnwn",
+  "N": "nnnnwnnww",
+  "O": "wnnnwnnwn",
+  "P": "nnwnwnnwn",
+  "Q": "nnnnnnwww",
+  "R": "wnnnnnwwn",
+  "S": "nnwnnnwwn",
+  "T": "nnnnwnwwn",
+  "U": "wwnnnnnnw",
+  "V": "nwwnnnnnw",
+  "W": "wwwnnnnnn",
+  "X": "nwnnwnnnw",
+  "Y": "wwnnwnnnn",
+  "Z": "nwwnwnnnn",
+  "-": "nwnnnnwnw",
+  ".": "wwnnnnwnn",
+  " ": "nwwnnnwnn",
+  "$": "nwnwnwnnn",
+  "/": "nwnwnnnwn",
+  "+": "nwnnnwnwn",
+  "%": "nnnwnwnwn",
+  "*": "nwnnwnwnn"
+};
+
+function buildCode39Layout(rawValue: string) {
+  const value = rawValue?.trim().toUpperCase();
+  if (!value) return null;
+  const encoded = `*${value}*`;
+  for (const char of encoded) {
+    if (!CODE39_MAP[char]) return null;
+  }
+  const narrow = 2;
+  const wide = 5;
+  const gap = 2;
+  let x = 0;
+  const rects: { x: number; width: number }[] = [];
+  for (let c = 0; c < encoded.length; c++) {
+    const pattern = CODE39_MAP[encoded[c]];
+    for (let i = 0; i < pattern.length; i++) {
+      const width = pattern[i] === "w" ? wide : narrow;
+      if (i % 2 === 0) rects.push({ x, width });
+      x += width;
+    }
+    if (c < encoded.length - 1) x += gap;
+  }
+  return { width: x, rects, text: value };
+}
+
+function BarcodePreview({ value, height = 36 }: { value?: string; height?: number }) {
+  const layout = buildCode39Layout(String(value || ""));
+  if (!layout) {
+    return <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold tracking-widest uppercase">{String(value || "—")}</div>;
+  }
+  return (
+    <div className="space-y-1">
+      <svg viewBox={`0 0 ${layout.width} ${height}`} className="w-full max-w-[160px] h-9 bg-white rounded p-1">
+        {layout.rects.map((bar, index) => (
+          <rect key={`${bar.x}-${index}`} x={bar.x} y={0} width={bar.width} height={height} fill="#111827" />
+        ))}
+      </svg>
+      <div className="text-[10px] text-gray-400 dark:text-gray-500 font-black tracking-widest">{layout.text}</div>
+    </div>
+  );
+}
 
 const resolveCsvSystemField = (header: string) => {
   const normalized = normalizeCsvKey(header);
@@ -209,6 +298,61 @@ export default function ProductsManager({
   const handleEdit = (product: any) => {
     setEditingProduct(product);
     setIsFormOpen(true);
+  };
+
+  const renderBarcodeSvgMarkup = (barcodeValue: string) => {
+    const layout = buildCode39Layout(String(barcodeValue || ""));
+    if (!layout) return "";
+    const height = 60;
+    const rects = layout.rects
+      .map((b) => `<rect x="${b.x}" y="0" width="${b.width}" height="${height}" fill="#111827" />`)
+      .join("");
+    return `<svg viewBox="0 0 ${layout.width} ${height}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+  };
+
+  const printBarcodes = (rows: Array<{ name: string; barcode: string }>) => {
+    const safeRows = rows.filter((r) => r && r.barcode);
+    if (safeRows.length === 0) return;
+    const w = window.open("", "_blank", "width=980,height=720");
+    if (!w) return;
+    const html = `<!doctype html><html><head><meta charset="utf-8" />
+      <title>Product Barcodes</title>
+      <style>
+        *{box-sizing:border-box} body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:0;padding:16px}
+        .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .label{border:1px solid #e5e7eb;border-radius:12px;padding:10px}
+        .name{font-weight:800;font-size:12px;line-height:1.2;min-height:30px}
+        .code{margin-top:8px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:8px}
+        .code svg{width:100%;height:60px;display:block}
+        .text{margin-top:6px;font-size:10px;letter-spacing:.18em;font-weight:800;color:#111827;text-align:center}
+        @media print{body{padding:0}.label{page-break-inside:avoid}}
+      </style>
+    </head><body>
+      <div class="grid">
+        ${safeRows
+          .map((r) => {
+            const svg = renderBarcodeSvgMarkup(r.barcode);
+            const name = String(r.name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const text = String(r.barcode || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            return `<div class="label"><div class="name">${name}</div><div class="code">${svg}</div><div class="text">${text}</div></div>`;
+          })
+          .join("")}
+      </div>
+      <script>setTimeout(()=>{window.focus(); window.print();}, 200);</script>
+    </body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const handlePrintSelected = () => {
+    const selected = products.filter((p: any) => selectedProductIds.includes(p.id) && p.barcode);
+    printBarcodes(selected.map((p: any) => ({ name: p.name, barcode: String(p.barcode) })));
+  };
+
+  const handlePrintSingle = (product: any) => {
+    if (!product?.barcode) return;
+    printBarcodes([{ name: String(product.name || ""), barcode: String(product.barcode) }]);
   };
 
   const handleEditCategory = (category: any) => {
@@ -585,6 +729,16 @@ export default function ProductsManager({
               >
                 <span>{showCsvMapping ? "Hide Mapping" : "Show Mapping"}</span>
               </button>
+              {selectedProductIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handlePrintSelected}
+                  className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider border border-gray-200 dark:border-gray-700"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Barcodes</span>
+                </button>
+              )}
             <button 
                 onClick={handleAdd}
                 className="bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200 font-bold text-sm uppercase tracking-wider shadow-lg shadow-primary/20"
@@ -761,8 +915,22 @@ export default function ProductsManager({
                                 </div>
                             </div>
                             </td>
-                            <td className="px-6 py-4 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                                {product.barcode || "-"}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className="min-w-[140px]">
+                                  <BarcodePreview value={product.barcode} />
+                                </div>
+                                {product.barcode ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintSingle(product)}
+                                    className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                                    title="Print barcode"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
+                                ) : null}
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400">
