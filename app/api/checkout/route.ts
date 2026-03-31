@@ -4,7 +4,8 @@ import { processPayment } from '@/lib/payment';
 import { createOrderNotification } from '@/lib/order-notifications';
 import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 import { createBiteshipDraftForPendingOrder } from '@/lib/shipping-biteship';
-import { sendMerchantWhatsApp, buildOrderMerchantSummary } from '@/lib/merchant-alerts';
+import { acquireNotificationLock, resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from '@/lib/merchant-alerts';
+import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
 
 export async function POST(req: NextRequest) {
@@ -180,6 +181,22 @@ export async function POST(req: NextRequest) {
 
         const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)");
         await sendMerchantWhatsApp(numericStoreId, merchantMsg, order.id).catch(() => null);
+
+        const customerPhone = String(customerInfo?.phone || "").trim();
+        const customerDigits = customerPhone.replace(/\D/g, "");
+        if (customerDigits.length >= 8) {
+          const ok = await acquireNotificationLock(`ORDER_PENDING_CUSTOMER_${order.id}`);
+          if (ok) {
+            const payUrl = resolvePaymentUrl(order.id, result?.paymentUrl || null);
+            const msg =
+              `🧾 *Order #${order.id} dibuat*\n` +
+              `Toko: *${store.name}*\n` +
+              `Total: *Rp ${Math.round(safeTotal).toLocaleString("id-ID")}*\n` +
+              `Status: *MENUNGGU PEMBAYARAN*\n\n` +
+              `Klik untuk lanjut bayar:\n${payUrl}`;
+            await sendWhatsAppMessage(customerDigits, msg, numericStoreId).catch(() => null);
+          }
+        }
       } catch {
         return;
       }
