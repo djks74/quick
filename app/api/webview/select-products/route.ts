@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
     const storeId = searchParams.get('storeId');
     const phone = searchParams.get('phone');
     const sessionId = searchParams.get('sessionId');
+    const resetCart = searchParams.get('reset') === '1';
 
     if (!storeId || !phone) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -63,7 +64,28 @@ export async function GET(req: NextRequest) {
         : Promise.resolve(null)
     ]);
 
-    const initialCartRaw = ((sessionByPair?.metadata as any)?.webviewCart ?? (sessionById?.metadata as any)?.webviewCart ?? null) as any;
+    let initialCartRaw = ((sessionByPair?.metadata as any)?.webviewCart ?? (sessionById?.metadata as any)?.webviewCart ?? null) as any;
+    if (resetCart) {
+      initialCartRaw = {};
+      await prisma.whatsAppSession
+        .upsert({
+          where: { phoneNumber_storeId: { phoneNumber: normalizedPhone, storeId: numericStoreId } },
+          update: {
+            metadata: {
+              ...((sessionByPair?.metadata as any) || {}),
+              webviewCart: {}
+            } as any
+          },
+          create: {
+            phoneNumber: normalizedPhone,
+            storeId: numericStoreId,
+            step: "START",
+            cart: [],
+            metadata: { webviewCart: {} } as any
+          }
+        })
+        .catch(() => null);
+    }
 
     // Get all categories for this store
     const categories = await prisma.category.findMany({
@@ -485,6 +507,7 @@ export async function GET(req: NextRequest) {
         var STORE_GOPAY_FEE_PERCENT = ${Number(safeGopayFeePercent || 0)};
         var STORE_MANUAL_FEE = ${Number(store.manualTransferFee || 0)};
         var SESSION_ID = ${sessionIdNum};
+        var RESET_CART = ${resetCart ? "true" : "false"};
         var CUSTOMER_PHONE = "${normalizedPhone}";
         var CART_STORAGE_KEY = "gercep_cart_" + String(STORE_ID) + "_" + String(CUSTOMER_PHONE);
         var INITIAL_CART_RAW = ${JSON.stringify(initialCartRaw ?? {})};
@@ -554,6 +577,9 @@ export async function GET(req: NextRequest) {
 
         function loadCart() {
             try {
+                if (RESET_CART) {
+                    try { localStorage.removeItem(CART_STORAGE_KEY); } catch (e) {}
+                }
                 var saved = localStorage.getItem(CART_STORAGE_KEY);
                 if (saved) {
                     var parsed = JSON.parse(saved);

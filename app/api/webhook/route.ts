@@ -712,6 +712,68 @@ export async function POST(req: NextRequest) {
           : historyRaw;
         
         let finalPrompt = textBody;
+        const pendingIntent = String((metadata as any)?.pendingIntent || "");
+
+        if (pendingIntent === "REORDER_DECISION") {
+          const choice = String(finalPrompt || "").trim().toLowerCase();
+          const isDifferent =
+            choice === "beda" ||
+            choice === "different" ||
+            /\b(beda|different|ganti|yang\s+lain|tidak\s+sama|nggak\s+sama|ga\s+sama)\b/i.test(choice);
+
+          if (isDifferent) {
+            const targetStoreId = Number((metadata as any)?.reorderStoreId || (metadata as any)?.lockedStoreId || 0);
+            if (targetStoreId > 0) {
+              await prisma.whatsAppSession
+                .upsert({
+                  where: { phoneNumber_storeId: { phoneNumber: from, storeId: targetStoreId } },
+                  update: {
+                    metadata: {
+                      ...(((await prisma.whatsAppSession.findUnique({
+                        where: { phoneNumber_storeId: { phoneNumber: from, storeId: targetStoreId } },
+                        select: { metadata: true }
+                      }).catch(() => null))?.metadata as any) || {}),
+                      webviewCart: {}
+                    } as any
+                  },
+                  create: { phoneNumber: from, storeId: targetStoreId, step: "START", cart: [], metadata: { webviewCart: {} } as any }
+                })
+                .catch(() => null);
+            }
+
+            if (aiSession?.id) {
+              await prisma.whatsAppSession
+                .update({
+                  where: { id: aiSession.id },
+                  data: {
+                    metadata: {
+                      ...metadata,
+                      pendingIntent: null,
+                      reorderStoreId: null
+                    } as any
+                  }
+                })
+                .catch(() => null);
+            }
+
+            const storeIdForMenu = Number((metadata as any)?.reorderStoreId || (metadata as any)?.lockedStoreId || 0);
+            const options =
+              storeIdForMenu > 0
+                ? {
+                    buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                    buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${storeIdForMenu}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&reset=1&ts=${Date.now()}`
+                  }
+                : undefined;
+
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*\n\nSiap Kak, aku reset keranjang belanja ya. Silakan pilih produk yang baru.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              0,
+              options as any
+            );
+            return NextResponse.json({ success: true });
+          }
+        }
 
         const isNearbyStoresQuery =
           /\b(toko|store|gercep)\b/i.test(String(finalPrompt || "")) &&
@@ -1297,6 +1359,14 @@ export async function POST(req: NextRequest) {
                   : (data.history || []),
                 customerProfile
               };
+              const isReorderPrompt =
+                /\b(masukkan\s+kembali\s+ke\s+keranjang|produk\s+yang\s+sama\s+seperti\s+terakhir|pesan\s+produk\s+yang\s+sama|belanjaan\s+terakhir)\b/i.test(responseText) &&
+                /\bkeranjang\b/i.test(responseText);
+              if (isReorderPrompt) {
+                updatedMetadata.pendingIntent = "REORDER_DECISION";
+                updatedMetadata.reorderStoreId = Number(data.activeStoreId || lockedStoreIdForReply || 0);
+                updatedMetadata.reorderAt = new Date().toISOString();
+              }
 
               const allowStoreSwitch =
                 /\b(?:pindah|ganti)\s+(?:toko|store)\b/i.test(textBody || "") ||
