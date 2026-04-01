@@ -597,9 +597,10 @@ export async function POST(req: NextRequest) {
       }
 
       // --- GLOBAL START SHOPPING COMMAND (works in any mode, incl. Merchant/Admin) ---
+      console.log(`[WHATSAPP_DEBUG] Checking global command in: "${textBody}"`);
       const startShoppingSlugMatchGlobal = String(textBody || "")
         .trim()
-        .match(/mulai_belanja_slug\s*[:=]\s*([a-z0-9._-]+)/i);
+        .match(/mulai_belanja_slug\s*[:=]\s*([a-zA-Z0-9\-_.]+)/i);
       const startShoppingIdMatchGlobal = String(textBody || "")
         .trim()
         .match(/mulai_belanja\s*[:=]\s*(\d+)/i);
@@ -1061,7 +1062,7 @@ export async function POST(req: NextRequest) {
           finalPrompt = `[MERCHANT_SHIPPING_ONLY] ${finalPrompt}`;
         }
 
-        const startShoppingSlugMatch = String(finalPrompt || "").trim().match(/mulai_belanja_slug\s*[:=]\s*([a-z0-9._-]+)/i);
+        const startShoppingSlugMatch = String(finalPrompt || "").trim().match(/mulai_belanja_slug\s*[:=]\s*([a-zA-Z0-9\-_.]+)/i);
         if (startShoppingSlugMatch?.[1]) {
           const requestedSlug = String(startShoppingSlugMatch[1]).trim().toLowerCase();
           if (requestedSlug) {
