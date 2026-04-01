@@ -145,7 +145,20 @@ export async function GET(req: NextRequest) {
       .replace(/^0/, "62");
 
     const categorySlugs = new Set<string>(categories.map((c) => c.slug).filter(Boolean) as any);
-    const hasUncategorized = allProducts.some((p) => !p.category || !categorySlugs.has(String(p.category)));
+    const categoryNameToSlug = new Map<string, string>(
+      categories
+        .filter((c) => c && c.slug && c.name)
+        .map((c) => [String(c.name).toLowerCase(), String(c.slug)])
+    );
+    const resolveCategorySlug = (raw: any) => {
+      const v = String(raw ?? "").trim();
+      if (!v) return "uncategorized";
+      if (categorySlugs.has(v)) return v;
+      const byName = categoryNameToSlug.get(v.toLowerCase());
+      if (byName) return byName;
+      return "uncategorized";
+    };
+    const hasUncategorized = allProducts.some((p) => resolveCategorySlug(p.category) === "uncategorized");
 
     // Generate HTML for the webview
     const html = `
@@ -420,7 +433,7 @@ export async function GET(req: NextRequest) {
         <div class="products">
             <div class="product-grid" id="product-grid">
                 ${allProducts.map(product => `
-                    <div class="product-card" data-product-id="${product.id}" data-category="${product.category && categorySlugs.has(String(product.category)) ? String(product.category) : "uncategorized"}" data-price="${Number(product.price)}" data-name="${String(product.name).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">
+                    <div class="product-card" data-product-id="${product.id}" data-category="${resolveCategorySlug(product.category)}" data-price="${Number(product.price)}" data-name="${String(product.name).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">
                         <img src="${product.image || '/placeholder-product.jpg'}" alt="${product.name}" class="product-image" loading="lazy" decoding="async" onerror="this.src='/placeholder-product.jpg'">
                         <div class="product-name">${product.name}</div>
                         <div class="meta-row">

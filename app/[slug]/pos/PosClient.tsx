@@ -182,10 +182,12 @@ export default function PosClient({ store, products, categories, user }: PosClie
       const matchesSearch =
         product.name.toLowerCase().includes(q) ||
         (product.barcode ? String(product.barcode).toLowerCase().includes(q) : false);
-      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+      const matchesCategory = selectedCategory === "all" || 
+        product.category?.toLowerCase() === selectedCategory.toLowerCase() ||
+        (categories.find(c => c.slug === selectedCategory)?.name.toLowerCase() === product.category?.toLowerCase());
       return matchesSearch && matchesCategory;
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory, categories]);
 
   // Calculations
   const taxPercent = parseFloat((store.taxPercent ?? 0).toString());

@@ -511,10 +511,12 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
       if (p.category === "System") return false;
       
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory === "All" || p.category?.toLowerCase() === selectedCategory.toLowerCase();
+      const matchesCategory = selectedCategory === "All" || 
+        p.category?.toLowerCase() === selectedCategory.toLowerCase() ||
+        (categories.find(c => c.name === selectedCategory)?.slug.toLowerCase() === p.category?.toLowerCase());
       return matchesSearch && matchesCategory;
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory, categories]);
 
   const themeColor = store?.themeColor || siteConfig.themeColor;
 

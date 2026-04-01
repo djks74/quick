@@ -158,7 +158,19 @@ async function getOrderableProducts(storeId: number, category: string | null, se
     category: { not: "_ARCHIVED_" }
   };
   if (category) {
-    whereClause.category = { equals: category, mode: "insensitive" };
+    const selectedCategoryRow = await prisma.category
+      .findFirst({
+        where: { storeId, slug: category },
+        select: { name: true }
+      })
+      .catch(() => null);
+    const selectedCategoryName = selectedCategoryRow?.name ? String(selectedCategoryRow.name) : null;
+    whereClause.OR = selectedCategoryName
+      ? [
+          { category: { equals: category, mode: "insensitive" } },
+          { category: { equals: selectedCategoryName, mode: "insensitive" } }
+        ]
+      : [{ category: { equals: category, mode: "insensitive" } }];
   }
   if (searchIds && searchIds.length > 0) {
     whereClause.id = { in: searchIds };
@@ -1260,7 +1272,19 @@ export async function POST(req: NextRequest) {
               category: { not: "_ARCHIVED_" }
             };
             if (selectedCategorySlug) {
-              whereClause.category = { equals: selectedCategorySlug, mode: "insensitive" };
+              const selectedCategoryRow = await prisma.category
+                .findFirst({
+                  where: { storeId: aiStoreId, slug: selectedCategorySlug },
+                  select: { name: true }
+                })
+                .catch(() => null);
+              const selectedCategoryName = selectedCategoryRow?.name ? String(selectedCategoryRow.name) : null;
+              whereClause.OR = selectedCategoryName
+                ? [
+                    { category: { equals: selectedCategorySlug, mode: "insensitive" } },
+                    { category: { equals: selectedCategoryName, mode: "insensitive" } }
+                  ]
+                : [{ category: { equals: selectedCategorySlug, mode: "insensitive" } }];
             }
 
             const pageItems = await prisma.product.findMany({
@@ -1435,7 +1459,14 @@ export async function POST(req: NextRequest) {
               category: { not: "_ARCHIVED_" }
             };
             if (selectedCategorySlug) {
-              whereClause.category = { equals: selectedCategorySlug, mode: "insensitive" };
+              const selectedCategoryName =
+                categories.find((c: any) => String(c.slug || "") === String(selectedCategorySlug))?.name || null;
+              whereClause.OR = selectedCategoryName
+                ? [
+                    { category: { equals: selectedCategorySlug, mode: "insensitive" } },
+                    { category: { equals: String(selectedCategoryName), mode: "insensitive" } }
+                  ]
+                : [{ category: { equals: selectedCategorySlug, mode: "insensitive" } }];
             }
 
             const pageItems = await prisma.product.findMany({
@@ -2646,7 +2677,12 @@ export async function POST(req: NextRequest) {
 
           const whereClause: any = { storeId: targetStore.id };
           if (selectedCategorySlug) {
-              whereClause.category = { equals: selectedCategorySlug, mode: 'insensitive' };
+              whereClause.OR = selectedCategoryLabel
+                ? [
+                    { category: { equals: selectedCategorySlug, mode: "insensitive" } },
+                    { category: { equals: selectedCategoryLabel, mode: "insensitive" } }
+                  ]
+                : [{ category: { equals: selectedCategorySlug, mode: "insensitive" } }];
           }
 
           const products = await prisma.product.findMany({
