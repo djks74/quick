@@ -425,6 +425,7 @@ export async function GET(req: NextRequest) {
                         <option value="bank_transfer">Bank Transfer</option>
                     </select>
                     <div class="mini">Payment will open here.</div>
+                    <div class="mini" id="fee-hint"></div>
                 </div>
 
                 <div class="summary" id="checkout-summary">
@@ -899,6 +900,13 @@ export async function GET(req: NextRequest) {
             });
         }
 
+        try {
+            var fh = document.getElementById('fee-hint');
+            if (fh) {
+                fh.textContent =
+                    "Fee: QRIS " + String(Number(STORE_QRIS_FEE_PERCENT || 0)) + "% • GoPay " + String(Number(STORE_GOPAY_FEE_PERCENT || 0)) + "% • Transfer Rp " + formatIdr(Number(STORE_MANUAL_FEE || 0));
+            }
+        } catch (e) {}
         debugSet('Boot', 'script_loaded=true ua=' + String(navigator && navigator.userAgent ? navigator.userAgent : ''));
         updateCartTotal();
         setActiveCategory('all');

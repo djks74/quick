@@ -724,9 +724,65 @@ export async function POST(req: NextRequest) {
             /\b(toko|store|gercep)\b/i.test(lastUserText) &&
             /\b(terdekat|dekat|sekitar|area|near)\b/i.test(lastUserText) &&
             !/\b(ongkir|kurir|kirim|shipping|delivery)\b/i.test(lastUserText);
-          finalPrompt = wantsNearbyStores
-            ? `[LOCATION_SHARED_STORE_SEARCH] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Tolong tampilkan daftar toko Gercep terdekat dari lokasi ini (maks 8), beserta jarak/perkiraan area. Jangan minta alamat/berat ongkir.`
-            : `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
+          if (wantsNearbyStores) {
+            const lat = Number(loc.latitude);
+            const lng = Number(loc.longitude);
+            const stores = await prisma.store.findMany({
+              where: {
+                ...assistantStoreEligibilityWhere,
+                biteshipOriginLat: { not: null },
+                biteshipOriginLng: { not: null }
+              } as any,
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                biteshipOriginLat: true,
+                biteshipOriginLng: true
+              }
+            });
+            const ranked = stores
+              .map((s: any) => {
+                const d = getDistanceMeters(lat, lng, Number(s.biteshipOriginLat), Number(s.biteshipOriginLng));
+                return { ...s, distanceMeters: d };
+              })
+              .filter((s: any) => Number.isFinite(s.distanceMeters))
+              .sort((a: any, b: any) => Number(a.distanceMeters) - Number(b.distanceMeters))
+              .slice(0, 8);
+
+            if (ranked.length === 0) {
+              await sendWhatsAppMessage(
+                from,
+                `🤖 *Gercep Assistant*\n\nMaaf Kak, aku belum menemukan toko terdekat dari lokasi ini.\nCoba ketik nama area (contoh: "Grogol" / "BSD") atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+                0
+              );
+              return NextResponse.json({ success: true });
+            }
+
+            const rows = ranked.map((s: any) => {
+              const km = Math.max(0, Number(s.distanceMeters) / 1000);
+              return {
+                id: `STORE_${s.id}`,
+                title: String(s.name || "").slice(0, 24),
+                description: `${km.toFixed(km < 10 ? 1 : 0)} km • ${String(s.slug || "").slice(0, 32)}`
+              };
+            });
+
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*\n\nIni toko Gercep terdekat dari lokasi Kakak. Pilih salah satu untuk buka menunya.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              0,
+              {
+                list: {
+                  buttonText: "Pilih Toko",
+                  sections: [{ title: "Toko Terdekat", rows }]
+                }
+              } as any
+            );
+            return NextResponse.json({ success: true });
+          }
+
+          finalPrompt = `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
           
           // Update customer profile with last known location if needed
           customerProfile.lastLat = loc.latitude;
@@ -776,7 +832,7 @@ export async function POST(req: NextRequest) {
 
               const options = {
                 buttonText: l("📱 Mulai Belanja", "📱 Start Shopping"),
-                buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${Number(s.id)}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+                buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${Number(s.id)}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`
               };
 
               await sendWhatsAppMessage(
@@ -851,7 +907,7 @@ export async function POST(req: NextRequest) {
                 }
                 const options = {
                   buttonText: l("📱 Buka Menu", "📱 Open Menu"),
-                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`
                 };
 
                 await sendWhatsAppMessage(
@@ -916,7 +972,7 @@ export async function POST(req: NextRequest) {
             const options = products.length > 0
               ? {
                   buttonText: l("📱 Pilih Produk", "📱 Select Products"),
-                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || '')}`
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || '')}&ts=${Date.now()}`
                 }
               : undefined;
 
@@ -982,7 +1038,7 @@ export async function POST(req: NextRequest) {
               const options = aiStoreId > 0
                 ? {
                     buttonText: l("📱 Buka Menu", "📱 Open Menu"),
-                    buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+                    buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`
                   }
                 : undefined;
 
@@ -1093,7 +1149,7 @@ export async function POST(req: NextRequest) {
             const options = aiStoreId > 0
               ? {
                   buttonText: l("📱 Buka Menu", "📱 Open Menu"),
-                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${aiStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`
                 }
               : undefined;
 
@@ -1242,7 +1298,7 @@ export async function POST(req: NextRequest) {
                 webviewStoreId > 0
                   ? {
                       buttonText: l("📱 Buka Menu", "📱 Open Menu"),
-                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`,
+                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`,
                       imageUrl: data.productImage
                     }
                   : { imageUrl: data.productImage };
@@ -1251,7 +1307,7 @@ export async function POST(req: NextRequest) {
                 webviewStoreId > 0
                   ? {
                       buttonText: l("📱 Buka Menu", "📱 Open Menu"),
-                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}`,
+                      buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${webviewStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`,
                       imageUrl: data.productImage
                     }
                   : { imageUrl: data.productImage };
