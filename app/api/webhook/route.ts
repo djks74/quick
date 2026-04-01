@@ -983,6 +983,57 @@ export async function POST(req: NextRequest) {
           finalPrompt = `[MERCHANT_SHIPPING_ONLY] ${finalPrompt}`;
         }
 
+        const startShoppingSlugMatch = String(finalPrompt || "").trim().match(/^mulai_belanja_slug\s*[:=]\s*([a-z0-9\-_.]+)\s*$/i);
+        if (startShoppingSlugMatch?.[1]) {
+          const requestedSlug = String(startShoppingSlugMatch[1]).trim().toLowerCase();
+          if (requestedSlug) {
+            const s = await prisma.store.findFirst({
+              where: { ...assistantStoreEligibilityWhere, slug: requestedSlug },
+              select: { id: true, slug: true, name: true }
+            });
+            if (s?.id) {
+              if (aiSession?.id) {
+                await prisma.whatsAppSession
+                  .update({
+                    where: { id: aiSession.id },
+                    data: {
+                      metadata: {
+                        ...metadata,
+                        lockedStoreId: s.id,
+                        lockedStoreSlug: s.slug,
+                        lockedStoreAt: new Date().toISOString()
+                      } as any
+                    }
+                  })
+                  .catch(() => null);
+              }
+
+              const options = {
+                buttonText: l("📱 Mulai Belanja", "📱 Start Shopping"),
+                buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${Number(s.id)}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&ts=${Date.now()}`
+              };
+
+              await sendWhatsAppMessage(
+                from,
+                `🤖 *Gercep Assistant*:\n\n${l(
+                  `Siap Kak, saya akan melanjutkan belanja kamu di sini untuk *${String(s.name)}*.`,
+                  `Sure — I'll continue your shopping here for *${String(s.name)}*.`
+                )}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                Number(s.id),
+                options as any
+              );
+              return NextResponse.json({ success: true });
+            }
+
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              0
+            );
+            return NextResponse.json({ success: true });
+          }
+        }
+
         const startShoppingMatch = String(finalPrompt || "").trim().match(/^mulai_belanja\s*[:=]\s*(\d+)\s*$/i);
         if (startShoppingMatch?.[1]) {
           const requestedStoreId = Number(startShoppingMatch[1]) || 0;
@@ -1024,6 +1075,17 @@ export async function POST(req: NextRequest) {
               );
               return NextResponse.json({ success: true });
             }
+
+            const maybeStore = await prisma.store.findUnique({
+              where: { id: requestedStoreId },
+              select: { id: true, name: true }
+            });
+            await sendWhatsAppMessage(
+              from,
+              `🤖 *Gercep Assistant*\n\nMaaf Kak, toko ${maybeStore?.name ? `*${maybeStore.name}*` : `ID ${requestedStoreId}`} belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              0
+            );
+            return NextResponse.json({ success: true });
           }
         }
 

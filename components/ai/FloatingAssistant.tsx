@@ -170,10 +170,16 @@ export default function FloatingAssistant({
     );
   };
 
-  const getWhatsAppUrl = (storeId?: number) => {
+  const getWhatsAppUrl = (storeId?: number, storeSlugOverride?: string) => {
     const platformNumber = "62882003961609";
+    const resolvedSlug = String(storeSlugOverride || lastActiveStore?.slug || storeSlug || "").trim();
     const sid = Number(storeId || lastActiveStore?.id || 0);
-    const msg = sid > 0 ? `MULAI_BELANJA:${sid}` : (storeSlug ? `Menu\nToko: ${storeSlug}` : "Menu");
+    const msg =
+      resolvedSlug
+        ? `MULAI_BELANJA_SLUG:${resolvedSlug}`
+        : sid > 0
+          ? `MULAI_BELANJA:${sid}`
+          : (storeSlug ? `Menu\nToko: ${storeSlug}` : "Menu");
     return `https://wa.me/${platformNumber}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -220,6 +226,8 @@ export default function FloatingAssistant({
         }]);
         if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
           setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
+        } else if (typeof data.activeStoreSlug === "string" && data.activeStoreSlug.trim()) {
+          setLastActiveStore({ id: 0, slug: data.activeStoreSlug.trim() });
         }
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
@@ -458,7 +466,7 @@ export default function FloatingAssistant({
                       !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <button
                         type="button"
-                        onClick={() => window.open(getWhatsAppUrl(m.activeStoreId), "_blank")}
+                        onClick={() => window.open(getWhatsAppUrl(m.activeStoreId, m.activeStoreSlug), "_blank")}
                         disabled={isLoading}
                         className="mt-3 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
@@ -497,7 +505,7 @@ export default function FloatingAssistant({
               return (
                 <button
                   type="button"
-                  onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id), "_blank")}
+                  onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id, lastActiveStore.slug), "_blank")}
                   disabled={isLoading}
                   className="mb-2 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
