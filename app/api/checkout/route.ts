@@ -147,85 +147,86 @@ export async function POST(req: NextRequest) {
        result = await processPayment(order.id, safeTotal, customerInfo?.phone || '08123456789', method, numericStoreId, specificType);
     }
 
-    void (async () => {
-      try {
-        if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
-          const draft = await createBiteshipDraftForPendingOrder({
-            store,
-            order,
-            items: normalizedItems.map((item: any) => ({
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price
-            })),
-            destinationCoordinate: order.destinationLat && order.destinationLng ? {
-              latitude: order.destinationLat,
-              longitude: order.destinationLng
-            } : undefined
-          });
-          if (draft?.ok && draft?.draftOrderId) {
-            const pendingDraft = draft as any;
-            await prisma.order.update({
-              where: { id: order.id },
-              data: {
-                biteshipOrderId: pendingDraft.draftOrderId,
-                shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
-              }
-            });
-          }
-        }
-
-        await createOrderNotification({
-          storeId: parseInt(storeId),
-          orderId: order.id,
-          message: `Order Baru #${order.id}: ${customerInfo?.phone || "GUEST"} • Rp ${Math.round(safeTotal).toLocaleString("id-ID")}`,
-          type: "NEW_ORDER"
+    try {
+      if (store && order.orderType === "DELIVERY" && order.shippingProvider && order.shippingAddress) {
+        const draft = await createBiteshipDraftForPendingOrder({
+          store,
+          order,
+          items: normalizedItems.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          destinationCoordinate: order.destinationLat && order.destinationLng ? {
+            latitude: order.destinationLat,
+            longitude: order.destinationLng
+          } : undefined
         });
-
-        const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)");
-        await sendMerchantWhatsApp(numericStoreId, merchantMsg, order.id).catch(() => null);
-
-        const customerPhone = String(customerInfo?.phone || "").trim();
-        const customerDigits = customerPhone.replace(/\D/g, "");
-        if (customerDigits.length >= 8) {
-          const ok = await acquireNotificationLock(`ORDER_PENDING_CUSTOMER_${order.id}`);
-          if (ok) {
-            const payUrl = resolvePaymentUrl(order.id, result?.paymentUrl || null);
-            const money = (n: any) => `Rp ${Math.round(Number(n) || 0).toLocaleString("id-ID")}`;
-            const paymentLabel =
-              paymentType === "bank_transfer" ? "Bank Transfer" : paymentType === "gopay" ? "GoPay" : paymentType === "qris" ? "QRIS" : "Payment";
-            const itemLines = normalizedItems
-              .slice(0, 12)
-              .map((it: any) => `- ${it.name} x${it.quantity}: ${money(it.price * it.quantity)}`)
-              .join("\n");
-            const msg = [
-              `🧾 *Order #${order.id} dibuat*`,
-              `Toko: *${store.name}*`,
-              `Status: *MENUNGGU PEMBAYARAN*`,
-              ``,
-              `🛒 *Items*`,
-              itemLines || `- (kosong)`,
-              ``,
-              `💵 *RINGKASAN BIAYA*`,
-              `Subtotal: ${money(itemsSubtotal)}`,
-              taxAmount > 0 ? `Pajak: ${money(taxAmount)}` : null,
-              serviceCharge > 0 ? `Service: ${money(serviceCharge)}` : null,
-              paymentFee > 0 ? `💳 Biaya (${paymentLabel}): ${money(paymentFee)}` : null,
-              shippingCost > 0 ? `🚛 Ongkir: ${money(shippingCost)}` : null,
-              `--------------------------------`,
-              `💰 *TOTAL: ${money(safeTotal)}*`,
-              ``,
-              `Klik tombol *Pay Now* untuk lanjut bayar.`
-            ]
-              .filter(Boolean)
-              .join("\n");
-            await sendWhatsAppMessage(customerDigits, msg, numericStoreId, { buttonText: "Pay Now", buttonUrl: payUrl }).catch(() => null);
-          }
+        if (draft?.ok && (draft as any)?.draftOrderId) {
+          const pendingDraft = draft as any;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              biteshipOrderId: pendingDraft.draftOrderId,
+              shippingStatus: pendingDraft.shippingStatus || order.shippingStatus || "draft_created"
+            }
+          });
         }
-      } catch {
-        return;
       }
-    })();
+    } catch {}
+
+    await createOrderNotification({
+      storeId: parseInt(storeId),
+      orderId: order.id,
+      message: `Order Baru #${order.id}: ${customerInfo?.phone || "GUEST"} • Rp ${Math.round(safeTotal).toLocaleString("id-ID")}`,
+      type: "NEW_ORDER"
+    }).catch(() => null);
+
+    const shouldMerchant = await acquireNotificationLock(`ORDER_PENDING_MERCHANT_${order.id}`);
+    if (shouldMerchant) {
+      const merchantMsg = await buildOrderMerchantSummary(order.id, "Order Baru (Web)").catch(() => "");
+      if (merchantMsg) {
+        await sendMerchantWhatsApp(numericStoreId, merchantMsg, order.id).catch(() => null);
+      }
+    }
+
+    const customerPhone = String(customerInfo?.phone || "").trim();
+    const customerDigits = customerPhone.replace(/\D/g, "");
+    if (customerDigits.length >= 8) {
+      const ok = await acquireNotificationLock(`ORDER_PENDING_CUSTOMER_${order.id}`);
+      if (ok) {
+        const payUrl = resolvePaymentUrl(order.id, result?.paymentUrl || null);
+        const money = (n: any) => `Rp ${Math.round(Number(n) || 0).toLocaleString("id-ID")}`;
+        const paymentLabel =
+          paymentType === "bank_transfer" ? "Bank Transfer" : paymentType === "gopay" ? "GoPay" : paymentType === "qris" ? "QRIS" : "Payment";
+        const itemLines = normalizedItems
+          .slice(0, 12)
+          .map((it: any) => `- ${it.name} x${it.quantity}: ${money(it.price * it.quantity)}`)
+          .join("\n");
+        const msg = [
+          `🧾 *Order #${order.id} dibuat*`,
+          `Toko: *${store.name}*`,
+          `Status: *MENUNGGU PEMBAYARAN*`,
+          ``,
+          `🛒 *Items*`,
+          itemLines || `- (kosong)`,
+          ``,
+          `💵 *RINGKASAN BIAYA*`,
+          `Subtotal: ${money(itemsSubtotal)}`,
+          taxAmount > 0 ? `Pajak: ${money(taxAmount)}` : null,
+          serviceCharge > 0 ? `Service: ${money(serviceCharge)}` : null,
+          paymentFee > 0 ? `💳 Biaya (${paymentLabel}): ${money(paymentFee)}` : null,
+          shippingCost > 0 ? `🚛 Ongkir: ${money(shippingCost)}` : null,
+          `--------------------------------`,
+          `💰 *TOTAL: ${money(safeTotal)}*`,
+          ``,
+          `Klik tombol *Pay Now* untuk lanjut bayar.`
+        ]
+          .filter(Boolean)
+          .join("\n");
+        await sendWhatsAppMessage(customerDigits, msg, numericStoreId, { buttonText: "Pay Now", buttonUrl: payUrl }).catch(() => null);
+      }
+    }
 
     return NextResponse.json({ success: true, paymentUrl: result.paymentUrl, orderId: order.id });
   } catch (error: any) {
