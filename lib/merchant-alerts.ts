@@ -25,39 +25,34 @@ export async function getMerchantPhone(storeId: number) {
 
     const phones = new Set<string>();
 
-    // 1. STRONGLY PRIORITIZE store.whatsapp (Store Identity)
+    // Restrict: use only store.whatsapp when available
     console.log(`[MERCHANT_NOTIF] Raw store.whatsapp: "${store.whatsapp}"`);
     if (store.whatsapp && store.whatsapp.trim().length > 5) {
       phones.add(store.whatsapp.trim());
-    }
-
-    // 2. Shipping Sender Phone (fallback)
-    console.log(`[MERCHANT_NOTIF] Raw shippingSenderPhone: "${store.shippingSenderPhone}"`);
-    if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
-      phones.add(store.shippingSenderPhone.trim());
-    }
-
-    // 3. Owner's phone number
-    console.log(`[MERCHANT_NOTIF] Raw owner.phoneNumber: "${store.owner?.phoneNumber}"`);
-    if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
-      phones.add(store.owner.phoneNumber.trim());
-    }
-
-    // 4. Staff/Cashiers (only those with phone numbers)
-    const staff = await prisma.user.findMany({
-      where: { 
-        workedAtId: store.id,
-        phoneNumber: { not: null }
-      },
-      select: { phoneNumber: true }
-    });
-
-    staff.forEach(s => {
-      if (s.phoneNumber && s.phoneNumber.trim().length > 5) {
-        phones.add(s.phoneNumber.trim());
-        console.log(`[MERCHANT_NOTIF] Added phone from staff: ${s.phoneNumber}`);
+    } else {
+      // Fallbacks only if store.whatsapp missing
+      console.log(`[MERCHANT_NOTIF] Raw shippingSenderPhone: "${store.shippingSenderPhone}"`);
+      if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
+        phones.add(store.shippingSenderPhone.trim());
       }
-    });
+      console.log(`[MERCHANT_NOTIF] Raw owner.phoneNumber: "${store.owner?.phoneNumber}"`);
+      if (store.owner?.phoneNumber && store.owner.phoneNumber.trim().length > 5) {
+        phones.add(store.owner.phoneNumber.trim());
+      }
+      const staff = await prisma.user.findMany({
+        where: { 
+          workedAtId: store.id,
+          phoneNumber: { not: null }
+        },
+        select: { phoneNumber: true }
+      });
+      staff.forEach(s => {
+        if (s.phoneNumber && s.phoneNumber.trim().length > 5) {
+          phones.add(s.phoneNumber.trim());
+          console.log(`[MERCHANT_NOTIF] Added phone from staff: ${s.phoneNumber}`);
+        }
+      });
+    }
 
     const uniquePhones = Array.from(phones).filter(Boolean).map(p => {
       let clean = String(p).trim().replace(/\D/g, "");
