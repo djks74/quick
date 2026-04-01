@@ -182,6 +182,15 @@ export async function sendWhatsAppMessage(
     list?: { buttonText: string; sections: WaListSection[] }
   }
 ) {
+  const normalizeButtonUrl = (input?: string) => {
+    const raw = String(input || "").trim();
+    if (!raw) return undefined;
+    return raw
+      .replace(/^[\s`"'“”‘’]+/, "")
+      .replace(/[\s`"'“”‘’]+$/, "")
+      .trim();
+  };
+
   // Sanitize Phone Number (Indonesia Default)
   let formattedTo = to.replace(/\D/g, ''); 
   if (formattedTo.startsWith('0')) {
@@ -212,7 +221,12 @@ export async function sendWhatsAppMessage(
     phoneNumberId, 
     token: maskedToken, 
     useEnterprise: resolved.useEnterpriseConfig,
-    options 
+    options: options
+      ? {
+          ...options,
+          buttonUrl: normalizeButtonUrl(options.buttonUrl)
+        }
+      : undefined
   });
 
   // System alerts (like order notifications to merchants) are NOT billable to the store.
@@ -298,7 +312,7 @@ export async function sendWhatsAppMessage(
         : (options?.quickReplies && options.quickReplies.length > 0)
           ? { type: "buttons", buttons: options.quickReplies }
           : (options?.buttonText && options?.buttonUrl)
-            ? { type: "cta_url", buttonText: options.buttonText, buttonUrl: options.buttonUrl }
+            ? { type: "cta_url", buttonText: options.buttonText, buttonUrl: normalizeButtonUrl(options.buttonUrl)! }
             : undefined;
     const result = await dispatchWhatsAppMessage(formattedTo, message, token, phoneNumberId, { imageUrl: options?.imageUrl, interactive });
     if (!result.ok) {
@@ -306,10 +320,43 @@ export async function sendWhatsAppMessage(
       if (usageLogId) {
         await finalizeWaMessageLog(usageLogId, null, "failed");
       }
+
+      const parseErrorCode = (raw: string) => {
+        try {
+          const parsed = JSON.parse(raw);
+          const code = parsed?.error?.code;
+          return typeof code === "number" ? code : null;
+        } catch {
+          return null;
+        }
+      };
+
+      const shouldFallbackToPlatform =
+        storeId > 0 &&
+        resolved.useEnterpriseConfig &&
+        !options?.isSystemAlert &&
+        Boolean(resolved.token && resolved.phoneNumberId) &&
+        [133010, 190].includes(parseErrorCode(result.error) || -1);
+
+      if (shouldFallbackToPlatform) {
+        const platformResolved = await resolveWhatsAppConfig(0);
+        if (platformResolved.token && platformResolved.phoneNumberId) {
+          const retry = await dispatchWhatsAppMessage(
+            formattedTo,
+            message,
+            platformResolved.token,
+            platformResolved.phoneNumberId,
+            { imageUrl: options?.imageUrl, interactive }
+          );
+          if (retry.ok) {
+            return true;
+          }
+        }
+      }
       
       if (result.usedInteractive) {
         if (options?.buttonUrl) {
-          return await sendWhatsAppMessage(to, `${message}\n\n${options.buttonUrl}`, storeId);
+          return await sendWhatsAppMessage(to, `${message}\n\n${normalizeButtonUrl(options.buttonUrl)}`, storeId);
         }
         if (options?.quickReplies?.length) {
           const listText = options.quickReplies
