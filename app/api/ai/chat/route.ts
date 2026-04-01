@@ -1529,7 +1529,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           text:
             "Boleh share lokasi (titik) atau sebutkan area Kakak di mana? (contoh: Ciputat, Grogol, BSD) Biar aku carikan toko terdekat.",
-          history: validatedHistory
+          history: validatedHistory,
+          customerProfile: { ...customerProfile, pendingIntent: "NEARBY_STORES" }
         });
       }
     }

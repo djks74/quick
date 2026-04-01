@@ -745,15 +745,18 @@ export async function POST(req: NextRequest) {
         if (!finalPrompt && (message as any).location) {
           const loc = (message as any).location;
           const lastUserText = (() => {
-            const last = [...history].reverse().find((h: any) => h && h.role === "user" && typeof h.content === "string");
-            return String(last?.content || "");
+            const last = [...history].reverse().find((h: any) => h && h.role === "user");
+            const parts = Array.isArray((last as any)?.parts) ? (last as any).parts : null;
+            const text = parts && parts[0]?.text ? String(parts[0].text) : "";
+            return text;
           })();
           const pendingIntent = String((metadata as any)?.pendingIntent || "");
+          const customerPendingIntent = String((customerProfile as any)?.pendingIntent || "");
           const wantsNearbyStores =
             /\b(toko|store|gercep)\b/i.test(lastUserText) &&
             /\b(terdekat|dekat|sekitar|area|near)\b/i.test(lastUserText) &&
             !/\b(ongkir|kurir|kirim|shipping|delivery)\b/i.test(lastUserText);
-          if (pendingIntent === "NEARBY_STORES" || wantsNearbyStores) {
+          if (pendingIntent === "NEARBY_STORES" || customerPendingIntent === "NEARBY_STORES" || wantsNearbyStores) {
             const lat = Number(loc.latitude);
             const lng = Number(loc.longitude);
             const stores = await prisma.store.findMany({
@@ -780,7 +783,7 @@ export async function POST(req: NextRequest) {
               .slice(0, 8);
 
             if (ranked.length === 0) {
-              if (aiSession?.id && pendingIntent === "NEARBY_STORES") {
+              if (aiSession?.id && (pendingIntent === "NEARBY_STORES" || customerPendingIntent === "NEARBY_STORES")) {
                 await prisma.whatsAppSession
                   .update({
                     where: { id: aiSession.id },
@@ -788,7 +791,7 @@ export async function POST(req: NextRequest) {
                       metadata: {
                         ...metadata,
                         pendingIntent: null,
-                        customerProfile
+                        customerProfile: { ...(customerProfile as any), pendingIntent: null }
                       } as any
                     }
                   })
@@ -811,7 +814,7 @@ export async function POST(req: NextRequest) {
               };
             });
 
-            if (aiSession?.id && pendingIntent === "NEARBY_STORES") {
+            if (aiSession?.id && (pendingIntent === "NEARBY_STORES" || customerPendingIntent === "NEARBY_STORES")) {
               await prisma.whatsAppSession
                 .update({
                   where: { id: aiSession.id },
@@ -819,7 +822,7 @@ export async function POST(req: NextRequest) {
                     metadata: {
                       ...metadata,
                       pendingIntent: null,
-                      customerProfile
+                      customerProfile: { ...(customerProfile as any), pendingIntent: null }
                     } as any
                   }
                 })
@@ -839,7 +842,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true });
           }
 
-          finalPrompt = `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
+          finalPrompt = `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk mencari toko Gercep terdekat.`;
           
           // Update customer profile with last known location if needed
           customerProfile.lastLat = loc.latitude;
