@@ -125,6 +125,18 @@ function extractQuickRepliesFromText(text: string) {
   return null;
 }
 
+function stripPhoneNumbersForWeb(text: string) {
+  const raw = String(text || "");
+  let out = raw;
+  out = out.replace(/\+?\s*62[\s-]?\d(?:[\s-]?\d){7,14}/g, "");
+  out = out.replace(/\b08\d{8,12}\b/g, "");
+  out = out.replace(/\b628\d{7,14}\b/g, "");
+  out = out.replace(/(?:di\s+nomor\s+berikut\s*:?\s*)+/gi, "");
+  out = out.replace(/\n{3,}/g, "\n\n");
+  out = out.replace(/[ \t]{2,}/g, " ");
+  return out;
+}
+
 function isFullMenuRequest(input: string) {
   const t = String(input || "").toLowerCase().trim();
   return /\b(menu lengkap(?:nya)?|lihat menu lengkap|full menu|daftar menu|list menu|semua menu|daftar produk|list produk|semua produk|produk lengkap|lihat semua produk|all products|all menu)\b/.test(t);
@@ -392,7 +404,6 @@ const tools: Record<string, (args: any) => Promise<any>> = {
       name: true,
       slug: true,
       storeType: true,
-      whatsapp: true,
       shippingSenderAddress: true,
       shippingSenderName: true,
       shippingSenderPostalCode: true,
@@ -2413,6 +2424,9 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         durationMs: Date.now() - startedAt
       }
     );
+    if (isWebChannel) {
+      responseText = stripPhoneNumbersForWeb(responseText);
+    }
     const quickReplies = extractQuickRepliesFromText(responseText);
     return NextResponse.json({ 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
@@ -2421,9 +2435,9 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
       paymentUrl: finalPaymentUrl,
       productImage: finalProductImage,
       quickReplies,
-      shippingOptions: lastShippingOptions,
-      categories: lastCategories,
-      products: lastProducts,
+      shippingOptions: isWebChannel ? [] : lastShippingOptions,
+      categories: isWebChannel ? [] : lastCategories,
+      products: isWebChannel ? [] : lastProducts,
       orderRecap,
       activeStoreId,
       activeStoreSlug,
