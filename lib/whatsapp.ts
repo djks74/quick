@@ -187,7 +187,8 @@ export async function sendWhatsAppMessage(
     try {
       await prisma.processedMessage.create({ data: { id } });
       return true;
-    } catch {
+    } catch (e: any) {
+      // Quietly fail on duplicate key (P2002)
       return false;
     }
   };
@@ -344,6 +345,13 @@ export async function sendWhatsAppMessage(
       };
 
       const code = parseErrorCode(result.error);
+      
+      // Fallback: If store-specific config fails with registration or token issues, retry using platform config (storeId 0)
+      if (storeId > 0 && code && [133010, 190, 131030].includes(code)) {
+        console.warn(`[WHATSAPP_FALLBACK] Store ${storeId} failed with code ${code}. Retrying with platform config (storeId 0)...`);
+        return await sendWhatsAppMessage(to, message, 0, options);
+      }
+
       if (storeId > 0 && !options?.isSystemAlert && code && [133010, 190].includes(code)) {
         const bucket = new Date().toISOString().slice(0, 13);
         const ok = await acquireSystemLock(`WA_SEND_FAIL_${storeId}_${code}_${bucket}`);

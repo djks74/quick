@@ -597,7 +597,6 @@ export async function POST(req: NextRequest) {
       }
 
       // --- GLOBAL START SHOPPING COMMAND (works in any mode, incl. Merchant/Admin) ---
-      console.log(`[WHATSAPP_DEBUG] Checking global command in: "${textBody}"`);
       const startShoppingSlugMatchGlobal = String(textBody || "")
         .trim()
         .match(/mulai_belanja_slug\s*[:=]\s*([a-zA-Z0-9\-_.]+)/i);
