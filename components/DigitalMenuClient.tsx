@@ -353,7 +353,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
   };
 
   const fetchShippingQuotes = async (lat?: number | null, lng?: number | null) => {
-    if (!store.enableTakeawayDelivery || orderType !== 'DELIVERY') return;
+    if (!store.enableTakeawayDelivery || (orderType !== 'DELIVERY' && orderType !== 'TAKEAWAY')) return;
     if (!deliveryAddress.trim()) {
       setShippingQuotes([]);
       setSelectedQuote(null);
@@ -390,7 +390,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
     }
   };
 
-  const currentShippingCost = orderType === 'DELIVERY' ? roundIdr(Number(selectedQuote?.fee || selectedQuote?.price || 0)) : 0;
+  const currentShippingCost = (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? roundIdr(Number(selectedQuote?.fee || selectedQuote?.price || 0)) : 0;
   const platformFeeForDisplay = isCustomerPaysFee ? (paymentMethod === 'qris' ? calculatePlatformFee('qris') : (paymentMethod === 'gopay' ? calculatePlatformFee('gopay') : calculatePlatformFee('transfer'))) : 0;
   const finalTotalAmount = totalPrice + platformFeeForDisplay + currentShippingCost;
 
@@ -405,9 +405,9 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
       return;
     }
 
-    if (orderType === 'DELIVERY') {
+    if (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') {
       if (!store.enableTakeawayDelivery) {
-        alert("Delivery is not enabled for this store.");
+        alert("Takeaway delivery is not enabled for this store.");
         return;
       }
       if (!deliveryAddress.trim()) {
@@ -443,11 +443,11 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
         customerInfo: {
           phone: checkoutPhone.trim(),
           tableNumber: tableNumber || undefined,
-          shippingProvider: orderType === 'DELIVERY' ? selectedQuote?.provider : undefined,
-          shippingService: orderType === 'DELIVERY' ? selectedQuote?.service : undefined,
-          shippingAddress: orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined,
-          shippingCost: orderType === 'DELIVERY' ? currentShippingCost : 0,
-          shippingEta: orderType === 'DELIVERY' ? selectedQuote?.etd || selectedQuote?.eta : undefined,
+          shippingProvider: (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? selectedQuote?.provider : undefined,
+          shippingService: (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? selectedQuote?.service : undefined,
+          shippingAddress: (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? deliveryAddress.trim() : undefined,
+          shippingCost: (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? currentShippingCost : 0,
+          shippingEta: (orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? selectedQuote?.etd || selectedQuote?.eta : undefined,
           destinationLatitude: orderType === 'DELIVERY' ? deliveryLatitude : undefined,
           destinationLongitude: orderType === 'DELIVERY' ? deliveryLongitude : undefined
         },
@@ -648,7 +648,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                   </div>
                   
                   <div className="flex justify-between items-end mt-2">
-                    <p className="font-black text-base text-[var(--theme-color)] dark:text-white">
+                    <p className="font-black text-base text-primary dark:text-white" style={{ color: themeColor }}>
                       {product.variations && product.variations.length > 0 
                         ? `${formatPrice(Math.min(...product.variations.map(v => v.price)))}`
                         : formatPrice(product.price)
@@ -749,7 +749,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                    } : {}}
                  >
                    <span className="font-black text-gray-900 dark:text-white">{v.name}</span>
-                   <span className="font-black text-[var(--theme-color)] dark:text-white">{formatPrice(v.price)}</span>
+                   <span className="font-black text-primary dark:text-white" style={{ color: themeColor }}>{formatPrice(v.price)}</span>
                  </button>
                ))}
             </div>
@@ -803,7 +803,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex-1">
                           <h4 className="font-black text-gray-900 dark:text-white text-sm">{item.name}{item.selectedVariation && <span className="text-gray-400 dark:text-gray-500 font-bold text-[10px] block uppercase">Variation: {item.selectedVariation.name}</span>}</h4>
-                          <p className="text-xs font-black text-[var(--theme-color)] dark:text-white mt-1">{formatPrice(item.price)}</p>
+                          <p className="text-xs font-black text-primary dark:text-white mt-1" style={{ color: themeColor }}>{formatPrice(item.price)}</p>
                        </div>
                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 p-1 rounded-xl">
                           <button 
@@ -826,7 +826,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                  ))}
                  </div>
 
-                 <div className="p-8 bg-gray-50/50 dark:bg-[#0F1113]/50 rounded-t-[40px] space-y-6">
+                 <div className="p-8 bg-gray-50/50 dark:bg-[#0F1113]/50 rounded-t-[40px] space-y-6 pb-32">
                  <div className="space-y-3">
                     <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">WhatsApp Number</label>
                     <input
@@ -880,7 +880,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     </div>
                  </div>
 
-                 {orderType === 'DELIVERY' && (
+                 {(orderType === 'DELIVERY' || orderType === 'TAKEAWAY') && (
                    <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Delivery Address</label>
@@ -1038,7 +1038,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                           <span>{formatPrice(serviceCharge)}</span>
                        </div>
                     )}
-                    {orderType === 'DELIVERY' && selectedQuote && (
+                    {(orderType === 'DELIVERY' || orderType === 'TAKEAWAY') && selectedQuote && (
                        <div className="flex justify-between text-xs font-bold text-gray-400 dark:text-gray-500">
                           <span>Shipping ({selectedQuote.provider} {selectedQuote.service})</span>
                           <span>{formatPrice(currentShippingCost)}</span>
@@ -1046,14 +1046,14 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                     )}
                     <div className="flex justify-between items-end pt-4 border-t border-gray-100 dark:border-gray-800">
                        <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total Amount</span>
-                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + (orderType === 'DELIVERY' ? currentShippingCost : 0))}</span>
+                       <span className="text-3xl font-black text-gray-900 dark:text-white">{formatPrice(totalPrice + ((orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? currentShippingCost : 0))}</span>
                     </div>
                  </div>
 
                  <div className="grid grid-cols-1 gap-4">
                     <button 
                       onClick={() => handleWebCheckout(paymentMethod)}
-                      disabled={!store.isOpen || isProcessing || (orderType === 'DELIVERY' && !selectedQuote)}
+                      disabled={!store.isOpen || isProcessing || ((orderType === 'DELIVERY' || orderType === 'TAKEAWAY') && !selectedQuote)}
                       className="py-3 bg-[#25D366] text-white rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-0.5 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:grayscale"
                       style={{ backgroundColor: themeColor }}
                     >
@@ -1063,7 +1063,7 @@ export default function DigitalMenuClient({ products, store, categories = [] }: 
                        </div>
                        <div className="flex flex-col items-center opacity-100">
                           <span className="text-base font-black leading-tight">
-                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer') + (orderType === 'DELIVERY' ? currentShippingCost : 0))}
+                             {formatPrice(totalPrice + calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer') + ((orderType === 'DELIVERY' || orderType === 'TAKEAWAY') ? currentShippingCost : 0))}
                           </span>
                           {calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer') > 0 && (
                             <span className="text-[9px] font-bold uppercase tracking-widest leading-none">(Inc. Fee: {formatPrice(calculatePlatformFee(paymentMethod === 'qris' ? 'qris' : paymentMethod === 'gopay' ? 'gopay' : 'transfer'))})</span>

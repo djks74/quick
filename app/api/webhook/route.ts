@@ -599,10 +599,10 @@ export async function POST(req: NextRequest) {
       // --- GLOBAL START SHOPPING COMMAND (works in any mode, incl. Merchant/Admin) ---
       const startShoppingSlugMatchGlobal = String(textBody || "")
         .trim()
-        .match(/^mulai_belanja_slug\s*[:=]\s*([a-z0-9\-_.]+)\s*$/i);
+        .match(/mulai_belanja_slug\s*[:=]\s*([a-z0-9._-]+)/i);
       const startShoppingIdMatchGlobal = String(textBody || "")
         .trim()
-        .match(/^mulai_belanja\s*[:=]\s*(\d+)\s*$/i);
+        .match(/mulai_belanja\s*[:=]\s*(\d+)/i);
       if (startShoppingSlugMatchGlobal?.[1] || startShoppingIdMatchGlobal?.[1]) {
         const requestedSlug = startShoppingSlugMatchGlobal?.[1]
           ? String(startShoppingSlugMatchGlobal[1]).trim().toLowerCase()
@@ -1061,7 +1061,7 @@ export async function POST(req: NextRequest) {
           finalPrompt = `[MERCHANT_SHIPPING_ONLY] ${finalPrompt}`;
         }
 
-        const startShoppingSlugMatch = String(finalPrompt || "").trim().match(/^mulai_belanja_slug\s*[:=]\s*([a-z0-9\-_.]+)\s*$/i);
+        const startShoppingSlugMatch = String(finalPrompt || "").trim().match(/mulai_belanja_slug\s*[:=]\s*([a-z0-9._-]+)/i);
         if (startShoppingSlugMatch?.[1]) {
           const requestedSlug = String(startShoppingSlugMatch[1]).trim().toLowerCase();
           if (requestedSlug) {
