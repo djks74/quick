@@ -714,6 +714,62 @@ export async function POST(req: NextRequest) {
         let finalPrompt = textBody;
         const pendingIntent = String((metadata as any)?.pendingIntent || "");
 
+        const wantsFreshOrder =
+          /\b(dari\s+awal|pesan\s+dari\s+awal|mulai\s+dari\s+awal|reset\s+keranjang|kosongin\s+keranjang|hapus\s+keranjang|new\s+order)\b/i.test(
+            String(finalPrompt || "")
+          );
+
+        if (wantsFreshOrder) {
+          const targetStoreId = Number((metadata as any)?.lockedStoreId || (metadata as any)?.reorderStoreId || 0);
+          if (targetStoreId > 0) {
+            await prisma.whatsAppSession
+              .upsert({
+                where: { phoneNumber_storeId: { phoneNumber: from, storeId: targetStoreId } },
+                update: {
+                  metadata: {
+                    ...(((await prisma.whatsAppSession.findUnique({
+                      where: { phoneNumber_storeId: { phoneNumber: from, storeId: targetStoreId } },
+                      select: { metadata: true }
+                    }).catch(() => null))?.metadata as any) || {}),
+                    webviewCart: {}
+                  } as any
+                },
+                create: { phoneNumber: from, storeId: targetStoreId, step: "START", cart: [], metadata: { webviewCart: {} } as any }
+              })
+              .catch(() => null);
+          }
+
+          if (aiSession?.id) {
+            await prisma.whatsAppSession
+              .update({
+                where: { id: aiSession.id },
+                data: {
+                  metadata: {
+                    ...metadata,
+                    pendingIntent: null,
+                    reorderStoreId: null
+                  } as any
+                }
+              })
+              .catch(() => null);
+          }
+
+          const options =
+            targetStoreId > 0
+              ? {
+                  buttonText: l("📱 Buka Menu", "📱 Open Menu"),
+                  buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${targetStoreId}&phone=${encodeURIComponent(from)}&sessionId=${encodeURIComponent(aiSession?.id || "")}&reset=1&ts=${Date.now()}`
+                }
+              : undefined;
+          await sendWhatsAppMessage(
+            from,
+            `🤖 *Gercep Assistant*\n\nSiap Kak, aku kosongkan keranjang. Silakan pesan dari awal ya.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            0,
+            options as any
+          );
+          return NextResponse.json({ success: true });
+        }
+
         if (pendingIntent === "REORDER_DECISION") {
           const choice = String(finalPrompt || "").trim().toLowerCase();
           const isDifferent =

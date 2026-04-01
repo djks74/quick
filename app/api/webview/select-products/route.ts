@@ -85,6 +85,20 @@ export async function GET(req: NextRequest) {
           }
         })
         .catch(() => null);
+
+      if (sessionIdNum) {
+        await prisma.whatsAppSession
+          .update({
+            where: { id: sessionIdNum },
+            data: {
+              metadata: {
+                ...((sessionById?.metadata as any) || {}),
+                webviewCart: {}
+              } as any
+            }
+          })
+          .catch(() => null);
+      }
     }
 
     // Get all categories for this store
@@ -591,6 +605,10 @@ export async function GET(req: NextRequest) {
 
         function hydrateCartUI() {
             try {
+                var all = document.querySelectorAll("[id^='qty-']");
+                for (var i = 0; i < all.length; i++) {
+                    try { all[i].textContent = "0"; } catch (e) {}
+                }
                 for (var productId in cart) {
                     if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
                     var qty = Number(cart[productId] || 0);
