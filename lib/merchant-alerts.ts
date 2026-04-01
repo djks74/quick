@@ -25,12 +25,32 @@ export async function getMerchantPhone(storeId: number) {
 
     const phones = new Set<string>();
 
-    // Restrict: use only store.whatsapp when available
     console.log(`[MERCHANT_NOTIF] Raw store.whatsapp: "${store.whatsapp}"`);
     if (store.whatsapp && store.whatsapp.trim().length > 5) {
       phones.add(store.whatsapp.trim());
-    } else {
-      // Fallbacks only if store.whatsapp missing
+    }
+
+    const shouldIncludeStaff = store.subscriptionPlan === "CORPORATE";
+    if (shouldIncludeStaff && store.whatsapp && store.whatsapp.trim().length > 5) {
+      const staff = await prisma.user.findMany({
+        where: {
+          workedAtId: store.id,
+          phoneNumber: { not: null }
+        },
+        select: { phoneNumber: true }
+      });
+      staff.forEach((s) => {
+        if (s.phoneNumber && s.phoneNumber.trim().length > 5) {
+          phones.add(s.phoneNumber.trim());
+          console.log(`[MERCHANT_NOTIF] Added phone from staff (CORPORATE): ${s.phoneNumber}`);
+        }
+      });
+    }
+
+    if (phones.size === 0) {
+      console.warn(
+        `[MERCHANT_NOTIF] Store WhatsApp is missing for store ${store.name} (#${storeId}). Falling back to other phones.`
+      );
       console.log(`[MERCHANT_NOTIF] Raw shippingSenderPhone: "${store.shippingSenderPhone}"`);
       if (store.shippingSenderPhone && store.shippingSenderPhone.trim().length > 5) {
         phones.add(store.shippingSenderPhone.trim());
@@ -40,16 +60,16 @@ export async function getMerchantPhone(storeId: number) {
         phones.add(store.owner.phoneNumber.trim());
       }
       const staff = await prisma.user.findMany({
-        where: { 
+        where: {
           workedAtId: store.id,
           phoneNumber: { not: null }
         },
         select: { phoneNumber: true }
       });
-      staff.forEach(s => {
+      staff.forEach((s) => {
         if (s.phoneNumber && s.phoneNumber.trim().length > 5) {
           phones.add(s.phoneNumber.trim());
-          console.log(`[MERCHANT_NOTIF] Added phone from staff: ${s.phoneNumber}`);
+          console.log(`[MERCHANT_NOTIF] Added phone from staff (fallback): ${s.phoneNumber}`);
         }
       });
     }
