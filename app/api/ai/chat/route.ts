@@ -2424,6 +2424,23 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         durationMs: Date.now() - startedAt
       }
     );
+    if (isWebChannel && !activeStoreSlug) {
+      const m = String(responseText || "").match(/pasar\s+segar\s+([a-z0-9\p{L}\s-]{2,40})/iu);
+      const locationHint = String(m?.[1] || "").trim();
+      if (locationHint) {
+        const inferred = await prisma.store.findFirst({
+          where: buildAssistantStoreEligibilityWhere({
+            name: { contains: locationHint, mode: "insensitive" }
+          } as any),
+          select: { id: true, slug: true }
+        });
+        if (inferred?.slug) {
+          activeStoreSlug = inferred.slug;
+          activeStoreId = inferred.id;
+        }
+      }
+    }
+
     if (isWebChannel) {
       responseText = stripPhoneNumbersForWeb(responseText);
     }
