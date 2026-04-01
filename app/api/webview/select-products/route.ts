@@ -904,7 +904,10 @@ export async function GET(req: NextRequest) {
             var fh = document.getElementById('fee-hint');
             if (fh) {
                 fh.textContent =
-                    "Fee: QRIS " + String(Number(STORE_QRIS_FEE_PERCENT || 0)) + "% • GoPay " + String(Number(STORE_GOPAY_FEE_PERCENT || 0)) + "% • Transfer Rp " + formatIdr(Number(STORE_MANUAL_FEE || 0));
+                    "FeePaidBy: " + String(STORE_FEE_PAID_BY || "-") +
+                    " • QRIS " + String(Number(STORE_QRIS_FEE_PERCENT || 0)) + "%" +
+                    " • GoPay " + String(Number(STORE_GOPAY_FEE_PERCENT || 0)) + "%" +
+                    " • Transfer Rp " + formatIdr(Number(STORE_MANUAL_FEE || 0));
             }
         } catch (e) {}
         debugSet('Boot', 'script_loaded=true ua=' + String(navigator && navigator.userAgent ? navigator.userAgent : ''));

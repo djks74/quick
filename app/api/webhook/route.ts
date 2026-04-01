@@ -713,6 +713,34 @@ export async function POST(req: NextRequest) {
         
         let finalPrompt = textBody;
 
+        const isNearbyStoresQuery =
+          /\b(toko|store|gercep)\b/i.test(String(finalPrompt || "")) &&
+          /\b(terdekat|dekat|sekitar|area|near|nearby)\b/i.test(String(finalPrompt || "")) &&
+          !/\b(ongkir|kurir|kirim|shipping|delivery)\b/i.test(String(finalPrompt || ""));
+
+        if (finalPrompt && isNearbyStoresQuery && !(message as any).location) {
+          if (aiSession?.id) {
+            await prisma.whatsAppSession
+              .update({
+                where: { id: aiSession.id },
+                data: {
+                  metadata: {
+                    ...metadata,
+                    pendingIntent: "NEARBY_STORES",
+                    customerProfile
+                  } as any
+                }
+              })
+              .catch(() => null);
+          }
+          await sendWhatsAppMessage(
+            from,
+            `🤖 *Gercep Assistant*\n\nBoleh share lokasi (titik) Kakak dulu ya, biar aku carikan toko Gercep terdekat.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            0
+          );
+          return NextResponse.json({ success: true });
+        }
+
         // If it's a location message, provide a richer prompt for the AI
         if (!finalPrompt && (message as any).location) {
           const loc = (message as any).location;
@@ -720,11 +748,12 @@ export async function POST(req: NextRequest) {
             const last = [...history].reverse().find((h: any) => h && h.role === "user" && typeof h.content === "string");
             return String(last?.content || "");
           })();
+          const pendingIntent = String((metadata as any)?.pendingIntent || "");
           const wantsNearbyStores =
             /\b(toko|store|gercep)\b/i.test(lastUserText) &&
             /\b(terdekat|dekat|sekitar|area|near)\b/i.test(lastUserText) &&
             !/\b(ongkir|kurir|kirim|shipping|delivery)\b/i.test(lastUserText);
-          if (wantsNearbyStores) {
+          if (pendingIntent === "NEARBY_STORES" || wantsNearbyStores) {
             const lat = Number(loc.latitude);
             const lng = Number(loc.longitude);
             const stores = await prisma.store.findMany({
@@ -751,6 +780,20 @@ export async function POST(req: NextRequest) {
               .slice(0, 8);
 
             if (ranked.length === 0) {
+              if (aiSession?.id && pendingIntent === "NEARBY_STORES") {
+                await prisma.whatsAppSession
+                  .update({
+                    where: { id: aiSession.id },
+                    data: {
+                      metadata: {
+                        ...metadata,
+                        pendingIntent: null,
+                        customerProfile
+                      } as any
+                    }
+                  })
+                  .catch(() => null);
+              }
               await sendWhatsAppMessage(
                 from,
                 `🤖 *Gercep Assistant*\n\nMaaf Kak, aku belum menemukan toko terdekat dari lokasi ini.\nCoba ketik nama area (contoh: "Grogol" / "BSD") atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
@@ -768,6 +811,20 @@ export async function POST(req: NextRequest) {
               };
             });
 
+            if (aiSession?.id && pendingIntent === "NEARBY_STORES") {
+              await prisma.whatsAppSession
+                .update({
+                  where: { id: aiSession.id },
+                  data: {
+                    metadata: {
+                      ...metadata,
+                      pendingIntent: null,
+                      customerProfile
+                    } as any
+                  }
+                })
+                .catch(() => null);
+            }
             await sendWhatsAppMessage(
               from,
               `🤖 *Gercep Assistant*\n\nIni toko Gercep terdekat dari lokasi Kakak. Pilih salah satu untuk buka menunya.\n\n_(Balas 'Exit' untuk berhenti)_`,
