@@ -15,8 +15,15 @@ export async function GET(req: NextRequest) {
     }
 
     // Get store information
+    const numericStoreId = Number(storeId);
+    const sessionIdNum = Number(sessionId || 0) || 0;
+    const normalizedPhone = String(phone)
+      .replace(/\D/g, "")
+      .replace(/^0/, "62")
+      .replace(/^8/, "628");
+
     const store = await prisma.store.findUnique({
-      where: { id: Number(storeId) },
+      where: { id: numericStoreId },
       select: {
         id: true,
         name: true,
@@ -38,6 +45,25 @@ export async function GET(req: NextRequest) {
 
     const rawGopayFeePercent = Number((store as any).gopayFeePercent);
     const safeGopayFeePercent = Number.isFinite(rawGopayFeePercent) && rawGopayFeePercent > 0 ? rawGopayFeePercent : 2.5;
+
+    const [sessionByPair, sessionById] = await Promise.all([
+      prisma.whatsAppSession
+        .findUnique({
+          where: {
+            phoneNumber_storeId: {
+              phoneNumber: normalizedPhone,
+              storeId: numericStoreId
+            }
+          },
+          select: { metadata: true }
+        })
+        .catch(() => null),
+      sessionIdNum
+        ? prisma.whatsAppSession.findUnique({ where: { id: sessionIdNum }, select: { metadata: true } }).catch(() => null)
+        : Promise.resolve(null)
+    ]);
+
+    const initialCartRaw = ((sessionByPair?.metadata as any)?.webviewCart ?? (sessionById?.metadata as any)?.webviewCart ?? null) as any;
 
     // Get all categories for this store
     const categories = await prisma.category.findMany({
@@ -458,7 +484,12 @@ export async function GET(req: NextRequest) {
         var STORE_QRIS_FEE_PERCENT = ${Number(store.qrisFeePercent || 0)};
         var STORE_GOPAY_FEE_PERCENT = ${Number(safeGopayFeePercent || 0)};
         var STORE_MANUAL_FEE = ${Number(store.manualTransferFee || 0)};
+        var SESSION_ID = ${sessionIdNum};
+        var CUSTOMER_PHONE = "${normalizedPhone}";
+        var CART_STORAGE_KEY = "gercep_cart_" + String(STORE_ID) + "_" + String(CUSTOMER_PHONE);
+        var INITIAL_CART_RAW = ${JSON.stringify(initialCartRaw ?? {})};
         var cart = {};
+        var saveTimer = null;
         var total = 0;
         var activeCategory = 'all';
         var searchQuery = '';
@@ -501,6 +532,72 @@ export async function GET(req: NextRequest) {
             v = Math.round(v);
             try { return "Rp " + v.toLocaleString('id-ID'); } catch (e) { return "Rp " + String(v); }
         }
+
+        function normalizeCartRaw(raw) {
+            try {
+                if (!raw) return {};
+                if (Array.isArray(raw)) {
+                    var obj = {};
+                    for (var i = 0; i < raw.length; i++) {
+                        var it = raw[i] || {};
+                        var id = String(it.id || it.productId || '').trim();
+                        var qty = Number(it.quantity || it.qty || 0);
+                        if (!id || !isFinite(qty) || qty <= 0) continue;
+                        obj[id] = Math.round(qty);
+                    }
+                    return obj;
+                }
+                if (typeof raw === 'object') return raw;
+                return {};
+            } catch (e) { return {}; }
+        }
+
+        function loadCart() {
+            try {
+                var saved = localStorage.getItem(CART_STORAGE_KEY);
+                if (saved) {
+                    var parsed = JSON.parse(saved);
+                    return normalizeCartRaw(parsed);
+                }
+            } catch (e) {}
+            return normalizeCartRaw(INITIAL_CART_RAW);
+        }
+
+        function hydrateCartUI() {
+            try {
+                for (var productId in cart) {
+                    if (!Object.prototype.hasOwnProperty.call(cart, productId)) continue;
+                    var qty = Number(cart[productId] || 0);
+                    var qtyEl = document.getElementById("qty-" + productId);
+                    if (qtyEl) qtyEl.textContent = String(qty);
+                }
+            } catch (e) {}
+        }
+
+        function persistCart() {
+            try {
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+            } catch (e) {}
+            if (saveTimer) {
+                try { clearTimeout(saveTimer); } catch (e) {}
+            }
+            saveTimer = setTimeout(function () {
+                try {
+                    fetch('/api/webview/cart', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            storeId: STORE_ID,
+                            phone: CUSTOMER_PHONE,
+                            sessionId: SESSION_ID || null,
+                            cart: cart
+                        })
+                    }).catch(function () { return null; });
+                } catch (e) {}
+            }, 450);
+        }
+
+        cart = loadCart();
 
         function updateQuantity(productId, change) {
             var currentQty = cart[productId] || 0;
@@ -568,8 +665,9 @@ export async function GET(req: NextRequest) {
         }
 
         function updateCartTotal() {
-            var sub = itemsSubtotal();
-            var fees = calculateFees(sub);
+            persistCart();
+            var subtotal = itemsSubtotal();
+            var fees = calculateFees(subtotal);
             var ship = Number(shippingCost || 0);
             if (!isFinite(ship)) ship = 0;
             ship = Math.round(ship);
@@ -911,6 +1009,7 @@ export async function GET(req: NextRequest) {
             }
         } catch (e) {}
         debugSet('Boot', 'script_loaded=true ua=' + String(navigator && navigator.userAgent ? navigator.userAgent : ''));
+        hydrateCartUI();
         updateCartTotal();
         setActiveCategory('all');
     </script>
