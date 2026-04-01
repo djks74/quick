@@ -137,6 +137,44 @@ function stripPhoneNumbersForWeb(text: string) {
   return out;
 }
 
+async function inferStoreForWebPublic(message: string) {
+  const raw = normalizeLooseText(String(message || "").trim());
+  const cleaned = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return null;
+
+  const looksLikeSlug = /^[a-z0-9-]{3,}$/.test(cleaned) || /^[a-z0-9-]{3,}\s+[a-z0-9-]{2,}$/.test(cleaned);
+  const hasPasarSegar = /\bpasar\s+segar\b/i.test(cleaned);
+  const shortLocationLike =
+    cleaned.length >= 3 &&
+    cleaned.length <= 40 &&
+    cleaned.split(" ").length <= 5 &&
+    !/\b(menu|produk|harga|ongkir|kurir|kirim|shipping|delivery|checkout|halo|hai)\b/i.test(cleaned);
+
+  if (!looksLikeSlug && !hasPasarSegar && !shortLocationLike) return null;
+
+  const locationHint = hasPasarSegar ? cleaned.replace(/\bpasar\s+segar\b/i, "").trim() : cleaned;
+
+  const inferred = (await prisma.store.findFirst({
+    where: buildAssistantStoreEligibilityWhere({
+      OR: [
+        { slug: { equals: cleaned } as any },
+        { slug: { contains: cleaned } as any },
+        { name: { contains: cleaned, mode: "insensitive" } as any },
+        locationHint ? { name: { contains: locationHint, mode: "insensitive" } as any } : undefined
+      ].filter(Boolean) as any
+    } as any),
+    select: { id: true, slug: true, name: true, subscriptionPlan: true, customGeminiKey: true } as any
+  })) as any;
+
+  if (!inferred?.slug) return null;
+  return inferred;
+}
+
 function isFullMenuRequest(input: string) {
   const t = String(input || "").toLowerCase().trim();
   return /\b(menu lengkap(?:nya)?|lihat menu lengkap|full menu|daftar menu|list menu|semua menu|daftar produk|list produk|semua produk|produk lengkap|lihat semua produk|all products|all menu)\b/.test(t);
@@ -1594,33 +1632,13 @@ export async function POST(req: NextRequest) {
     const isWhatsAppChannel = channelUpper === "WHATSAPP" || (!channelUpper && isPublic);
 
     if (isPublic && isWebChannel && !scopedStore) {
-      const rawMsg = String(message || "").trim();
-      const simple = normalizeLooseText(rawMsg)
-        .replace(/[^\p{L}\p{N}\s-]/gu, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      const isShortLocationLike =
-        simple.length >= 3 &&
-        simple.length <= 30 &&
-        simple.split(" ").length <= 3 &&
-        !/\b(menu|produk|harga|ongkir|kurir|kirim|shipping|delivery|order|pesan|beli|checkout|halo|hai)\b/i.test(simple);
-      if (isShortLocationLike) {
-        const inferred = (await prisma.store.findFirst({
-          where: buildAssistantStoreEligibilityWhere({
-            OR: [
-              { slug: { contains: simple } as any },
-              { name: { contains: simple, mode: "insensitive" } as any }
-            ]
-          } as any),
-          select: { id: true, slug: true, name: true, subscriptionPlan: true, customGeminiKey: true } as any
-        })) as any;
-        if (inferred?.slug) {
-          storeSlug = String(inferred.slug);
-          scopedStore = inferred;
-          forcedScopedSlug = String(inferred.slug);
-          if (["SOVEREIGN", "CORPORATE"].includes((inferred as any).subscriptionPlan) && (inferred as any).customGeminiKey) {
-            geminiKey = (inferred as any).customGeminiKey;
-          }
+      const inferred = await inferStoreForWebPublic(String(message || ""));
+      if (inferred?.slug) {
+        storeSlug = String(inferred.slug);
+        scopedStore = inferred;
+        forcedScopedSlug = String(inferred.slug);
+        if (["SOVEREIGN", "CORPORATE"].includes((inferred as any).subscriptionPlan) && (inferred as any).customGeminiKey) {
+          geminiKey = (inferred as any).customGeminiKey;
         }
       }
     }
