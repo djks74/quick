@@ -455,8 +455,7 @@ export default function FloatingAssistant({
                     {m.role !== "user" &&
                       ((m.activeStoreId && m.activeStoreId > 0) || (lastActiveStore?.id && lastActiveStore.id > 0)) &&
                       !m.paymentUrl &&
-                      !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) &&
-                      ((Array.isArray(m.categories) && m.categories.length > 0) || (Array.isArray(m.products) && m.products.length > 0)) && (
+                      !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <button
                         type="button"
                         onClick={() => window.open(getWhatsAppUrl(m.activeStoreId), "_blank")}
