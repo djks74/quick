@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureStoreSettingsSchema } from '@/lib/store-settings-schema';
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureStoreSettingsSchema();
     const { searchParams } = new URL(req.url);
     const storeId = searchParams.get('storeId');
     const phone = searchParams.get('phone');
@@ -33,6 +35,9 @@ export async function GET(req: NextRequest) {
     if (!store) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
+
+    const rawGopayFeePercent = Number((store as any).gopayFeePercent);
+    const safeGopayFeePercent = Number.isFinite(rawGopayFeePercent) && rawGopayFeePercent > 0 ? rawGopayFeePercent : 2.5;
 
     // Get all categories for this store
     const categories = await prisma.category.findMany({
@@ -450,7 +455,7 @@ export async function GET(req: NextRequest) {
         var STORE_TAX_PERCENT = ${Number(store.taxPercent || 0)};
         var STORE_SERVICE_PERCENT = ${Number(store.serviceChargePercent || 0)};
         var STORE_QRIS_FEE_PERCENT = ${Number(store.qrisFeePercent || 0)};
-        var STORE_GOPAY_FEE_PERCENT = ${Number((store as any).gopayFeePercent || 0)};
+        var STORE_GOPAY_FEE_PERCENT = ${Number(safeGopayFeePercent || 0)};
         var STORE_MANUAL_FEE = ${Number(store.manualTransferFee || 0)};
         var cart = {};
         var total = 0;

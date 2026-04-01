@@ -716,7 +716,17 @@ export async function POST(req: NextRequest) {
         // If it's a location message, provide a richer prompt for the AI
         if (!finalPrompt && (message as any).location) {
           const loc = (message as any).location;
-          finalPrompt = `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
+          const lastUserText = (() => {
+            const last = [...history].reverse().find((h: any) => h && h.role === "user" && typeof h.content === "string");
+            return String(last?.content || "");
+          })();
+          const wantsNearbyStores =
+            /\b(toko|store|gercep)\b/i.test(lastUserText) &&
+            /\b(terdekat|dekat|sekitar|area|near)\b/i.test(lastUserText) &&
+            !/\b(ongkir|kurir|kirim|shipping|delivery)\b/i.test(lastUserText);
+          finalPrompt = wantsNearbyStores
+            ? `[LOCATION_SHARED_STORE_SEARCH] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Tolong tampilkan daftar toko Gercep terdekat dari lokasi ini (maks 8), beserta jarak/perkiraan area. Jangan minta alamat/berat ongkir.`
+            : `[LOCATION_SHARED] Saya baru saja membagikan lokasi saya (Lat: ${loc.latitude}, Lng: ${loc.longitude}). Mohon gunakan lokasi ini untuk menghitung ongkir atau mencari toko terdekat.`;
           
           // Update customer profile with last known location if needed
           customerProfile.lastLat = loc.latitude;
