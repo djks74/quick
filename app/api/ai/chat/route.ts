@@ -1593,6 +1593,38 @@ export async function POST(req: NextRequest) {
     const isWebChannel = channelUpper === "WEB";
     const isWhatsAppChannel = channelUpper === "WHATSAPP" || (!channelUpper && isPublic);
 
+    if (isPublic && isWebChannel && !scopedStore) {
+      const rawMsg = String(message || "").trim();
+      const simple = normalizeLooseText(rawMsg)
+        .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const isShortLocationLike =
+        simple.length >= 3 &&
+        simple.length <= 30 &&
+        simple.split(" ").length <= 3 &&
+        !/\b(menu|produk|harga|ongkir|kurir|kirim|shipping|delivery|order|pesan|beli|checkout|halo|hai)\b/i.test(simple);
+      if (isShortLocationLike) {
+        const inferred = (await prisma.store.findFirst({
+          where: buildAssistantStoreEligibilityWhere({
+            OR: [
+              { slug: { contains: simple } as any },
+              { name: { contains: simple, mode: "insensitive" } as any }
+            ]
+          } as any),
+          select: { id: true, slug: true, name: true, subscriptionPlan: true, customGeminiKey: true } as any
+        })) as any;
+        if (inferred?.slug) {
+          storeSlug = String(inferred.slug);
+          scopedStore = inferred;
+          forcedScopedSlug = String(inferred.slug);
+          if (["SOVEREIGN", "CORPORATE"].includes((inferred as any).subscriptionPlan) && (inferred as any).customGeminiKey) {
+            geminiKey = (inferred as any).customGeminiKey;
+          }
+        }
+      }
+    }
+
     const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);
     const isAskingMenuExplicitly = isPublic && (isFullMenuRequest(String(message || "")) || isAskingWhereMenu(String(message || "")));
 
@@ -2445,6 +2477,10 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
       responseText = stripPhoneNumbersForWeb(responseText);
     }
     const quickReplies = extractQuickRepliesFromText(responseText);
+    const uiAction =
+      isWebChannel && activeStoreSlug
+        ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: activeStoreSlug, storeId: activeStoreId }
+        : undefined;
     return NextResponse.json({ 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
       history: trimmedNextHistory,
@@ -2458,6 +2494,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
       orderRecap,
       activeStoreId,
       activeStoreSlug,
+      uiAction,
       customerProfile: updatedCustomerProfile
     });
 

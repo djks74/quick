@@ -18,6 +18,7 @@ interface Message {
   products?: Array<{ id: number; name: string; price: number; category?: string | null; categoryName?: string | null; image?: string | null }>;
   activeStoreId?: number;
   activeStoreSlug?: string;
+  uiAction?: { type: string; label?: string; storeSlug?: string; storeId?: number };
 }
 
 interface FloatingAssistantProps {
@@ -151,7 +152,8 @@ export default function FloatingAssistant({
             categories: Array.isArray(data.categories) ? data.categories : undefined,
             products: Array.isArray(data.products) ? data.products : undefined,
             activeStoreId: typeof data.activeStoreId === "number" ? data.activeStoreId : undefined,
-            activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined
+            activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined,
+            uiAction: data.uiAction && typeof data.uiAction === "object" ? data.uiAction : undefined
           }]);
           if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
             setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
@@ -222,7 +224,8 @@ export default function FloatingAssistant({
           categories: Array.isArray(data.categories) ? data.categories : undefined,
           products: Array.isArray(data.products) ? data.products : undefined,
           activeStoreId: typeof data.activeStoreId === "number" ? data.activeStoreId : undefined,
-          activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined
+          activeStoreSlug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined,
+          uiAction: data.uiAction && typeof data.uiAction === "object" ? data.uiAction : undefined
         }]);
         if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
           setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
@@ -344,19 +347,7 @@ export default function FloatingAssistant({
                         ))}
                       </div>
                     )}
-                    {Array.isArray(m.quickReplies) && m.quickReplies.length > 0 && !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {m.quickReplies.map((qr) => (
-                          <button
-                            key={String(qr.id)}
-                            onClick={() => handleSend(String(qr.value || qr.title))}
-                            className="px-3 py-1.5 rounded-lg text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                          >
-                            {qr.title}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {false}
                     {m.role !== "user" &&
                       ((m.activeStoreId && m.activeStoreId > 0) ||
                         (lastActiveStore?.id && lastActiveStore.id > 0) ||
@@ -366,7 +357,10 @@ export default function FloatingAssistant({
                       !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <button
                         type="button"
-                        onClick={() => window.open(getWhatsAppUrl(m.activeStoreId, m.activeStoreSlug), "_blank")}
+                        onClick={() => {
+                          const slug = String(m.uiAction?.storeSlug || m.activeStoreSlug || lastActiveStore?.slug || "").trim();
+                          window.open(getWhatsAppUrl(m.activeStoreId, slug), "_blank");
+                        }}
                         disabled={isLoading}
                         className="mt-3 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
