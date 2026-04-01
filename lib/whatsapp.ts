@@ -182,6 +182,16 @@ export async function sendWhatsAppMessage(
     list?: { buttonText: string; sections: WaListSection[] }
   }
 ) {
+  const acquireSystemLock = async (key: string) => {
+    const id = `SYS-${key}`;
+    try {
+      await prisma.processedMessage.create({ data: { id } });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const normalizeButtonUrl = (input?: string) => {
     const raw = String(input || "").trim();
     if (!raw) return undefined;
@@ -253,15 +263,17 @@ export async function sendWhatsAppMessage(
         const shouldAlert = Boolean((reserve as any).shouldAlert);
         if (shouldAlert && alertPhone) {
           const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
-          const lowCreditAlertUrl = storeSlug && baseUrl ? `${baseUrl.replace(/\/$/, "")}/${storeSlug}/admin/finance/ledger` : "";
-          const alertText = alertLevel === "CRITICAL"
-            ? (lowCreditAlertUrl
-                ? `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi order tidak terhenti: ${lowCreditAlertUrl}`
-                : `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi order tidak terhenti.`)
-            : (lowCreditAlertUrl
-                ? `⚠️ Saldo WA toko menipis. Top up sekarang: ${lowCreditAlertUrl}`
-                : `⚠️ Saldo WA toko menipis. Top up sekarang.`);
-          await sendWhatsAppMessage(alertPhone, alertText, 0);
+          const url = storeSlug && baseUrl ? `${baseUrl.replace(/\/$/, "")}/${storeSlug}/admin/finance/ledger` : "";
+          const alertText =
+            alertLevel === "CRITICAL"
+              ? url
+                ? `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi tidak terhenti: ${url}`
+                : `🚨 Saldo WA toko hampir habis. Top up sekarang agar notifikasi tidak terhenti.`
+              : url
+                ? `⚠️ Saldo WA toko menipis. Top up sekarang: ${url}`
+                : `⚠️ Saldo WA toko menipis. Top up sekarang.`;
+
+          await sendWhatsAppMessage(alertPhone, alertText, storeId, { isSystemAlert: true }).catch(() => null);
         }
         return false;
       } else {
@@ -331,25 +343,25 @@ export async function sendWhatsAppMessage(
         }
       };
 
-      const shouldFallbackToPlatform =
-        storeId > 0 &&
-        resolved.useEnterpriseConfig &&
-        !options?.isSystemAlert &&
-        Boolean(resolved.token && resolved.phoneNumberId) &&
-        [133010, 190].includes(parseErrorCode(result.error) || -1);
-
-      if (shouldFallbackToPlatform) {
-        const platformResolved = await resolveWhatsAppConfig(0);
-        if (platformResolved.token && platformResolved.phoneNumberId) {
-          const retry = await dispatchWhatsAppMessage(
-            formattedTo,
-            message,
-            platformResolved.token,
-            platformResolved.phoneNumberId,
-            { imageUrl: options?.imageUrl, interactive }
-          );
-          if (retry.ok) {
-            return true;
+      const code = parseErrorCode(result.error);
+      if (storeId > 0 && !options?.isSystemAlert && code && [133010, 190].includes(code)) {
+        const bucket = new Date().toISOString().slice(0, 13);
+        const ok = await acquireSystemLock(`WA_SEND_FAIL_${storeId}_${code}_${bucket}`);
+        if (ok) {
+          const store = await prisma.store.findUnique({
+            where: { id: storeId },
+            select: { name: true, whatsapp: true, owner: { select: { phoneNumber: true } } }
+          });
+          const notifyTo = store?.whatsapp || store?.owner?.phoneNumber || null;
+          if (notifyTo) {
+            const text =
+              `⚠️ *WhatsApp Delivery Error*\n\n` +
+              `Toko: *${store?.name || storeId}*\n` +
+              `Kode Error: *${code}*\n\n` +
+              `Pesan ke customer *${formattedTo}* gagal terkirim.\n` +
+              `Penyebab umum: nomor customer tidak terdaftar WhatsApp / customer belum chat dulu / atau setup WABA/PhoneID toko belum benar.\n\n` +
+              `Cek Settings WhatsApp toko, lalu coba kirim lagi.`;
+            await sendWhatsAppMessage(notifyTo, text, storeId, { isSystemAlert: true }).catch(() => null);
           }
         }
       }
