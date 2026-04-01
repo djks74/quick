@@ -596,6 +596,84 @@ export async function POST(req: NextRequest) {
         if (storeByPhoneForAi?.id) isMerchantSender = true;
       }
 
+      // --- GLOBAL START SHOPPING COMMAND (works in any mode, incl. Merchant/Admin) ---
+      const startShoppingSlugMatchGlobal = String(textBody || "")
+        .trim()
+        .match(/^mulai_belanja_slug\s*[:=]\s*([a-z0-9\-_.]+)\s*$/i);
+      const startShoppingIdMatchGlobal = String(textBody || "")
+        .trim()
+        .match(/^mulai_belanja\s*[:=]\s*(\d+)\s*$/i);
+      if (startShoppingSlugMatchGlobal?.[1] || startShoppingIdMatchGlobal?.[1]) {
+        const requestedSlug = startShoppingSlugMatchGlobal?.[1]
+          ? String(startShoppingSlugMatchGlobal[1]).trim().toLowerCase()
+          : null;
+        const requestedId = startShoppingIdMatchGlobal?.[1] ? Number(startShoppingIdMatchGlobal[1]) : 0;
+
+        const s = await prisma.store.findFirst({
+          where: requestedSlug
+            ? ({ ...assistantStoreEligibilityWhere, slug: requestedSlug } as any)
+            : ({ ...assistantStoreEligibilityWhere, id: requestedId } as any),
+          select: { id: true, slug: true, name: true }
+        });
+
+        if (!s?.id) {
+          await sendWhatsAppMessage(
+            from,
+            `🤖 *Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            0
+          );
+          return NextResponse.json({ success: true });
+        }
+
+        await prisma.whatsAppSession
+          .upsert({
+            where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+            update: {
+              step: isMerchantSender ? "USER_MODE" : undefined,
+              metadata: {
+                ...(((await prisma.whatsAppSession
+                  .findUnique({
+                    where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } },
+                    select: { metadata: true }
+                  })
+                  .catch(() => null))?.metadata as any) || {}),
+                lockedStoreId: s.id,
+                lockedStoreSlug: s.slug,
+                lockedStoreAt: new Date().toISOString()
+              } as any
+            } as any,
+            create: {
+              phoneNumber: from,
+              storeId: 0,
+              step: isMerchantSender ? "USER_MODE" : "START",
+              metadata: {
+                lockedStoreId: s.id,
+                lockedStoreSlug: s.slug,
+                lockedStoreAt: new Date().toISOString()
+              } as any
+            }
+          })
+          .catch(() => null);
+
+        const options = {
+          buttonText: l("📱 Mulai Belanja", "📱 Start Shopping"),
+          buttonUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gercep.click"}/api/webview/select-products?storeId=${Number(
+            s.id
+          )}&phone=${encodeURIComponent(from)}&sessionId=&ts=${Date.now()}`
+        };
+
+        await sendWhatsAppMessage(
+          from,
+          `🤖 *Gercep Assistant*:\n\n${l(
+            `Siap Kak, saya akan melanjutkan belanja kamu di *${String(s.name)}*.`,
+            `Sure — I'll continue your shopping at *${String(s.name)}*.`
+          )}\n\n_(Balas 'Exit' untuk berhenti)_`,
+          Number(s.id),
+          options as any
+        );
+        return NextResponse.json({ success: true });
+      }
+
       // --- AI AGENT HANDLER ---
       const isAICommand = 
         isCategoryListTap ||
