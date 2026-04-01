@@ -1643,6 +1643,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (isPublic && isWebChannel) {
+      const pick = String(message || "").trim().match(/^pilih_toko_slug\s*[:=]\s*([a-z0-9\-_.]+)\s*$/i);
+      if (pick?.[1]) {
+        const slug = String(pick[1]).trim().toLowerCase();
+        const store = await prisma.store.findFirst({
+          where: buildAssistantStoreEligibilityWhere({ slug }),
+          select: { id: true, slug: true, name: true }
+        });
+        if (store?.slug) {
+          const text = `Siap Kak. Kakak pilih *${store.name}*. Klik tombol *Mulai Belanja* ya.`;
+          const nextHistory = [
+            ...validatedHistory,
+            { role: "user", parts: [{ text: String(message || "") }] },
+            { role: "model", parts: [{ text }] }
+          ];
+          const trimmed = historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory;
+          return NextResponse.json({
+            text,
+            history: trimmed,
+            activeStoreId: store.id,
+            activeStoreSlug: store.slug,
+            uiAction: { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: store.slug, storeId: store.id }
+          });
+        }
+      }
+    }
+
     const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);
     const isAskingMenuExplicitly = isPublic && (isFullMenuRequest(String(message || "")) || isAskingWhereMenu(String(message || "")));
 
@@ -2260,6 +2287,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
     let lastShippingOptions: any[] | null = null;
     let lastCategories: any[] | null = null;
     let lastProducts: any[] | null = null;
+    let lastStores: any[] | null = null;
     let orderRecap: string | null = null;
     let activeStoreId = scopedStore?.id || undefined;
     let activeStoreSlug = scopedStore?.slug || undefined;
@@ -2378,9 +2406,12 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
           });
           
           // Capture structured data for the response
-          if (call.name === "search_stores" && (data as any).stores && (data as any).stores.length === 1) {
-            activeStoreId = (data as any).stores[0].id;
-            activeStoreSlug = (data as any).stores[0].slug;
+          if (call.name === "search_stores" && Array.isArray((data as any).stores)) {
+            lastStores = (data as any).stores;
+            if ((data as any).stores.length === 1) {
+              activeStoreId = (data as any).stores[0].id;
+              activeStoreSlug = (data as any).stores[0].slug;
+            }
           }
           if (args.slug) {
             activeStoreSlug = String(args.slug);
@@ -2474,31 +2505,23 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         durationMs: Date.now() - startedAt
       }
     );
-    if (isWebChannel && !activeStoreSlug) {
-      const m = String(responseText || "").match(/pasar\s+segar\s+([a-z0-9\p{L}\s-]{2,40})/iu);
-      const locationHint = String(m?.[1] || "").trim();
-      if (locationHint) {
-        const inferred = await prisma.store.findFirst({
-          where: buildAssistantStoreEligibilityWhere({
-            name: { contains: locationHint, mode: "insensitive" }
-          } as any),
-          select: { id: true, slug: true }
-        });
-        if (inferred?.slug) {
-          activeStoreSlug = inferred.slug;
-          activeStoreId = inferred.id;
-        }
-      }
-    }
-
     if (isWebChannel) {
       responseText = stripPhoneNumbersForWeb(responseText);
     }
     const quickReplies = extractQuickRepliesFromText(responseText);
+    const storePickOptions =
+      isWebChannel && !activeStoreSlug && Array.isArray(lastStores) && lastStores.length > 0
+        ? lastStores
+            .filter((s: any) => s && s.slug && s.name)
+            .slice(0, 6)
+            .map((s: any) => ({ slug: String(s.slug), name: String(s.name) }))
+        : [];
     const uiAction =
       isWebChannel && activeStoreSlug
-        ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: activeStoreSlug, storeId: activeStoreId }
-        : undefined;
+        ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: String(activeStoreSlug), storeId: activeStoreId }
+        : isWebChannel && storePickOptions.length > 0
+          ? { type: "CHOOSE_STORE", label: "Pilih Toko", options: storePickOptions }
+          : undefined;
     return NextResponse.json({ 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
       history: trimmedNextHistory,

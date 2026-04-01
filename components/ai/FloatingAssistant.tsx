@@ -18,7 +18,7 @@ interface Message {
   products?: Array<{ id: number; name: string; price: number; category?: string | null; categoryName?: string | null; image?: string | null }>;
   activeStoreId?: number;
   activeStoreSlug?: string;
-  uiAction?: { type: string; label?: string; storeSlug?: string; storeId?: number };
+  uiAction?: { type: string; label?: string; storeSlug?: string; storeId?: number; options?: Array<{ slug: string; name: string }> };
 }
 
 interface FloatingAssistantProps {
@@ -131,7 +131,7 @@ export default function FloatingAssistant({
               context: {
                 channel: "WEB",
                 location: { latitude, longitude },
-                slug: storeSlug // Pass the store slug context
+                slug: lastActiveStore?.slug || storeSlug
               }
             })
           });
@@ -174,7 +174,15 @@ export default function FloatingAssistant({
 
   const getWhatsAppUrl = (storeId?: number, storeSlugOverride?: string) => {
     const platformNumber = "62882003961609";
-    const resolvedSlug = String(storeSlugOverride || lastActiveStore?.slug || storeSlug || "").trim();
+    const normalizeSlug = (s: string) =>
+      String(s || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-_ ]+/g, "")
+        .replace(/[\s_]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    const resolvedSlug = normalizeSlug(String(storeSlugOverride || lastActiveStore?.slug || storeSlug || ""));
     const sid = Number(storeId || lastActiveStore?.id || 0);
     const msg =
       resolvedSlug
@@ -196,7 +204,7 @@ export default function FloatingAssistant({
 
     try {
       const trimmedHistory = Array.isArray(history) ? history.slice(-12) : [];
-      const context: any = { channel: "WEB", slug: storeSlug };
+      const context: any = { channel: "WEB", slug: lastActiveStore?.slug || storeSlug };
       if (sharedLocation) context.location = sharedLocation;
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -347,19 +355,39 @@ export default function FloatingAssistant({
                         ))}
                       </div>
                     )}
-                    {false}
                     {m.role !== "user" &&
-                      ((m.activeStoreId && m.activeStoreId > 0) ||
-                        (lastActiveStore?.id && lastActiveStore.id > 0) ||
-                        (typeof m.activeStoreSlug === "string" && m.activeStoreSlug.trim().length > 0) ||
-                        (typeof lastActiveStore?.slug === "string" && lastActiveStore.slug.trim().length > 0)) &&
+                      m.uiAction?.type === "CHOOSE_STORE" &&
+                      Array.isArray(m.uiAction.options) &&
+                      m.uiAction.options.length > 0 && (
+                        <div className="mt-3 flex flex-col gap-2">
+                          <div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                            Pilih toko:
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {m.uiAction.options.slice(0, 6).map((opt) => (
+                              <button
+                                key={String(opt.slug)}
+                                onClick={() => handleSend(`PILIH_TOKO_SLUG:${String(opt.slug)}`)}
+                                disabled={isLoading}
+                                className="px-3 py-2 rounded-xl text-left text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              >
+                                <div className="font-semibold">{opt.name}</div>
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400">{opt.slug}</div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {m.role !== "user" &&
+                      m.uiAction?.type === "START_SHOPPING" &&
+                      String(m.uiAction?.storeSlug || "").trim().length > 0 &&
                       !m.paymentUrl &&
                       !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <button
                         type="button"
                         onClick={() => {
-                          const slug = String(m.uiAction?.storeSlug || m.activeStoreSlug || lastActiveStore?.slug || "").trim();
-                          window.open(getWhatsAppUrl(m.activeStoreId, slug), "_blank");
+                          const slug = String(m.uiAction?.storeSlug || "").trim();
+                          window.open(getWhatsAppUrl(m.uiAction?.storeId, slug), "_blank");
                         }}
                         disabled={isLoading}
                         className="mt-3 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
@@ -386,27 +414,6 @@ export default function FloatingAssistant({
 
           {/* Input */}
           <div className="p-3 bg-gray-50 dark:bg-gray-800/20 border-t dark:border-gray-800">
-            {(() => {
-              const lastAssistant = [...messages].reverse().find((x) => x.role !== "user");
-              const shouldShow =
-                Boolean(lastActiveStore?.id) &&
-                Boolean(lastAssistant) &&
-                !lastAssistant?.paymentUrl &&
-                !(Array.isArray(lastAssistant?.shippingOptions) && lastAssistant.shippingOptions.length > 0) &&
-                ((Array.isArray(lastAssistant?.categories) && lastAssistant.categories.length > 0) ||
-                  (Array.isArray(lastAssistant?.products) && lastAssistant.products.length > 0));
-              if (!shouldShow || !lastActiveStore?.id) return null;
-              return (
-                <button
-                  type="button"
-                  onClick={() => window.open(getWhatsAppUrl(lastActiveStore.id, lastActiveStore.slug), "_blank")}
-                  disabled={isLoading}
-                  className="mb-2 w-full px-3 py-2.5 rounded-xl bg-[#25D366] text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#25D366]/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <MessageCircle className="w-4 h-4" /> Mulai Belanja
-                </button>
-              );
-            })()}
             <div className="flex gap-2">
               <button
                 onClick={shareLocation}
