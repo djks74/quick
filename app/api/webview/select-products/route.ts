@@ -974,7 +974,8 @@ export async function GET(req: NextRequest) {
                 customerInfo: customerInfo,
                 paymentMethod: "midtrans",
                 specificType: paymentSpecificType,
-                orderType: "DELIVERY"
+                orderType: "DELIVERY",
+                fast: 1
             };
             debugSet('Action', 'payNow provider=' + shippingProvider + ' total=' + String(finalTotal));
             xhrJson('POST', '/api/checkout', payload, function (ok, data) {
@@ -994,7 +995,7 @@ export async function GET(req: NextRequest) {
 
                 var paymentUrl = data.paymentUrl || data.redirect_url || (data.paymentResult && (data.paymentResult.paymentUrl || data.paymentResult.invoiceUrl || data.paymentResult.redirect_url));
                 if (paymentUrl) {
-                    try { window.location.replace(String(paymentUrl)); } catch (e) { window.location.href = String(paymentUrl); }
+                    try { window.location.href = String(paymentUrl); } catch (e) { window.location.assign(String(paymentUrl)); }
                     return;
                 }
                 if (data && data.orderId) {
