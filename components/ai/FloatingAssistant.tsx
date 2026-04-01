@@ -358,7 +358,10 @@ export default function FloatingAssistant({
                       </div>
                     )}
                     {m.role !== "user" &&
-                      ((m.activeStoreId && m.activeStoreId > 0) || (lastActiveStore?.id && lastActiveStore.id > 0)) &&
+                      ((m.activeStoreId && m.activeStoreId > 0) ||
+                        (lastActiveStore?.id && lastActiveStore.id > 0) ||
+                        (typeof m.activeStoreSlug === "string" && m.activeStoreSlug.trim().length > 0) ||
+                        (typeof lastActiveStore?.slug === "string" && lastActiveStore.slug.trim().length > 0)) &&
                       !m.paymentUrl &&
                       !(Array.isArray(m.shippingOptions) && m.shippingOptions.length > 0) && (
                       <button
