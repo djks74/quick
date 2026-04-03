@@ -22,6 +22,55 @@ export const runtime = "nodejs";
 let AI_ACTIVE_REQUESTS = 0;
 const AI_MAX_CONCURRENCY = Math.max(1, Number(process.env.AI_MAX_CONCURRENCY || "4") || 4);
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryGeminiError(err: any) {
+  const status = Number(err?.status || err?.response?.status || err?.statusCode || 0);
+  if ([429, 503].includes(status)) return true;
+  const msg = String(err?.message || "");
+  if (msg.includes("[503") || msg.includes("Service Unavailable")) return true;
+  if (msg.includes("[429") || msg.toLowerCase().includes("rate")) return true;
+  return false;
+}
+
+function pickSimpleGreetingReply(raw: string) {
+  const t = String(raw || "").toLowerCase().trim();
+  if (!t) return null;
+  const greetings = ["pagi", "siang", "sore", "malam", "halo", "hai", "hello", "hi", "assalamualaikum"];
+  if (greetings.includes(t)) return "Halo Kak! Ada yang bisa aku bantu hari ini?";
+  if (t === "tes" || t === "test" || t === "testing") return "Siap Kak, aku aktif. Mau cari toko atau mau buka menu toko tertentu?";
+  if (t.includes("masih kendala") || t.includes("kendala?") || t === "kendala") {
+    return "Iya Kak, tadi AI provider sempat high demand. Coba lagi ya—kalau masih error, sebut toko/produk yang dicari biar aku bantu lewat mode non-AI dulu.";
+  }
+  return null;
+}
+
+async function sendChatWithRetry(chat: any, input: any) {
+  const maxAttempts = Math.max(1, Number(process.env.GEMINI_MAX_RETRIES || "3") || 3);
+  const baseDelayMs = Math.max(100, Number(process.env.GEMINI_RETRY_BASE_DELAY_MS || "400") || 400);
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await chat.sendMessage(input);
+    } catch (err: any) {
+      lastErr = err;
+      const status = Number(err?.status || err?.response?.status || err?.statusCode || 0);
+      if (status === 403) {
+        throw err;
+      }
+      if (!shouldRetryGeminiError(err) || attempt === maxAttempts) {
+        throw err;
+      }
+      const jitter = Math.floor(Math.random() * 300);
+      const delay = baseDelayMs * attempt + jitter;
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
   if (clean.startsWith("0")) {
@@ -1508,6 +1557,10 @@ export async function POST(req: NextRequest) {
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
+    const quickReply = pickSimpleGreetingReply(String(message || ""));
+    if (quickReply) {
+      return NextResponse.json({ text: quickReply, history: Array.isArray(history) ? history : [] });
+    }
 
     if (isPublic) {
       const channel = context?.channel === "WHATSAPP" ? "WHATSAPP" : context?.channel === "WEB" ? "WEB" : "UNKNOWN";
@@ -1962,8 +2015,11 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(geminiKey);
+    const modelName =
+      process.env.GEMINI_MODEL ||
+      "gemini-3.0-flash";
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3-flash-preview",
+      model: modelName,
     }, { apiVersion: "v1beta" });
 
     // Determine if the user is a Merchant for the system instruction
@@ -2402,7 +2458,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
 
     // 1. Initial Request to Gemini
     console.log(`[AI_CHAT] Initial message: "${message}"`);
-    let result = await chat.sendMessage(String(message));
+    let result = await sendChatWithRetry(chat, String(message));
     let response = result.response;
     let calls = response.functionCalls() || [];
     console.log(`[AI_CHAT] Gemini response calls count: ${calls.length}`);
@@ -2593,7 +2649,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
           }
         }));
         
-        result = await chat.sendMessage(parts as any);
+        result = await sendChatWithRetry(chat, parts as any);
         response = result.response;
         calls = response.functionCalls() || [];
       } else {
@@ -2671,12 +2727,20 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
     return NextResponse.json(payload);
 
   } catch (error: any) {
+    const raw = String(error?.message || "");
+    const status = Number(error?.status || error?.response?.status || error?.statusCode || 0);
+    if ([429, 503].includes(status) || shouldRetryGeminiError(error)) {
+      console.warn("[GEMINI_CHAT_BUSY]", { status, message: raw.slice(0, 200) });
+      return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
+    }
+    if (status === 403) {
+      console.warn("[GEMINI_CHAT_UNAUTHORIZED]", { status, message: raw.slice(0, 200) });
+      return NextResponse.json({ text: "Maaf, AI belum aktif karena konfigurasi API Key belum benar. Mohon set Gemini API Key di Platform Settings.", error: raw || "" });
+    }
     console.error("[GEMINI_CHAT_ERROR]", error);
-    // Log more details if it's a TypeError related to iterables
     if (error instanceof TypeError && error.message.includes("iterable")) {
       console.error("[GEMINI_CHAT_ERROR_DETAIL] Likely invalid history or message parts format.");
     }
-    const raw = String(error?.message || "");
     const shouldReset =
       raw.includes("First content should be with role 'user'") ||
       raw.includes("First content should be with role \"user\"");
@@ -2690,7 +2754,6 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         { status: 400 }
       );
     }
-    // Fallback gracefully to avoid blocking admin flows (return 200 with text for webhook)
     return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
   }
   finally {
