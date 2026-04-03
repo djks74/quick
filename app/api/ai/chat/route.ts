@@ -1534,6 +1534,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 };
 
 export async function POST(req: NextRequest) {
+  let chosenModelName = "";
   try {
     if (AI_ACTIVE_REQUESTS >= AI_MAX_CONCURRENCY) {
       return NextResponse.json({
@@ -2015,9 +2016,14 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const modelName =
-      process.env.GEMINI_MODEL ||
-      "gemini-3.0-flash";
+    const modelName = String(process.env.GEMINI_MODEL || "").trim();
+    chosenModelName = modelName;
+    if (!modelName) {
+      return NextResponse.json({
+        text: "Maaf, AI belum aktif karena GEMINI_MODEL belum diset. Tolong set nama model Gemini yang mau dipakai.",
+        history: validatedHistory
+      });
+    }
     const model = genAI.getGenerativeModel({ 
       model: modelName,
     }, { apiVersion: "v1beta" });
@@ -2729,6 +2735,12 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
   } catch (error: any) {
     const raw = String(error?.message || "");
     const status = Number(error?.status || error?.response?.status || error?.statusCode || 0);
+    if (status === 404) {
+      return NextResponse.json({
+        text: `Maaf, model "${chosenModelName || "unknown"}" tidak ditemukan (404). Tolong cek nilai GEMINI_MODEL dan pakai nama model yang valid untuk API v1beta.`,
+        error: raw || ""
+      });
+    }
     if ([429, 503].includes(status) || shouldRetryGeminiError(error)) {
       console.warn("[GEMINI_CHAT_BUSY]", { status, message: raw.slice(0, 200) });
       return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
