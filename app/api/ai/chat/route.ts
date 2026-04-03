@@ -1653,17 +1653,60 @@ export async function POST(req: NextRequest) {
         ["saya", "aku", "gue", "gw", "me", "here", "sini", "disini", "di sini", "dekat sini", "sekitar sini"].includes(
           loc
         );
-      const hasCoords =
-        Number.isFinite(Number(customerProfile?.lastLat)) &&
-        Number.isFinite(Number(customerProfile?.lastLng)) &&
-        Math.abs(Number(customerProfile?.lastLat)) > 0.0001 &&
-        Math.abs(Number(customerProfile?.lastLng)) > 0.0001;
-      if (channel === "WHATSAPP" && nearbyIntent && !hasCoords && invalidLoc) {
+      const lat = Number((context as any)?.location?.latitude ?? customerProfile?.lastLat);
+      const lng = Number((context as any)?.location?.longitude ?? customerProfile?.lastLng);
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.0001 && Math.abs(lng) > 0.0001;
+      if (nearbyIntent && !hasCoords && invalidLoc) {
         return NextResponse.json({
           text:
             "Boleh share lokasi (titik) atau sebutkan area Kakak di mana? (contoh: Ciputat, Grogol, BSD) Biar aku carikan toko terdekat.",
           history: validatedHistory,
           customerProfile: { ...customerProfile, pendingIntent: "NEARBY_STORES" }
+        });
+      }
+      if (channel === "WEB" && nearbyIntent && hasCoords) {
+        const radiusKm = 50;
+        const latDelta = radiusKm / 111;
+        const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180) || 1);
+        const candidates = await prisma.store.findMany({
+          where: {
+            isActive: true,
+            enableWhatsApp: true,
+            biteshipOriginLat: { not: null, gte: lat - latDelta, lte: lat + latDelta },
+            biteshipOriginLng: { not: null, gte: lng - lngDelta, lte: lng + lngDelta }
+          } as any,
+          select: { id: true, name: true, slug: true, biteshipOriginLat: true, biteshipOriginLng: true },
+          take: 200
+        });
+        const nearby = candidates
+          .map((s: any) => {
+            const d = getDistanceMeters(
+              lat,
+              lng,
+              Number(s.biteshipOriginLat || 0),
+              Number(s.biteshipOriginLng || 0)
+            );
+            return { id: s.id, name: s.name, slug: s.slug, distance: d };
+          })
+          .filter((s: any) => Number.isFinite(s.distance) && s.distance <= 50000)
+          .sort((a: any, b: any) => a.distance - b.distance)
+          .slice(0, 6);
+        if (nearby.length === 0) {
+          return NextResponse.json({
+            text: "Aku belum nemu toko terdekat di sekitar lokasi Kakak. Coba sebut area-nya (contoh: Ciputat, Grogol, BSD) ya.",
+            history: validatedHistory
+          });
+        }
+        const list = nearby
+          .map((s: any, i: number) => {
+            const km = Math.max(0, Math.round((Number(s.distance) / 1000) * 10) / 10);
+            return `${i + 1}) ${s.name} (~${km} km)`;
+          })
+          .join("\n");
+        return NextResponse.json({
+          text: `Ini beberapa toko terdekat dari lokasi Kakak:\n\n${list}\n\nPilih salah satu toko ya:`,
+          history: validatedHistory,
+          uiAction: { type: "CHOOSE_STORE", label: "Pilih Toko", options: nearby.map((s: any) => ({ slug: String(s.slug), name: String(s.name) })) }
         });
       }
     }
