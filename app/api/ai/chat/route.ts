@@ -452,10 +452,10 @@ function findMatchedCategorySlugs(categories: Array<{ name: string; slug: string
 
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
-const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "1024") || 1024);
-const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "10") || 10);
-const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "12") || 12);
-const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "20") || 20);
+const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "512") || 512);
+const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "4") || 4);
+const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "8") || 8);
+const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "12") || 12);
 
 // These are the actual implementations of the tools Gemini will call
 const tools: Record<string, (args: any) => Promise<any>> = {
@@ -1544,7 +1544,6 @@ export async function POST(req: NextRequest) {
       });
     }
     AI_ACTIVE_REQUESTS++;
-    await ensureStoreSettingsSchema();
     const startedAt = Date.now();
     const internalContextHeader = req.headers.get("x-internal-context-key");
     const isTrustedInternalContext = Boolean(
@@ -1562,6 +1561,7 @@ export async function POST(req: NextRequest) {
     if (quickReply) {
       return NextResponse.json({ text: quickReply, history: Array.isArray(history) ? history : [] });
     }
+    await ensureStoreSettingsSchema();
 
     if (isPublic) {
       const channel = context?.channel === "WHATSAPP" ? "WHATSAPP" : context?.channel === "WEB" ? "WEB" : "UNKNOWN";
