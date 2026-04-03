@@ -38,11 +38,30 @@ function shouldRetryGeminiError(err: any) {
 function pickSimpleGreetingReply(raw: string) {
   const t = String(raw || "").toLowerCase().trim();
   if (!t) return null;
-  const greetings = ["pagi", "siang", "sore", "malam", "halo", "hai", "hello", "hi", "assalamualaikum"];
-  if (greetings.includes(t)) return "Halo Kak! Ada yang bisa aku bantu hari ini?";
-  if (t === "tes" || t === "test" || t === "testing") return "Siap Kak, aku aktif. Mau cari toko atau mau buka menu toko tertentu?";
-  if (t.includes("masih kendala") || t.includes("kendala?") || t === "kendala") {
-    return "Iya Kak, tadi AI provider sempat high demand. Coba lagi ya—kalau masih error, sebut toko/produk yang dicari biar aku bantu lewat mode non-AI dulu.";
+  const compact = t.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const first = compact.split(" ")[0] || "";
+  const greetings = new Set([
+    "pagi",
+    "siang",
+    "sore",
+    "malam",
+    "halo",
+    "hai",
+    "hello",
+    "hi",
+    "alo",
+    "assalamualaikum",
+    "assalamu",
+    "permisi"
+  ]);
+  if (greetings.has(compact) || greetings.has(first)) {
+    return "Halo Kak! Biar cepat, Kakak mau cari toko apa / beli apa, dan area-nya di mana?";
+  }
+  if (compact === "tes" || compact === "test" || compact === "testing") {
+    return "Siap Kak, aku aktif. Mau cari toko atau mau buka menu toko tertentu?";
+  }
+  if (compact.includes("masih kendala") || compact.includes("kendala")) {
+    return "Iya Kak, AI provider kadang high demand. Biar cepat, sebutkan *nama toko* atau *barang yang dicari* + *area* ya.";
   }
   return null;
 }
