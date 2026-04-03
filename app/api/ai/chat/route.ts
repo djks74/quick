@@ -19,6 +19,9 @@ import { evaluateAiAbuseGuard, extractClientIp, isSpamLikeMessage } from "@/lib/
 
 export const runtime = "nodejs";
 
+let AI_ACTIVE_REQUESTS = 0;
+const AI_MAX_CONCURRENCY = Math.max(1, Number(process.env.AI_MAX_CONCURRENCY || "4") || 4);
+
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
   if (clean.startsWith("0")) {
@@ -1483,6 +1486,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
 export async function POST(req: NextRequest) {
   try {
+    if (AI_ACTIVE_REQUESTS >= AI_MAX_CONCURRENCY) {
+      return NextResponse.json({
+        text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.",
+        history: [],
+        blocked: true
+      });
+    }
+    AI_ACTIVE_REQUESTS++;
     await ensureStoreSettingsSchema();
     const startedAt = Date.now();
     const internalContextHeader = req.headers.get("x-internal-context-key");
@@ -1630,6 +1641,125 @@ export async function POST(req: NextRequest) {
     const channelUpper = String((context as any)?.channel || "").toUpperCase();
     const isWebChannel = channelUpper === "WEB";
     const isWhatsAppChannel = channelUpper === "WHATSAPP" || (!channelUpper && isPublic);
+
+    if (isPublic && isWhatsAppChannel) {
+      const raw = String(message || "");
+      const compact = raw.toLowerCase().replace(/\s+/g, " ").trim();
+      const normalizeIdr = (s: string) => {
+        const digits = String(s || "").replace(/[^\d]/g, "");
+        const n = Number(digits);
+        return Number.isFinite(n) ? n : NaN;
+      };
+      const getScopedSlug = async () => {
+        if (forcedScopedSlug) return forcedScopedSlug;
+        const storeId = context?.storeId ? Number(context.storeId) : 0;
+        if (storeId) {
+          const s = await prisma.store.findUnique({ where: { id: storeId }, select: { slug: true } }).catch(() => null);
+          if (s?.slug) return String(s.slug);
+        }
+        const slug = context?.slug ? String(context.slug) : "";
+        if (slug) return slug;
+        return null;
+      };
+      const scopedSlug = await getScopedSlug();
+      let isMerchantCaller = false;
+      if (isTrustedInternalContext && context?.phoneNumber) {
+        const cleanPhone = String(context.phoneNumber).replace(/\D/g, "");
+        const dbUser = await prisma.user
+          .findFirst({
+            where: { phoneNumber: { contains: cleanPhone } },
+            select: { role: true }
+          })
+          .catch(() => null);
+        if (dbUser && ["MERCHANT", "MANAGER", "SUPER_ADMIN"].includes(String(dbUser.role))) {
+          isMerchantCaller = true;
+        } else {
+          const storeByPhone = await prisma.store
+            .findFirst({
+              where: { whatsapp: { contains: cleanPhone } },
+              select: { slug: true }
+            })
+            .catch(() => null);
+          if (storeByPhone?.slug && scopedSlug && String(storeByPhone.slug) === String(scopedSlug)) {
+            isMerchantCaller = true;
+          }
+        }
+      }
+      const canActAsMerchant = Boolean(scopedSlug) && isMerchantCaller;
+
+      const updatePriceMatch =
+        compact.match(/^(?:ubah|ganti|update)\s+(?:harga|price)\s+(.+?)\s+(?:jadi|to|=)?\s*(?:rp\s*)?([\d.,]+)/i) ||
+        compact.match(/^harga\s+(.+?)\s+(?:jadi|=)?\s*(?:rp\s*)?([\d.,]+)/i);
+      const addProductMatch =
+        compact.match(/^(?:tambah|add)\s+(?:produk|product)\s+(.+?)\s+(?:harga|price)?\s*(?:rp\s*)?([\d.,]+)(?:\s+(?:kategori|category)\s+(.+))?$/i);
+      const openStore = /^(?:buka|open)\s+toko\b/i.test(compact);
+      const closeStore = /^(?:tutup|close)\s+toko\b/i.test(compact);
+      const enableStore = /^(?:aktifkan|enable)\s+toko\b/i.test(compact);
+      const disableStore = /^(?:nonaktifkan|disable)\s+toko\b/i.test(compact);
+
+      if (canActAsMerchant && scopedSlug && (updatePriceMatch || addProductMatch || openStore || closeStore || enableStore || disableStore)) {
+        if (updatePriceMatch) {
+          const productName = String(updatePriceMatch[1] || "").trim();
+          const newPrice = normalizeIdr(String(updatePriceMatch[2] || ""));
+          if (!productName || !Number.isFinite(newPrice) || newPrice <= 0) {
+            return NextResponse.json({
+              text: "Formatnya: *ubah harga <nama produk> <harga>* (contoh: *ubah harga gula pasir 15000*).",
+              history: validatedHistory
+            });
+          }
+          const r = await tools.update_product_price({ slug: scopedSlug, productName, newPrice }).catch((e: any) => ({ error: String(e?.message || e || "Failed") }));
+          const text = r?.success ? `✅ ${r.message}` : `❌ ${r?.error || "Gagal update harga."}`;
+          const nextHistory = [
+            ...validatedHistory,
+            { role: "user", parts: [{ text: String(message || "") }] },
+            { role: "model", parts: [{ text }] }
+          ];
+          return NextResponse.json({ text, history: nextHistory });
+        }
+
+        if (addProductMatch) {
+          const name = String(addProductMatch[1] || "").trim();
+          const price = normalizeIdr(String(addProductMatch[2] || ""));
+          const category = String(addProductMatch[3] || "").trim() || undefined;
+          if (!name || !Number.isFinite(price) || price <= 0) {
+            return NextResponse.json({
+              text: "Formatnya: *tambah produk <nama> <harga> [kategori <nama>]* (contoh: *tambah produk Teh Botol 5000 kategori Minuman*).",
+              history: validatedHistory
+            });
+          }
+          const r = await tools.add_new_product({ slug: scopedSlug, name, price, category }).catch((e: any) => ({ error: String(e?.message || e || "Failed") }));
+          const text = r?.success ? `✅ ${r.message}` : `❌ ${r?.error || "Gagal tambah produk."}`;
+          const nextHistory = [
+            ...validatedHistory,
+            { role: "user", parts: [{ text: String(message || "") }] },
+            { role: "model", parts: [{ text }] }
+          ];
+          return NextResponse.json({ text, history: nextHistory });
+        }
+
+        if (openStore || closeStore) {
+          const r = await tools.toggle_store_open({ slug: scopedSlug, open: openStore }).catch((e: any) => ({ error: String(e?.message || e || "Failed") }));
+          const text = r?.success ? `✅ ${r.message}` : `❌ ${r?.error || "Gagal ubah status toko."}`;
+          const nextHistory = [
+            ...validatedHistory,
+            { role: "user", parts: [{ text: String(message || "") }] },
+            { role: "model", parts: [{ text }] }
+          ];
+          return NextResponse.json({ text, history: nextHistory });
+        }
+
+        if (enableStore || disableStore) {
+          const r = await tools.toggle_store_active({ slug: scopedSlug, active: enableStore }).catch((e: any) => ({ error: String(e?.message || e || "Failed") }));
+          const text = r?.success ? `✅ ${r.message}` : `❌ ${r?.error || "Gagal ubah status toko."}`;
+          const nextHistory = [
+            ...validatedHistory,
+            { role: "user", parts: [{ text: String(message || "") }] },
+            { role: "model", parts: [{ text }] }
+          ];
+          return NextResponse.json({ text, history: nextHistory });
+        }
+      }
+    }
 
     if (isPublic && isWebChannel && !scopedStore) {
       const inferred = await inferStoreForWebPublic(String(message || ""));
@@ -2522,7 +2652,7 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         : isWebChannel && storePickOptions.length > 0
           ? { type: "CHOOSE_STORE", label: "Pilih Toko", options: storePickOptions }
           : undefined;
-    return NextResponse.json({ 
+    const payload = { 
       text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
       history: trimmedNextHistory,
       breakdown: finalBreakdown,
@@ -2537,7 +2667,8 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
       activeStoreSlug,
       uiAction,
       customerProfile: updatedCustomerProfile
-    });
+    };
+    return NextResponse.json(payload);
 
   } catch (error: any) {
     console.error("[GEMINI_CHAT_ERROR]", error);
@@ -2559,6 +2690,10 @@ ${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phon
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: raw || "An unexpected error occurred during chat." }, { status: 500 });
+    // Fallback gracefully to avoid blocking admin flows (return 200 with text for webhook)
+    return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
+  }
+  finally {
+    AI_ACTIVE_REQUESTS = Math.max(0, AI_ACTIVE_REQUESTS - 1);
   }
 }
