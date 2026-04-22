@@ -60,7 +60,6 @@ export default function AdminSettings() {
   const isCorporate = subscriptionPlan === "CORPORATE";
   const isDemoStore = slugValue === "demo";
   const canOverridePlatformConfig = (isSovereign || isCorporate) && !isDemoStore;
-  const canOverrideWaAndGemini = (isSovereign || isCorporate) && !isDemoStore;
   const [newPosMethodName, setNewPosMethodName] = useState("");
   const [newPosMethodMode, setNewPosMethodMode] = useState<PosPaymentMethod["mode"]>("card");
   
@@ -95,7 +94,7 @@ export default function AdminSettings() {
     shippingEnableStoreCourier: false,
     shippingStoreCourierFee: "0",
     enableTakeawayDelivery: true,
-    enableAiChatWidget: true,
+    enableCommerceAssistant: true,
     biteshipApiKey: "",
     biteshipOriginAreaId: "",
     biteshipOriginLat: "",
@@ -104,7 +103,6 @@ export default function AdminSettings() {
     shippingSenderPhone: "",
     shippingSenderAddress: "",
     shippingSenderPostalCode: "",
-    customGeminiKey: "",
     webhookUrl: "",
     timezone: "Asia/Jakarta",
     operatingHours: {
@@ -369,8 +367,7 @@ export default function AdminSettings() {
           shippingSenderPhone: data.shippingSenderPhone || "",
           shippingSenderAddress: data.shippingSenderAddress || "",
           shippingSenderPostalCode: data.shippingSenderPostalCode || "",
-          customGeminiKey: (data as any).customGeminiKey || "",
-          enableAiChatWidget: (data as any).enableAiChatWidget ?? true,
+          enableCommerceAssistant: (data as any).enableCommerceAssistant ?? true,
           webhookUrl: (data as any).webhookUrl || "",
           timezone: (data as any).timezone || "Asia/Jakarta",
           operatingHours: (data as any).operatingHours || {
@@ -419,8 +416,7 @@ export default function AdminSettings() {
         biteshipOriginLng: settings.biteshipOriginLng ? parseFloat(settings.biteshipOriginLng.toString().replace(',', '.')) : null,
         shippingStoreCourierFee: parseFloat(settings.shippingStoreCourierFee.toString().replace(',', '.')) || 0,
         bankAccount: bankAccount,
-        customGeminiKey: settings.customGeminiKey,
-        enableAiChatWidget: settings.enableAiChatWidget,
+        enableCommerceAssistant: settings.enableCommerceAssistant,
         webhookUrl: settings.webhookUrl,
         operatingHours: settings.operatingHours,
         timezone: settings.timezone
@@ -1067,7 +1063,7 @@ export default function AdminSettings() {
             <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
               <div>
                 <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">WhatsApp & AI Setup</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure your own Meta and Gemini credentials.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure your own Meta credentials.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 {!canOverridePlatformConfig && (
@@ -1077,7 +1073,7 @@ export default function AdminSettings() {
                       <h4 className="font-bold uppercase tracking-tight text-sm">Sovereign & Corporate Only</h4>
                     </div>
                     <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed">
-                      Custom WhatsApp numbers and Gemini API Keys are exclusive to <strong>Sovereign</strong> and <strong>Corporate</strong> members. 
+                      Custom WhatsApp numbers are exclusive to <strong>Sovereign</strong> and <strong>Corporate</strong> members. 
                     </p>
                   </div>
                 )}
@@ -1095,7 +1091,7 @@ export default function AdminSettings() {
                         <h3 className="text-sm font-bold text-[#1d2327] dark:text-white uppercase tracking-tight">
                           {isCorporate ? "Corporate Configurations" : "Sovereign Configurations"}
                         </h3>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp and Gemini API credentials.</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Custom WhatsApp credentials.</p>
                       </div>
                       <button 
                         onClick={() => setShowIntegrationGuide(!showIntegrationGuide)}
@@ -1115,7 +1111,6 @@ export default function AdminSettings() {
                            <li><strong>Meta App ID:</strong> Ensure you have a Meta App for your Business.</li>
                            <li><strong>WhatsApp Cloud API:</strong> Go to Meta Business Suite to get your <b>Phone Number ID</b> and <b>WABA ID</b>.</li>
                            <li><strong>Access Token:</strong> Use the <i>Embedded Signup</i> below or generate a permanent token in <b>App Settings &gt; WhatsApp &gt; Configuration</b>.</li>
-                           <li><strong>Gemini Key:</strong> Get your free API Key from <a href="https://aistudio.google.com/" target="_blank" className="underline font-bold text-blue-700 hover:underline">Google AI Studio</a>.</li>
                         </ul>
                       </div>
                     )}
@@ -1168,19 +1163,6 @@ export default function AdminSettings() {
                           />
                         </div>
                       </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
-                        <input 
-                          type="password" 
-                          className="w-full border border-[#ccd0d4] dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm dark:text-white outline-none focus:border-orange-500 transition-colors rounded" 
-                          placeholder="AIzaSy..."
-                          value={settings.customGeminiKey}
-                          onChange={(e) => setSettings({ ...settings, customGeminiKey: e.target.value })}
-                        />
-                        <p className="text-[10px] text-gray-500 italic">Your own Google Gemini Pro key for AI chat.</p>
-                      </div>
-
                       <div className="flex items-center space-x-2 pt-2">
                         <input 
                           type="checkbox" 
@@ -1284,30 +1266,30 @@ export default function AdminSettings() {
 
             <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">AI Chat Widget</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Embed your AI assistant into your own website.</p>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">Commerce Assistant</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Embed your commerce assistant into your own website.</p>
               </div>
               <div className="md:col-span-2 space-y-4">
                 <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
                   <p className="text-xs text-purple-700 dark:text-purple-400 leading-relaxed font-medium">
-                    ✨ <strong>White-Label Ready:</strong> Your embedded chat uses your custom theme color and Gemini API Key (if configured).
+                    ✨ <strong>White-Label Ready:</strong> Your embedded chat uses your custom theme color and Gercep configuration.
                   </p>
                 </div>
 
                 <div className="flex items-center space-x-2 p-4 bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-xl">
                   <input 
                     type="checkbox" 
-                    id="enableAiChatWidget"
-                    checked={settings.enableAiChatWidget}
-                    onChange={(e) => setSettings({ ...settings, enableAiChatWidget: e.target.checked })}
+                    id="enableCommerceAssistant"
+                    checked={settings.enableCommerceAssistant}
+                    onChange={(e) => setSettings({ ...settings, enableCommerceAssistant: e.target.checked })}
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-                  <label htmlFor="enableAiChatWidget" className="text-sm font-bold dark:text-gray-300 cursor-pointer">
-                    Enable AI Chat Widget
+                  <label htmlFor="enableCommerceAssistant" className="text-sm font-bold dark:text-gray-300 cursor-pointer">
+                    Enable Commerce Assistant
                   </label>
                 </div>
 
-                {settings.enableAiChatWidget && (
+                {settings.enableCommerceAssistant && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="space-y-3">
                       <label className="block text-sm font-medium dark:text-gray-300 uppercase tracking-wider text-[10px] font-black text-gray-400">Embed Code (IFrame)</label>

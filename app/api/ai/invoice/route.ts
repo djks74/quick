@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         status: "PENDING",
         orderType: "TAKEAWAY",
         paymentMethod: payment_method || null,
-        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", source: "AI_GEMINI" }),
+        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", source: "AI_CHATBOT" }),
         items: {
           create: {
             productId: product.id,

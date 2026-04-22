@@ -21,7 +21,6 @@ export async function ensurePlatformSettingsSchema() {
       const commands = [
         `ALTER TABLE "PlatformSettings"
          ADD COLUMN IF NOT EXISTS "biteshipApiKey" TEXT,
-         ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "facebookAppId" TEXT,
          ADD COLUMN IF NOT EXISTS "whatsappSignupConfigId" TEXT,
          ADD COLUMN IF NOT EXISTS "waRateMarketing" DOUBLE PRECISION NOT NULL DEFAULT 2000,
@@ -310,7 +309,6 @@ export async function updatePlatformSettings(data: {
   midtransServerKey?: string;
   midtransClientKey?: string;
   biteshipApiKey?: string;
-  geminiApiKey?: string;
   subscriptionServerKey?: string;
   subscriptionClientKey?: string;
   facebookAppId?: string;
@@ -342,7 +340,6 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
-        geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
         facebookAppId: cleanedFacebookAppId || null,
@@ -360,7 +357,6 @@ export async function updatePlatformSettings(data: {
         midtransServerKey: data.midtransServerKey || null,
         midtransClientKey: data.midtransClientKey || null,
         biteshipApiKey: data.biteshipApiKey || null,
-        geminiApiKey: data.geminiApiKey || null,
         subscriptionServerKey: data.subscriptionServerKey || null,
         subscriptionClientKey: data.subscriptionClientKey || null,
         facebookAppId: cleanedFacebookAppId || null,

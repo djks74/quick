@@ -15,7 +15,6 @@ type PlatformSettings = {
   biteshipApiKey?: string | null;
   subscriptionServerKey?: string | null;
   subscriptionClientKey?: string | null;
-  geminiApiKey?: string | null;
   facebookAppId?: string | null;
   whatsappSignupConfigId?: string | null;
   waRateMarketing?: number;
@@ -48,7 +47,6 @@ export default function SettingsForm({
       biteshipApiKey: initialSettings?.biteshipApiKey || "",
       subscriptionServerKey: initialSettings?.subscriptionServerKey || "",
       subscriptionClientKey: initialSettings?.subscriptionClientKey || "",
-      geminiApiKey: initialSettings?.geminiApiKey || "",
       facebookAppId: initialSettings?.facebookAppId || "",
       whatsappSignupConfigId: initialSettings?.whatsappSignupConfigId || "",
       waRateMarketing: initialSettings?.waRateMarketing ?? 2000,
@@ -382,24 +380,6 @@ export default function SettingsForm({
               className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
               value={form.midtransClientKey}
               onChange={(e) => setForm({ ...form, midtransClientKey: e.target.value })}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8 transition-colors">
-        <div>
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white">Google Gemini AI</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">API Key for AI-powered assistant and customer ordering.</p>
-        </div>
-        <div className="md:col-span-2 space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-300">Gemini API Key</label>
-            <input
-              type="password"
-              className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg dark:text-white transition-colors"
-              value={form.geminiApiKey}
-              onChange={(e) => setForm({ ...form, geminiApiKey: e.target.value })}
             />
           </div>
         </div>

@@ -28,12 +28,22 @@ export async function ensureStoreSettingsSchema() {
          ADD COLUMN IF NOT EXISTS "waCriticalCreditAlertSentAt" TIMESTAMP(3),
          ADD COLUMN IF NOT EXISTS "webhookUrl" TEXT,
          ADD COLUMN IF NOT EXISTS "lastSyncAt" TIMESTAMP(3),
-         ADD COLUMN IF NOT EXISTS "customGeminiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "apiKey" TEXT,
          ADD COLUMN IF NOT EXISTS "storeType" TEXT NOT NULL DEFAULT 'OTHER',
          ADD COLUMN IF NOT EXISTS "corporateName" TEXT,
-         ADD COLUMN IF NOT EXISTS "enableAiChatWidget" BOOLEAN NOT NULL DEFAULT true,
+         ADD COLUMN IF NOT EXISTS "enableCommerceAssistant" BOOLEAN NOT NULL DEFAULT true,
          ADD COLUMN IF NOT EXISTS "gopayFeePercent" DOUBLE PRECISION NOT NULL DEFAULT 2.5`,
+
+        `DO $$
+         BEGIN
+           IF EXISTS (
+             SELECT 1
+             FROM information_schema.columns
+             WHERE table_name = 'Store' AND column_name = 'enableAiChatWidget'
+           ) THEN
+             EXECUTE 'UPDATE "Store" SET "enableCommerceAssistant" = COALESCE("enableAiChatWidget", "enableCommerceAssistant")';
+           END IF;
+         END $$;`,
 
         `CREATE UNIQUE INDEX IF NOT EXISTS "Store_apiKey_key" ON "Store"("apiKey")`,
 

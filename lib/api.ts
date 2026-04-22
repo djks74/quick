@@ -248,8 +248,7 @@ export async function updateStoreSettings(storeId: number, data: any) {
         shippingSenderAddress: data.shippingSenderAddress || null,
         shippingSenderPostalCode: data.shippingSenderPostalCode || null,
         webhookUrl: data.webhookUrl || null,
-        customGeminiKey: data.customGeminiKey || null,
-        enableAiChatWidget: data.enableAiChatWidget ?? true,
+        enableCommerceAssistant: data.enableCommerceAssistant ?? true,
         operatingHours: data.operatingHours || null,
         timezone: data.timezone || null,
         ...(canUseOwnIntegrationConfig

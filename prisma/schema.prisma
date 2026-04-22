@@ -29,7 +29,6 @@ model Store {
   apiKey                      String?             @unique
   webhookUrl            String?
   lastSyncAt            DateTime?
-  customGeminiKey       String?
   whatsapp                    String?
   themeColor                  String              @default("#000000")
   whatsappToken               String?
@@ -73,7 +72,7 @@ model Store {
   shippingEnableStoreCourier  Boolean             @default(false)
   shippingStoreCourierFee     Float               @default(0.0)
   enableTakeawayDelivery      Boolean             @default(true)
-  enableAiChatWidget          Boolean             @default(true)
+  enableCommerceAssistant     Boolean             @default(true)
   storeType                   String              @default("OTHER")
   corporateName               String?             // For grouping multiple stores under one corporate entity
   shippingSenderName          String?
@@ -355,7 +354,6 @@ model PlatformSettings {
   subscriptionServerKey String?
   subscriptionClientKey String?
   biteshipApiKey        String?
-  geminiApiKey          String?
   facebookAppId         String?
   whatsappSignupConfigId String?
   waRateMarketing       Float    @default(2000)

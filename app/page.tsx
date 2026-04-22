@@ -110,7 +110,7 @@ const translations = {
     corporate_price: "Contact Us",
     corporate_period: "",
     sovereign_feature1: "Custom WhatsApp Number",
-    sovereign_feature2: "Your Own Gemini API Key",
+    sovereign_feature2: "Own WhatsApp Configuration",
     sovereign_feature3: "Product Sync API Access",
     sovereign_feature4: "Custom Midtrans Keys"
   },
@@ -179,7 +179,7 @@ const translations = {
     corporate_price: "Hubungi Kami",
     corporate_period: "",
     sovereign_feature1: "Nomor WhatsApp Sendiri",
-    sovereign_feature2: "Gemini API Key Milik Anda",
+    sovereign_feature2: "Konfigurasi WhatsApp Milik Anda",
     sovereign_feature3: "Akses API Sinkronisasi Produk",
     sovereign_feature4: "Kunci Midtrans Sendiri"
   }
@@ -600,7 +600,7 @@ export default function Home() {
                   {[
                     "Everything in Enterprise",
                     "Custom WA Number",
-                    "Own Gemini API Key",
+                    "Own WhatsApp Configuration",
                     "Product Sync API",
                     "Custom Midtrans Keys"
                   ].map((f, i) => (

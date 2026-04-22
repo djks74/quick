@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import midtransClient from "midtrans-client";
 import { getServerSession } from "next-auth";
@@ -8,12 +7,10 @@ import { getShippingQuoteFromBiteship, createBiteshipDraftForPendingOrder } from
 import { ensureStoreSettingsSchema } from "@/lib/store-settings-schema";
 import { ensurePlatformSettingsSchema } from "@/lib/super-admin";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { resolvePaymentUrl, sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
+import { sendMerchantWhatsApp, buildOrderMerchantSummary } from "@/lib/merchant-alerts";
 import { processPayment } from "@/lib/payment";
-import { createOrderNotification } from "@/lib/order-notifications";
 import { getDistanceMeters } from "@/lib/utils";
 import { triggerReverseSync, isStoreOpen } from "@/lib/api";
-import { logTraffic } from "@/lib/traffic";
 import { ensureDefaultStoreTypes, getStoreTypeLabelMap } from "@/lib/store-types";
 import { evaluateAiAbuseGuard, extractClientIp, isSpamLikeMessage } from "@/lib/ai-abuse-guard";
 
@@ -21,19 +18,6 @@ export const runtime = "nodejs";
 
 let AI_ACTIVE_REQUESTS = 0;
 const AI_MAX_CONCURRENCY = Math.max(1, Number(process.env.AI_MAX_CONCURRENCY || "4") || 4);
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function shouldRetryGeminiError(err: any) {
-  const status = Number(err?.status || err?.response?.status || err?.statusCode || 0);
-  if ([429, 503].includes(status)) return true;
-  const msg = String(err?.message || "");
-  if (msg.includes("[503") || msg.includes("Service Unavailable")) return true;
-  if (msg.includes("[429") || msg.toLowerCase().includes("rate")) return true;
-  return false;
-}
 
 function pickSimpleGreetingReply(raw: string) {
   const t = String(raw || "").toLowerCase().trim();
@@ -64,30 +48,6 @@ function pickSimpleGreetingReply(raw: string) {
     return "Iya Kak, AI provider kadang high demand. Biar cepat, sebutkan *nama toko* atau *barang yang dicari* + *area* ya.";
   }
   return null;
-}
-
-async function sendChatWithRetry(chat: any, input: any) {
-  const maxAttempts = Math.max(1, Number(process.env.GEMINI_MAX_RETRIES || "3") || 3);
-  const baseDelayMs = Math.max(100, Number(process.env.GEMINI_RETRY_BASE_DELAY_MS || "400") || 400);
-  let lastErr: any = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await chat.sendMessage(input);
-    } catch (err: any) {
-      lastErr = err;
-      const status = Number(err?.status || err?.response?.status || err?.statusCode || 0);
-      if (status === 403) {
-        throw err;
-      }
-      if (!shouldRetryGeminiError(err) || attempt === maxAttempts) {
-        throw err;
-      }
-      const jitter = Math.floor(Math.random() * 300);
-      const delay = baseDelayMs * attempt + jitter;
-      await sleep(delay);
-    }
-  }
-  throw lastErr;
 }
 
 function normalizePhoneNumber(phone: string) {
@@ -141,73 +101,6 @@ function getGercepScopeRefusal(input: string) {
   return "Maaf, saya hanya bisa bantu topik dalam sistem Gercep (cari toko/resto, menu, pemesanan, pengiriman, pembayaran, dan operasional merchant). Silakan tanya dalam konteks Gercep ya.";
 }
 
-function extractQuickRepliesFromText(text: string) {
-  const raw = String(text || "");
-  const t = raw.toLowerCase();
-  const yesNo =
-    /\b(ya|iya)\b.*\b(tidak|nggak|ga)\b/.test(t) ||
-    /\b(tidak|nggak|ga)\b.*\b(ya|iya)\b/.test(t) ||
-    /\b(yes)\b.*\b(no)\b/.test(t) ||
-    /\b(no)\b.*\b(yes)\b/.test(t) ||
-    /\bya\/tidak\b/.test(t) ||
-    /\byes\/no\b/.test(t);
-  if (yesNo) {
-    return [
-      { id: "YES", title: "Ya", value: "Ya" },
-      { id: "NO", title: "Tidak", value: "Tidak" }
-    ];
-  }
-
-  const offersFullMenu =
-    (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
-    (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat"));
-  if (offersFullMenu) {
-    return [
-      { id: "YES", title: "Ya", value: "Ya" },
-      { id: "NO", title: "Tidak", value: "Tidak" }
-    ];
-  }
-
-  const asksPayment =
-    (t.includes("bayar") || t.includes("payment") || t.includes("metode pembayaran")) &&
-    t.includes("qris") &&
-    (t.includes("bank") || t.includes("transfer")) &&
-    // Only show payment buttons if we are NOT still clarifying items or location
-    !t.includes("?") &&
-    !t.includes("apakah") &&
-    !t.includes("bantu konfirmasi");
-  if (asksPayment) {
-    return [
-      { id: "PAY_QRIS", title: "QRIS", value: "qris" },
-      { id: "PAY_BANK", title: "Bank Transfer", value: "bank transfer" }
-    ];
-  }
-
-  const offersMenu =
-    (t.includes("menu lengkap") || t.includes("full menu") || t.includes("semua menu") || t.includes("semua produk")) &&
-    (t.includes("mau") || t.includes("tampilkan") || t.includes("lihat") || t.includes("ingin") || t.includes("?"));
-  if (offersMenu) {
-    return [
-      { id: "YES", title: "Ya", value: "Ya" },
-      { id: "NO", title: "Tidak", value: "Tidak" }
-    ];
-  }
-
-  return null;
-}
-
-function stripPhoneNumbersForWeb(text: string) {
-  const raw = String(text || "");
-  let out = raw;
-  out = out.replace(/\+?\s*62[\s-]?\d(?:[\s-]?\d){7,14}/g, "");
-  out = out.replace(/\b08\d{8,12}\b/g, "");
-  out = out.replace(/\b628\d{7,14}\b/g, "");
-  out = out.replace(/(?:di\s+nomor\s+berikut\s*:?\s*)+/gi, "");
-  out = out.replace(/\n{3,}/g, "\n\n");
-  out = out.replace(/[ \t]{2,}/g, " ");
-  return out;
-}
-
 async function inferStoreForWebPublic(message: string) {
   const raw = normalizeLooseText(String(message || "").trim());
   const cleaned = raw
@@ -239,7 +132,7 @@ async function inferStoreForWebPublic(message: string) {
         locationHint ? { name: { contains: locationHint, mode: "insensitive" } as any } : undefined
       ].filter(Boolean) as any
     } as any),
-    select: { id: true, slug: true, name: true, subscriptionPlan: true, customGeminiKey: true } as any
+    select: { id: true, slug: true, name: true } as any
   })) as any;
 
   if (!inferred?.slug) return null;
@@ -469,14 +362,17 @@ function findMatchedCategorySlugs(categories: Array<{ name: string; slug: string
   return Array.from(matched);
 }
 
-const AI_API_KEY = process.env.AI_API_KEY;
 const AI_INTERNAL_CONTEXT_KEY = process.env.AI_INTERNAL_CONTEXT_KEY;
-const GEMINI_MAX_OUTPUT_TOKENS = Math.max(64, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || "512") || 512);
-const GEMINI_MAX_TOOL_ITERATIONS = Math.max(0, Number(process.env.GEMINI_MAX_TOOL_ITERATIONS || "4") || 4);
-const GEMINI_HISTORY_LIMIT_PUBLIC = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PUBLIC || "8") || 8);
-const GEMINI_HISTORY_LIMIT_PRIVATE = Math.max(0, Number(process.env.GEMINI_HISTORY_LIMIT_PRIVATE || "12") || 12);
+const AI_HISTORY_LIMIT_PUBLIC = Math.max(
+  0,
+  Number(process.env.AI_HISTORY_LIMIT_PUBLIC || "8") || 8
+) || 8;
+const AI_HISTORY_LIMIT_PRIVATE = Math.max(
+  0,
+  Number(process.env.AI_HISTORY_LIMIT_PRIVATE || "12") || 12
+) || 12;
 
-// These are the actual implementations of the tools Gemini will call
+// These are the actual implementations used by the internal commerce chatbot.
 const tools: Record<string, (args: any) => Promise<any>> = {
   async search_stores({
     query,
@@ -1552,8 +1448,311 @@ const tools: Record<string, (args: any) => Promise<any>> = {
   }
 };
 
+function trimChatHistory(history: any[], historyLimit: number) {
+  if (!Array.isArray(history)) return [];
+  if (historyLimit > 0 && history.length > historyLimit) {
+    return history.slice(-historyLimit);
+  }
+  return history;
+}
+
+function buildRuleReplyHistory(
+  history: any[],
+  userText: string,
+  assistantText: string,
+  historyLimit: number,
+  extraParts: any[] = []
+) {
+  return trimChatHistory(
+    [
+      ...history,
+      { role: "user", parts: [{ text: String(userText || "") }] },
+      { role: "model", parts: [{ text: String(assistantText || "") }] },
+      ...extraParts
+    ],
+    historyLimit
+  );
+}
+
+function formatIdr(amount: number) {
+  return `Rp ${new Intl.NumberFormat("id-ID").format(Number(amount || 0))}`;
+}
+
+function isOrderStatusIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(status pesanan|cek pesanan|pesanan saya|order saya|order terakhir|last order|lacak pesanan|tracking order|cek order)\b/.test(
+    t
+  );
+}
+
+function isStoreHoursIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(jam buka|jam operasional|operasional|buka jam|tutup jam|buka sekarang|masih buka)\b/.test(t);
+}
+
+function isCategoryIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(kategori|category|kategori apa|kategori apa saja)\b/.test(t);
+}
+
+function isStoreSearchIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(toko|store|resto|restaurant|warung|merchant|outlet|cabang|pasar segar|terdekat|dekat|sekitar|nearby|near me|area)\b/.test(
+    t
+  );
+}
+
+function isShippingFaqIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(ongkir|kurir|pengiriman|delivery|dikirim|shipping)\b/.test(t);
+}
+
+function isPaymentFaqIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(bayar|payment|pembayaran|qris|transfer|gopay)\b/.test(t);
+}
+
+function isHelpFaqIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return /\b(bantuan|help|cara pesan|cara order|gimana pesan|bagaimana pesan|cara belanja)\b/.test(t);
+}
+
+function isProductSearchIntent(input: string) {
+  const t = normalizeLooseText(input);
+  return (
+    isFullMenuRequest(t) ||
+    /\b(menu|produk|barang|item|stok|stock|cari|ada|jual|punya|tersedia|apa aja|apa saja|rekomendasi|beli|belanja)\b/.test(t)
+  );
+}
+
+function cleanProductKeyword(input: string) {
+  const { keyword } = normalizeStoreSearchInput(String(input || ""), "");
+  return normalizeLooseText(keyword)
+    .replace(
+      /\b(menu|produk|barang|item|stok|stock|cari|ada|jual|punya|tersedia|apa aja|apa saja|rekomendasi|beli|belanja|dong|nih|yang|di|dengan|untuk|mau|saya|aku)\b/g,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function handleInternalCommerceChat({
+  message,
+  validatedHistory,
+  historyLimit,
+  isPublic,
+  context,
+  customerProfile,
+  scopedStore,
+  forcedScopedSlug
+}: any) {
+  const rawMessage = String(message || "").trim();
+  const loose = normalizeLooseText(rawMessage);
+  const channelUpper = String((context as any)?.channel || "").toUpperCase();
+  const isWebChannel = channelUpper === "WEB";
+  const lat = Number((context as any)?.location?.latitude ?? customerProfile?.lastLat);
+  const lng = Number((context as any)?.location?.longitude ?? customerProfile?.lastLng);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) > 0.0001 && Math.abs(lng) > 0.0001;
+
+  let activeStore: any = scopedStore || null;
+  const activeSlug = String(activeStore?.slug || forcedScopedSlug || context?.slug || "").trim();
+  if ((!activeStore || !activeStore?.id) && activeSlug) {
+    activeStore = await prisma.store.findFirst({
+      where: buildAssistantScopedStoreWhere({ slug: activeSlug }),
+      select: { id: true, slug: true, name: true, isOpen: true, operatingHours: true, timezone: true }
+    });
+  } else if (activeStore?.id && (activeStore?.isOpen === undefined || activeStore?.timezone === undefined)) {
+    activeStore = await prisma.store.findUnique({
+      where: { id: Number(activeStore.id) },
+      select: { id: true, slug: true, name: true, isOpen: true, operatingHours: true, timezone: true }
+    });
+  }
+
+  if (isPublic && context?.phoneNumber && isOrderStatusIntent(rawMessage)) {
+    const result = await tools.get_last_order_by_phone({
+      phoneNumber: String(context.phoneNumber),
+      callerPhone: String(context.phoneNumber),
+      isMerchant: false
+    });
+    const text = result?.success
+      ? result?.status === "PENDING" && result?.paymentUrl
+        ? "Ini order terakhir Kakak. Kalau belum dibayar, bisa lanjut lewat link pembayaran ya."
+        : "Ini detail order terakhir Kakak ya."
+      : "Aku belum menemukan order untuk nomor ini. Kalau nomor yang dipakai berbeda, kirim dari nomor pemesan ya.";
+    return {
+      text,
+      history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+      breakdown: result?.success ? result.breakdown : undefined,
+      paymentUrl: result?.success ? result.paymentUrl : undefined
+    };
+  }
+
+  if (activeStore?.slug && isStoreHoursIntent(rawMessage)) {
+    const openNow = await isStoreOpen(activeStore as any).catch(() => Boolean(activeStore?.isOpen));
+    const text = openNow
+      ? `Saat ini *${activeStore.name}* sedang buka. Kalau mau, aku bisa tampilkan kategori atau carikan produk juga.`
+      : `Saat ini *${activeStore.name}* sedang tutup. Kakak tetap bisa lihat menu atau cari produk dulu ya.`;
+    return {
+      text,
+      history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+      activeStoreId: activeStore.id,
+      activeStoreSlug: activeStore.slug
+    };
+  }
+
+  if (isHelpFaqIntent(rawMessage)) {
+    const text = activeStore?.slug
+      ? `Aku bisa bantu di *${activeStore.name}*: lihat kategori, cari produk, cek ongkir, metode pembayaran, dan cek pesanan terakhir. Coba ketik nama produk atau balas "menu lengkap".`
+      : "Aku bisa bantu cari toko terdekat, cari produk per toko, cek ongkir, metode pembayaran, dan cek pesanan terakhir. Supaya cepat, kirim *barang yang dicari + area* atau share lokasi ya.";
+    return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+  }
+
+  if (isPaymentFaqIntent(rawMessage) && !isOrderStatusIntent(rawMessage)) {
+    const text = "Pembayaran Gercep umumnya pakai *QRIS* dan metode digital yang aktif di toko. Setelah checkout, aku akan kasih link bayar kalau tersedia.";
+    return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+  }
+
+  if (isShippingFaqIntent(rawMessage) && !activeStore?.slug) {
+    const text =
+      "Untuk cek ongkir yang akurat, pilih toko dulu lalu kirim alamat lengkap atau share lokasi. Setelah itu aku bisa bantu tampilkan opsi kurir yang tersedia.";
+    return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+  }
+
+  if (activeStore?.slug && isCategoryIntent(rawMessage)) {
+    const result = await tools.get_store_categories({ slug: activeStore.slug });
+    const categories = Array.isArray(result?.categories) ? result.categories : [];
+    const text =
+      categories.length > 0
+        ? `Ini kategori di *${activeStore.name}*. Pilih salah satu ya.`
+        : `Maaf, kategori di *${activeStore.name}* belum tersedia.`;
+    return {
+      text,
+      history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+      categories,
+      activeStoreId: activeStore.id,
+      activeStoreSlug: activeStore.slug
+    };
+  }
+
+  if (activeStore?.slug && isProductSearchIntent(rawMessage)) {
+    const keyword = cleanProductKeyword(rawMessage);
+    if (!keyword && !isFullMenuRequest(rawMessage)) {
+      const text = `Aku bisa bantu cari produk di *${activeStore.name}*. Coba ketik nama barangnya, atau balas "menu lengkap".`;
+      return {
+        text,
+        history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+        activeStoreId: activeStore.id,
+        activeStoreSlug: activeStore.slug
+      };
+    }
+    const result = await tools.get_store_products({ slug: activeStore.slug, keyword: keyword || undefined });
+    const products = Array.isArray(result?.products) ? result.products : [];
+    const categories = Array.isArray(result?.categories) ? result.categories : [];
+    if (products.length > 0) {
+      const preview = products
+        .slice(0, 5)
+        .map((p: any, idx: number) => `${idx + 1}. ${p.name} - ${formatIdr(Number(p.price || 0))}`)
+        .join("\n");
+      const text = keyword
+        ? `Aku ketemu ${products.length} produk di *${activeStore.name}* yang cocok dengan "${keyword}":\n\n${preview}`
+        : `Ini beberapa produk dari *${activeStore.name}*:\n\n${preview}`;
+      return {
+        text,
+        history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+        products,
+        categories,
+        activeStoreId: activeStore.id,
+        activeStoreSlug: activeStore.slug
+      };
+    }
+    if (categories.length > 0 && !keyword) {
+      const text = `Aku tampilkan kategori di *${activeStore.name}* dulu ya.`;
+      return {
+        text,
+        history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+        categories,
+        activeStoreId: activeStore.id,
+        activeStoreSlug: activeStore.slug
+      };
+    }
+    const text = `Aku belum ketemu produk yang cocok di *${activeStore.name}*. Coba pakai kata kunci lain atau balas "menu lengkap".`;
+    return {
+      text,
+      history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+      activeStoreId: activeStore.id,
+      activeStoreSlug: activeStore.slug
+    };
+  }
+
+  if (isPublic) {
+    const shouldSearchStores = isStoreSearchIntent(rawMessage) || !activeStore?.slug;
+    if (shouldSearchStores) {
+      const result = await tools.search_stores({
+        query: rawMessage,
+        location_context: context?.location_context,
+        latitude: hasCoords ? lat : undefined,
+        longitude: hasCoords ? lng : undefined,
+        scopedSlug: forcedScopedSlug || undefined
+      });
+      const stores = Array.isArray(result?.stores) ? result.stores : [];
+      if (stores.length === 0) {
+        const text =
+          "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
+        return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+      }
+
+      if (stores.length === 1) {
+        const store = await prisma.store.findFirst({
+          where: buildAssistantStoreEligibilityWhere({ slug: String(stores[0].slug || "") }),
+          select: { id: true, slug: true, name: true }
+        });
+        const text = `Aku ketemu toko *${stores[0].name}*. Klik *Mulai Belanja* ya.`;
+        return {
+          text,
+          history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+          activeStoreId: store?.id,
+          activeStoreSlug: store?.slug || String(stores[0].slug || ""),
+          uiAction: store?.slug
+            ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: store.slug, storeId: store.id }
+            : undefined
+        };
+      }
+
+      const intro = hasCoords ? "Ini beberapa toko terdekat dari lokasi Kakak:" : "Ini beberapa toko yang cocok:";
+      const lines = stores
+        .slice(0, 6)
+        .map((s: any, idx: number) => {
+          const distanceText = Number.isFinite(Number(s.distance))
+            ? ` (~${Math.round(Number(s.distance) / 100) / 10} km)`
+            : "";
+          return `${idx + 1}. ${s.name}${distanceText}`;
+        })
+        .join("\n");
+      const text = `${intro}\n\n${lines}\n\nPilih salah satu toko ya.`;
+      return {
+        text,
+        history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+        uiAction: {
+          type: "CHOOSE_STORE",
+          label: "Pilih Toko",
+          options: stores.slice(0, 6).map((s: any) => ({ slug: String(s.slug), name: String(s.name) }))
+        }
+      };
+    }
+  }
+
+  const text = activeStore?.slug
+    ? `Aku bisa bantu di *${activeStore.name}*: cari produk, tampilkan kategori, cek jam buka, dan cek pesanan terakhir. Coba ketik nama produk atau balas "menu lengkap".`
+    : "Aku fokus bantu commerce Gercep: cari toko, cari produk, ongkir, pembayaran, dan status pesanan. Coba kirim *nama produk + area* atau nama toko ya.";
+  return {
+    text,
+    history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+    activeStoreId: activeStore?.id,
+    activeStoreSlug: activeStore?.slug
+  };
+}
+
 export async function POST(req: NextRequest) {
-  let chosenModelName = "";
   try {
     if (AI_ACTIVE_REQUESTS >= AI_MAX_CONCURRENCY) {
       return NextResponse.json({
@@ -1563,7 +1762,6 @@ export async function POST(req: NextRequest) {
       });
     }
     AI_ACTIVE_REQUESTS++;
-    const startedAt = Date.now();
     const internalContextHeader = req.headers.get("x-internal-context-key");
     const isTrustedInternalContext = Boolean(
       AI_INTERNAL_CONTEXT_KEY &&
@@ -1607,7 +1805,7 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-    // Ensure history is a valid array of the correct format for Gemini SDK
+    // Normalize history to our internal chat message format.
     let validatedHistory = Array.isArray(history) ? history.map((h: any) => {
       // Role must be 'user', 'model', or 'function'
       let role = h.role;
@@ -1628,7 +1826,7 @@ export async function POST(req: NextRequest) {
           : [{ text: String(h.text || h.parts || "") }]
       };
     }) : [];
-    const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+    const historyLimit = isPublic ? AI_HISTORY_LIMIT_PUBLIC : AI_HISTORY_LIMIT_PRIVATE;
     if (historyLimit > 0 && validatedHistory.length > historyLimit) {
       validatedHistory = validatedHistory.slice(-historyLimit);
     }
@@ -1641,10 +1839,9 @@ export async function POST(req: NextRequest) {
 
     if (isPublic) {
       const channel = context?.channel === "WHATSAPP" ? "WHATSAPP" : context?.channel === "WEB" ? "WEB" : "UNKNOWN";
-      const loose = normalizeLooseText(String(message || ""));
       const nearbyIntent =
         /\b(terdekat|dekat\s+(saya|sini)|sekitar(\s+saya)?|nearby|near\s+me|di\s+sekitar|area\s+saya|lokasi\s+saya)\b/i.test(
-          loose
+          normalizeLooseText(String(message || ""))
         );
       const { effectiveLocation } = normalizeStoreSearchInput(String(message || ""), context?.location_context);
       const loc = normalizeLooseText(String(effectiveLocation || ""));
@@ -1723,8 +1920,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get Gemini Key: Prefer custom store key if Sovereign, otherwise platform default
-    let geminiKey = null;
     let storeSlug = context?.slug || (Array.isArray(context) ? context[0]?.slug : null);
     let forcedScopedSlug: string | null = null;
     
@@ -1748,11 +1943,6 @@ export async function POST(req: NextRequest) {
     if (isPublic && scopedStore?.slug) {
       forcedScopedSlug = String(scopedStore.slug);
     }
-    if (["SOVEREIGN", "CORPORATE"].includes(scopedStore?.subscriptionPlan) && scopedStore?.customGeminiKey) {
-      geminiKey = scopedStore.customGeminiKey;
-      console.log(`[AI_CHAT] Using custom Gemini Key for store: ${storeSlug}`);
-    }
-
     const fullMenuState = getFullMenuStateFromHistory(validatedHistory);
     const channelUpper = String((context as any)?.channel || "").toUpperCase();
     const isWebChannel = channelUpper === "WEB";
@@ -1883,9 +2073,6 @@ export async function POST(req: NextRequest) {
         storeSlug = String(inferred.slug);
         scopedStore = inferred;
         forcedScopedSlug = String(inferred.slug);
-        if (["SOVEREIGN", "CORPORATE"].includes((inferred as any).subscriptionPlan) && (inferred as any).customGeminiKey) {
-          geminiKey = (inferred as any).customGeminiKey;
-        }
       }
     }
 
@@ -1927,7 +2114,7 @@ export async function POST(req: NextRequest) {
           { role: "user", parts: [{ text: String(message || "") }] },
           { role: "model", parts: [{ text }] }
         ];
-        const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+        const historyLimit = isPublic ? AI_HISTORY_LIMIT_PUBLIC : AI_HISTORY_LIMIT_PRIVATE;
         return NextResponse.json({
           text,
           history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
@@ -1961,7 +2148,7 @@ export async function POST(req: NextRequest) {
           { role: "model", parts: [{ text }] },
           buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: totalCount, totalCount })
         ];
-        const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+        const historyLimit = isPublic ? AI_HISTORY_LIMIT_PUBLIC : AI_HISTORY_LIMIT_PRIVATE;
         return NextResponse.json({
           text,
           history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
@@ -1983,7 +2170,7 @@ export async function POST(req: NextRequest) {
         { role: "model", parts: [{ text }] },
         buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: offset + products.length, totalCount })
       ];
-      const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+      const historyLimit = isPublic ? AI_HISTORY_LIMIT_PUBLIC : AI_HISTORY_LIMIT_PRIVATE;
       return NextResponse.json({
         text,
         history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
@@ -2060,760 +2247,30 @@ export async function POST(req: NextRequest) {
         { role: "model", parts: [{ text }] },
         buildFullMenuStateHistoryPart({ storeId: scopedStore.id, offset: products.length, totalCount })
       ];
-      const historyLimit = isPublic ? GEMINI_HISTORY_LIMIT_PUBLIC : GEMINI_HISTORY_LIMIT_PRIVATE;
+      const historyLimit = isPublic ? AI_HISTORY_LIMIT_PUBLIC : AI_HISTORY_LIMIT_PRIVATE;
       return NextResponse.json({
         text,
         history: historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory
       });
     }
 
-    if (!geminiKey) {
-      await ensurePlatformSettingsSchema().catch(() => null);
-      const settings = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null) as any;
-      geminiKey = settings?.geminiApiKey;
-    }
-
-    if (!geminiKey) {
-      return NextResponse.json({ error: "Gemini API Key not configured." }, { status: 400 });
-    }
-
-    const genAI = new GoogleGenerativeAI(geminiKey);
-    const modelName = String(process.env.GEMINI_MODEL || "").trim();
-    chosenModelName = modelName;
-    if (!modelName) {
-      return NextResponse.json({
-        text: "Maaf, AI belum aktif karena GEMINI_MODEL belum diset. Tolong set nama model Gemini yang mau dipakai.",
-        history: validatedHistory
-      });
-    }
-    const model = genAI.getGenerativeModel({ 
-      model: modelName,
-    }, { apiVersion: "v1beta" });
-
-    // Determine if the user is a Merchant for the system instruction
-    let userContextInfo = "";
-    let isMerchantUser = false;
-    let corporateId: number | null = null;
-    let currentUserId: number | null = null;
-    let currentUserRole: string | null = null;
-    const allowedStoreSlugs = new Set<string>();
-    const allowedStoreIds = new Set<number>();
-
-    if (session && (session as any).user) {
-      const dbUser = await prisma.user.findUnique({
-        where: { email: (session as any).user.email! },
-        include: {
-          stores: true,
-          workedAt: { select: { id: true, slug: true } }
-        }
-      }) as any;
-      
-      if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER")) {
-        isMerchantUser = true;
-        corporateId = dbUser.id;
-        currentUserId = dbUser.id;
-        currentUserRole = dbUser.role;
-        const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
-        const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
-        userContextInfo = ` The user is an authenticated ADMIN/MERCHANT (ID: ${dbUser.id}). They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
-        for (const s of dbUser.stores || []) {
-          if (s?.slug) allowedStoreSlugs.add(String(s.slug));
-          if (s?.id) allowedStoreIds.add(Number(s.id));
-        }
-        if (dbUser.workedAt?.slug) allowedStoreSlugs.add(String(dbUser.workedAt.slug));
-        if (dbUser.workedAt?.id) allowedStoreIds.add(Number(dbUser.workedAt.id));
-        
-        if (userPlan === "CORPORATE") {
-           userContextInfo += " They are a CORPORATE user with multi-outlet access.";
-        }
-      } else if (dbUser && dbUser.role === "SUPER_ADMIN") {
-        isMerchantUser = true; // Super admin can do everything
-        currentUserRole = "SUPER_ADMIN";
-        userContextInfo = " The user is a SUPER_ADMIN with full platform access.";
-      }
-    } else if (isTrustedInternalContext && context?.phoneNumber) {
-      const cleanPhone = context.phoneNumber.replace(/\D/g, "");
-      const dbUser = await prisma.user.findFirst({
-        where: { phoneNumber: { contains: cleanPhone } },
-        include: {
-          stores: true,
-          workedAt: { select: { id: true, slug: true } }
-        }
-      }) as any;
-      
-      if (dbUser && (dbUser.role === "MERCHANT" || dbUser.role === "MANAGER" || dbUser.role === "SUPER_ADMIN")) {
-        isMerchantUser = true;
-        corporateId = dbUser.id;
-        currentUserId = dbUser.id;
-        currentUserRole = dbUser.role;
-        const storesList = dbUser.stores.map((s: any) => `${s.name} (slug: ${s.slug})`).join(", ");
-        const userPlan = dbUser.stores?.[0]?.subscriptionPlan || "FREE";
-        userContextInfo = ` The user is a registered ${dbUser.role} (ID: ${dbUser.id}) chatting via WhatsApp. They manage: ${storesList}. They can use tools like 'get_store_stats', 'get_corporate_stats', 'toggle_store_active', 'toggle_store_open', and 'update_product_price'.`;
-        for (const s of dbUser.stores || []) {
-          if (s?.slug) allowedStoreSlugs.add(String(s.slug));
-          if (s?.id) allowedStoreIds.add(Number(s.id));
-        }
-        if (dbUser.workedAt?.slug) allowedStoreSlugs.add(String(dbUser.workedAt.slug));
-        if (dbUser.workedAt?.id) allowedStoreIds.add(Number(dbUser.workedAt.id));
-        
-        if (userPlan === "CORPORATE") {
-           userContextInfo += " They are a CORPORATE user with multi-outlet access.";
-        }
-      } else {
-        const storeByWhatsapp = await prisma.store.findFirst({
-          where: { whatsapp: { contains: cleanPhone } },
-          select: { id: true, slug: true, name: true, subscriptionPlan: true }
-        });
-        if (storeByWhatsapp?.id && storeByWhatsapp?.slug) {
-          isMerchantUser = true;
-          currentUserRole = "MERCHANT";
-          allowedStoreSlugs.add(String(storeByWhatsapp.slug));
-          allowedStoreIds.add(Number(storeByWhatsapp.id));
-          userContextInfo = ` The user is chatting from a store WhatsApp number. Treat them as a MERCHANT for store '${storeByWhatsapp.name}' (slug: ${storeByWhatsapp.slug}).`;
-        }
-      }
-    }
-    if (isPublic && forcedScopedSlug) {
-      allowedStoreSlugs.add(forcedScopedSlug);
-    }
-
-    // Inject store context if provided
-    let storeContextInfo = "";
-    if (context?.storeId) {
-      const store = await prisma.store.findUnique({
-        where: { id: Number(context.storeId) },
-        select: { name: true, slug: true, tables: true }
-      });
-      if (store) {
-        const hasTables = store.tables && store.tables.length > 0;
-        storeContextInfo = ` You are currently assisting at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
-      }
-    } else if (forcedScopedSlug) {
-      const store = await prisma.store.findFirst({
-        where: buildAssistantStoreEligibilityWhere({ slug: forcedScopedSlug }),
-        select: { name: true, slug: true, tables: true }
-      });
-      if (store) {
-        const hasTables = store.tables && store.tables.length > 0;
-        storeContextInfo = ` You are currently assisting at the store '${store.name}' (slug: ${store.slug}).${hasTables ? " This restaurant has tables." : ""}`;
-      }
-    }
-
-    const tableInfo = context?.tableNumber ? ` The customer is sitting at Table ${context.tableNumber}.` : "";
-    const locationInfo = context?.location 
-      ? ` The user's current location is latitude: ${context.location.latitude}, longitude: ${context.location.longitude}.`
-      : "";
-
-    const chat = model.startChat({
-      history: validatedHistory,
-      systemInstruction: {
-        parts: [{ text: `You are the Gercep Platform Assistant. Gercep is a platform used by many different stores that have joined Gercep (restaurants, cafes, groceries, fresh markets, and other store types). Your goal is to be a clever, helpful, and non-restrictive shopping companion.
-
-DOMAIN FOCUS:
-- Be general and store-agnostic: do not assume the user wants a "fresh market" unless they explicitly ask for it.
-- Always help the user find the right store based on either (a) store name, (b) what they want to buy, (c) store type (e.g. restaurant/cafe/grocery), and (d) location proximity.
-- If the user asks "how to shop on Gercep" (e.g. "cara belanja di gercep"), explain that the flow starts here to FIND the right store, then continues on WhatsApp for ORDERING:
-  1) Tell me what you want to buy / preferred store type / your area
-  2) I will identify the best store(s)
-  3) Tap "Mulai Belanja" to continue on WhatsApp (menu, cart, address, shipping, and payment happen there)
-
-CHANNEL HANDOFF (IMPORTANT):
-- If channel is WEB (embedded chat), your job is to help users discover the right store and then move them to WhatsApp to complete the order.
-- On WEB channel: do NOT guide users through shopping steps (menu browsing, cart building, quantities). Instead, once a store is determined, ask them to tap "Mulai Belanja" to continue shopping on WhatsApp.
-- Merchant-only utilities:
-  - SHIPPING ONLY: (merchant/admin only) you may call 'get_shipping_rates' if the user shares location and provides an address, then show the options.
-  - PAYMENT ONLY: (merchant/admin only) only for invoices/tagihan. If the user wants to pay an invoice, guide them to generate/receive the invoice payment link and show 'paymentUrl' when available.
-  - If the user is not a merchant/admin, do not offer these utilities; guide them to use "Mulai Belanja" for ordering on WhatsApp.
-
-MERCHANT SHIPPING ONLY MODE:
-- If the user message includes "[MERCHANT_SHIPPING_ONLY]" (or context.mode is MERCHANT_SHIPPING_ONLY), do NOT talk about shopping/categories/products.
-- Ask for: destination address, destination coordinate (ask them to share the destination pin), and estimated weight in grams/kg.
-- Once you have address + coordinate + weight, call 'get_shipping_rates' immediately and return the top options.
-
-CUSTOMER MEMORY & PROFILE:
-- You have access to the customer's profile: ${JSON.stringify(customerProfile)}.
-- If the user provides their name, address, or preferences (e.g., "I prefer organic vegetables"), remember them and use them in future responses.
-- If the user has a "lastLat" and "lastLng" in their profile, use them for 'search_stores' if they ask for something "nearby" and haven't shared a new location.
-- If you identify new information (like a name or preferred address), acknowledge it: "Baik Kak [Nama], saya catat alamatnya ya."
-
-RESPONSE STYLE:
-1. Be polite, friendly, and human-like. Use "Kak" to refer to the customer.
-2. Use *bold* (single asterisk) for emphasis (WhatsApp style).
-3. Default format: 2-3 short bullets + 1 clear question.
-4. If the user shares a location ([LOCATION_SHARED] marker), acknowledge it and proceed to the next step (calculating shipping or searching nearby).
-
-FLOW & LOGIC:
-1. SHOPPING CART: Do not lose track of items the user has picked (check history). If they provide an address while picking items, it's for DELIVERY of those items.
-2. STICKY STORE: If you are already in a store context ('${context?.storeName || 'the current store'}'), STAY focused on this store. Do not suggest other stores or call 'search_stores' unless the user explicitly asks to "cari toko lain" or "pindah toko".
-2b. STORE TYPE PRIORITY: If the user mentions a store type (e.g. "resto", "cafe", "grocery", "pasar", "bakery"), pass it as 'store_type' to 'search_stores' to prioritize relevant stores.
-3. LARGE MENUS:
-   - On WHATSAPP channel: you MUST NEVER list products or categories in your text response as bullets. Instead, you MUST call 'get_store_products' (for products) or 'get_store_categories' (for categories). These tools automatically generate the required interactive buttons.
-   - On WEB channel: do not call menu tools for browsing. Use the WhatsApp shopping handoff ("Mulai Belanja") once the store is chosen.
-4. CATEGORY SELECTION: When a user selects or asks about a category (e.g., "Bahan Pokok" or "Bumbu Dapur"), you MUST call 'get_store_products' with that category name as the keyword. This ensures the "Pilih Produk" button appears. DO NOT summarize the category in text.
-5. NO LISTING IN TEXT: It is strictly forbidden to list products, categories, or options manually in your text response if a tool can provide them. Your response should be a brief confirmation (e.g., "Tentu Kak, ini beberapa pilihan Bumbu Dapur untuk Kakak:") followed by the tool call.
-6. NO PRODUCTS FOUND: If you call 'get_store_products' and it returns 0 products, do not just give up. Try searching for a broader keyword or show the category list instead.
-6. LIST MESSAGES:
-   - Use 'get_store_categories' to show a tappable category list.
-   - Use 'get_store_products' to show a tappable product list.
-   - When the user selects a product from the list, ALWAYS ask for the quantity (e.g., "Mau berapa banyak Kak?") and any specific variations if available.
-6. SHIPPING: Always call 'get_shipping_rates' once you have a physical address and coordinates (latitude/longitude). If the user has a 'preferredAddress' in their profile and hasn't provided a new one, you can ask: "Kak, mau dikirim ke [Preferred Address] seperti biasa?"
-7. PAYMENT: Ask for payment method ('qris', 'gopay', or 'bank_transfer') only AFTER items and shipping are confirmed.
-8. ORDER RECAP: For long lists (5+ items), use 'get_order_recap' to show a clear summary instead of listing them manually.
-
-GERCEP INFO:
-- Owner: PT Digitalisasi Kreasi Indonesia
-- Founder: Sandi Suhendro
-- Website: https://gercep.click
-
-RE-ORDERING:
-- If the user says "order lagi" or "sama kayak kemarin", use 'get_last_order_by_phone' to see what they bought before.
-
-${userContextInfo}${storeContextInfo}${tableInfo}${locationInfo} ${context?.phoneNumber ? `The current user's phone number is ${context.phoneNumber}.` : ""} ${context?.channel === "WHATSAPP" ? "The user is chatting via WhatsApp." : ""}` }]
-      } as any,
-      tools: [
-        {
-          functionDeclarations: [
-            {
-              name: "search_stores",
-              description: "Find restaurants or stores by name/product/category and nearby area. For nearby intent, keep area in location_context (e.g. Ciputat) and keep query concise.",
-              parameters: {
-                type: "object",
-                properties: {
-                  query: { type: "string", description: "Search keyword (store name, category, or product name)." },
-                  store_type: { type: "string", description: "Optional store type preference (e.g. restaurant, cafe, grocery). Use when the user specifies a type." },
-                  location_context: { type: "string", description: "Area, city, or postal code to filter results." },
-                  latitude: { type: "number", description: "The customer's latitude for distance sorting." },
-                  longitude: { type: "number", description: "The customer's longitude for distance sorting." }
-                },
-                required: ["query"]
-              }
-            },
-            {
-              name: "get_store_stats",
-              description: "Retrieve sales and balance for a store.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string", description: "Store slug." }
-                },
-                required: ["slug"]
-              }
-            },
-            {
-              name: "get_store_products",
-              description: "Get menu items for a store. You can optionally filter by keyword for large menus.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string", description: "Store slug." },
-                  keyword: { type: "string", description: "Optional search keyword for products (name, category, or description)." }
-                },
-                required: ["slug"]
-              }
-            },
-            {
-              name: "get_store_categories",
-              description: "Get the list of product categories available in a store.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string", description: "Store slug." }
-                },
-                required: ["slug"]
-              }
-            },
-            {
-              name: "get_corporate_stats",
-              description: "Retrieve multi-outlet stats for a corporate account.",
-              parameters: {
-                type: "object",
-                properties: {
-                  corporateId: { type: "number", description: "The ID of the corporate user/owner." }
-                },
-                required: ["corporateId"]
-              }
-            },
-            {
-              name: "create_topup_payment_link",
-              description: "Generate a Midtrans payment link for WhatsApp credit top-up. Only for admins/merchants.",
-              parameters: {
-                type: "object",
-                properties: {
-                  storeId: { type: "integer", description: "The numeric ID of the store to top up." },
-                  amount: { type: "number", description: "The top-up amount in Rupiah (min 10000)." }
-                },
-                required: ["storeId", "amount"]
-              }
-            },
-            {
-              name: "toggle_store_active",
-              description: "Enable or disable a store outlet. Only for admins.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  active: { type: "boolean" }
-                },
-                required: ["slug", "active"]
-              }
-            },
-            {
-              name: "toggle_store_open",
-              description: "Manually open or close a store (override schedule). Only for admins.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  open: { type: "boolean" }
-                },
-                required: ["slug", "open"]
-              }
-            },
-            {
-              name: "get_shipping_rates",
-              description: "Get delivery options and costs for an address. Requires a full address or coordinates.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  address: { type: "string" },
-                  latitude: { type: "number" },
-                  longitude: { type: "number" },
-                  weightGrams: { type: "integer" }
-                },
-                required: ["slug", "address", "latitude", "longitude"]
-              }
-            },
-            {
-              name: "update_product_price",
-              description: "Update the price of an existing product or variation. Only for merchants.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  productName: { type: "string" },
-                  newPrice: { type: "number" },
-                  variationName: { type: "string" }
-                },
-                required: ["slug", "productName", "newPrice"]
-              }
-            },
-            {
-              name: "add_new_product",
-              description: "Add a new product to the store menu. Only for merchants.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  name: { type: "string" },
-                  price: { type: "number" },
-                  category: { type: "string" }
-                },
-                required: ["slug", "name", "price"]
-              }
-            },
-            {
-              name: "create_customer_order",
-              description: "Create an order for a user.",
-              parameters: {
-                type: "object",
-                properties: {
-                  slug: { type: "string" },
-                  customer_phone: { type: "string" },
-                  items: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        productId: { type: "integer" },
-                        quantity: { type: "integer" },
-                        variationName: { type: "string" }
-                      }
-                    }
-                  },
-                  order_type: { type: "string", enum: ["DINE_IN", "TAKEAWAY", "DELIVERY"] },
-                  address: { type: "string" },
-                  latitude: { type: "number" },
-                  longitude: { type: "number" },
-                  shippingProvider: { type: "string" },
-                  shippingService: { type: "string" },
-                  shippingFee: { type: "number" },
-                  payment_method: { type: "string", enum: ["qris", "gopay", "bank_transfer"] },
-                  table_number: { type: "string", description: "Nomor meja jika makan di tempat (DINE_IN)." },
-                  isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
-                },
-                required: ["slug", "customer_phone", "items", "order_type", "payment_method"]
-              }
-            },
-            {
-              name: "create_merchant_invoice",
-              description: "Create a manual invoice for a customer. Only for merchants.",
-              parameters: {
-                type: "object",
-                properties: {
-                  amount: { type: "number" },
-                  customer_phone: { type: "string" },
-                  merchant_phone: { type: "string" },
-                  payment_method: { type: "string", enum: ["qris", "gopay", "bank_transfer"] }
-                },
-                required: ["amount", "customer_phone", "merchant_phone"]
-              }
-            },
-            {
-              name: "send_order_to_whatsapp",
-              description: "Send order details to a WhatsApp number. If sending to the merchant themselves, set isMerchant=true.",
-              parameters: {
-                type: "object",
-                properties: {
-                  orderId: { type: "integer" },
-                  phoneNumber: { type: "string", description: "The WhatsApp number to send the order to." },
-                  isMerchant: { type: "boolean", description: "Set to true if sending to the store owner/merchant." }
-                },
-                required: ["orderId", "phoneNumber"]
-              }
-            },
-            {
-              name: "get_last_order_by_phone",
-              description: "Get the latest order details for a specific customer phone number.",
-              parameters: {
-                type: "object",
-                properties: {
-                  phoneNumber: { type: "string", description: "The customer's WhatsApp number." },
-                  isMerchant: { type: "boolean", description: "Set to true if the requester is the merchant." }
-                },
-                required: ["phoneNumber"]
-              }
-            },
-            {
-              name: "update_customer_profile",
-              description: "Update the customer's persistent profile with new information like name, preferred address, or preferences.",
-              parameters: {
-                type: "object",
-                properties: {
-                  name: { type: "string", description: "The customer's name." },
-                  preferredAddress: { type: "string", description: "The customer's primary delivery address." },
-                  preferences: { type: "string", description: "Any other notes or preferences (e.g. 'likes organic', 'no plastic')." }
-                }
-              }
-            },
-            {
-              name: "get_order_recap",
-              description: "Generate a formatted summary of items currently in the user's shopping history.",
-              parameters: {
-                type: "object",
-                properties: {
-                  items: { 
-                    type: "array", 
-                    description: "List of items to recap, including name, price, and quantity.",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        price: { type: "number" },
-                        quantity: { type: "number" }
-                      }
-                    }
-                  }
-                },
-                required: ["items"]
-              }
-            }
-          ]
-        }
-      ] as any,
-      generationConfig: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS }
+    const internalChatResponse = await handleInternalCommerceChat({
+      message,
+      validatedHistory,
+      historyLimit,
+      isPublic,
+      context,
+      customerProfile,
+      scopedStore,
+      forcedScopedSlug
     });
-
-    // 1. Initial Request to Gemini
-    console.log(`[AI_CHAT] Initial message: "${message}"`);
-    let result = await sendChatWithRetry(chat, String(message));
-    let response = result.response;
-    let calls = response.functionCalls() || [];
-    console.log(`[AI_CHAT] Gemini response calls count: ${calls.length}`);
-
-    // 2. Handle Function Calls (Loop until no more calls)
-    const MAX_ITERATIONS = GEMINI_MAX_TOOL_ITERATIONS;
-    let iterations = 0;
-
-    let finalBreakdown = undefined;
-    let finalPaymentUrl = undefined;
-    let finalProductImage = undefined;
-    let lastShippingOptions: any[] | null = null;
-    let lastCategories: any[] | null = null;
-    let lastProducts: any[] | null = null;
-    let lastStores: any[] | null = null;
-    let orderRecap: string | null = null;
-    let activeStoreId = scopedStore?.id || undefined;
-    let activeStoreSlug = scopedStore?.slug || undefined;
-    let updatedCustomerProfile = { ...customerProfile };
-    const storeIdBySlugCache = new Map<string, number>();
-
-    const resolveStoreIdBySlug = async (slug: string) => {
-      const key = String(slug || "").trim();
-      if (!key) return undefined;
-      if (storeIdBySlugCache.has(key)) return storeIdBySlugCache.get(key);
-      const s = await prisma.store.findFirst({
-        where: buildAssistantStoreEligibilityWhere({ slug: key }),
-        select: { id: true }
-      });
-      const id = s?.id ? Number(s.id) : undefined;
-      if (id) storeIdBySlugCache.set(key, id);
-      return id;
-    };
-
-    while (calls && calls.length > 0 && iterations < MAX_ITERATIONS) {
-      console.log(`[AI_CHAT] Iteration ${iterations + 1}: Received ${calls.length} tool calls`);
-      const toolResponses = [];
-      for (const call of calls) {
-        const toolFn = tools[call.name];
-        if (toolFn) {
-          // Auto-inject isMerchant flag or corporateId
-          const args = { ...call.args } as any;
-          if (isMerchantUser) {
-            if (["send_order_to_whatsapp", "get_last_order_by_phone"].includes(call.name)) {
-              args.actorIsMerchant = true;
-            }
-            if (call.name === "create_customer_order") {
-              args.isMerchant = true;
-            }
-            if (call.name === "get_corporate_stats" && !args.corporateId && corporateId) {
-              args.corporateId = corporateId;
-            }
-            // For top-up, inject userId if NOT super-admin (super-admin skips ownership check)
-            if (call.name === "create_topup_payment_link" && currentUserId) {
-               if (currentUserRole !== "SUPER_ADMIN") {
-                 args.userId = currentUserId;
-               }
-            }
-          }
-          if (context?.phoneNumber) {
-            args.callerPhone = context.phoneNumber;
-          }
-          if (forcedScopedSlug) {
-            const scopedSlugTools = new Set([
-              "get_store_stats",
-              "get_store_products",
-              "get_shipping_rates",
-              "create_customer_order",
-              "update_product_price",
-              "add_new_product",
-              "toggle_store_active",
-              "toggle_store_open",
-              "create_merchant_invoice"
-            ]);
-            if (scopedSlugTools.has(call.name)) {
-              args.slug = forcedScopedSlug;
-            }
-            if (call.name === "search_stores") {
-              args.scopedSlug = forcedScopedSlug;
-            }
-          }
-
-          const sensitiveTools = new Set([
-            "update_product_price",
-            "add_new_product",
-            "toggle_store_active",
-            "toggle_store_open",
-            "create_topup_payment_link",
-            "get_store_stats",
-            "get_store_products",
-            "get_shipping_rates",
-            "create_merchant_invoice"
-          ]);
-          if (sensitiveTools.has(call.name) && !isMerchantUser) {
-            toolResponses.push({
-              functionResponse: {
-                name: call.name,
-                response: { error: "Unauthorized tool access" }
-              }
-            });
-            continue;
-          }
-          if (currentUserRole !== "SUPER_ADMIN") {
-            if (args.slug && allowedStoreSlugs.size > 0 && !allowedStoreSlugs.has(String(args.slug))) {
-              toolResponses.push({
-                functionResponse: {
-                  name: call.name,
-                  response: { error: "Unauthorized store access" }
-                }
-              });
-              continue;
-            }
-            if (args.storeId && allowedStoreIds.size > 0 && !allowedStoreIds.has(Number(args.storeId))) {
-              toolResponses.push({
-                functionResponse: {
-                  name: call.name,
-                  response: { error: "Unauthorized store access" }
-                }
-              });
-              continue;
-            }
-          }
-
-          console.log(`[AI_CHAT] Calling tool: ${call.name}`, args);
-          const data = await toolFn(args) || { success: false, error: "Tool returned no data" };
-          toolResponses.push({
-            functionResponse: {
-              name: call.name,
-              response: data
-            }
-          });
-          
-          // Capture structured data for the response
-          if (call.name === "search_stores" && Array.isArray((data as any).stores)) {
-            lastStores = (data as any).stores;
-            if ((data as any).stores.length === 1) {
-              activeStoreId = (data as any).stores[0].id;
-              activeStoreSlug = (data as any).stores[0].slug;
-            }
-          }
-          if (args.slug) {
-            activeStoreSlug = String(args.slug);
-            const resolvedId = await resolveStoreIdBySlug(String(args.slug));
-            if (resolvedId) activeStoreId = resolvedId;
-          }
-          if (args.storeId) activeStoreId = Number(args.storeId);
-
-          if (call.name === "get_shipping_rates" && Array.isArray((data as any)?.shippingOptions)) {
-            lastShippingOptions = (data as any).shippingOptions;
-          }
-          if (call.name === "get_store_products" && Array.isArray((data as any)?.products)) {
-            lastProducts = (data as any).products;
-          }
-          if (call.name === "get_store_categories" && Array.isArray((data as any)?.categories)) {
-            lastCategories = (data as any).categories;
-          }
-          if (call.name === "get_order_recap" && (data as any)?.recap) {
-            orderRecap = (data as any).recap;
-          }
-          if (call.name === "create_customer_order" && data.success) {
-            finalBreakdown = data.breakdown;
-            finalPaymentUrl = data.paymentUrl;
-          }
-          if (call.name === "get_last_order_by_phone" && data.success) {
-            finalBreakdown = data.breakdown;
-            finalPaymentUrl = data.paymentUrl;
-          }
-          if (call.name === "create_merchant_invoice" && data.success) {
-            finalBreakdown = data.breakdown;
-            finalPaymentUrl = data.paymentUrl;
-          }
-          if (call.name === "create_topup_payment_link" && data.success) {
-            finalPaymentUrl = data.paymentUrl;
-          }
-          if (call.name === "update_customer_profile" && data.success) {
-            Object.assign(updatedCustomerProfile, call.args);
-          }
-        }
-      }
-
-      // Send the tool results back to Gemini
-      if (toolResponses.length > 0) {
-        // Explicitly format as Parts array for sendMessage
-        const parts = toolResponses.map(tr => ({
-          functionResponse: {
-            name: tr.functionResponse.name,
-            response: typeof tr.functionResponse.response === "object" ? tr.functionResponse.response : { content: tr.functionResponse.response }
-          }
-        }));
-        
-        result = await sendChatWithRetry(chat, parts as any);
-        response = result.response;
-        calls = response.functionCalls() || [];
-      } else {
-        calls = [];
-      }
-      iterations++;
-    }
-
-    let responseText = String(response.text() || "");
-    responseText = responseText.replace(/\n{3,}/g, "\n\n").trim();
-    if (!responseText) {
-      responseText = "Maaf, aku belum bisa menjawab itu. Coba tanya dengan kata lain ya.";
-    }
-    const imageMatch = responseText.match(/\[PRODUCT_IMAGE:\s*(https?:\/\/[^\]]+)\]/i);
-    if (imageMatch) {
-      finalProductImage = imageMatch[1];
-    }
-
-    const nextHistory = await chat.getHistory();
-    let trimmedNextHistory = historyLimit > 0 && nextHistory.length > historyLimit
-      ? nextHistory.slice(-historyLimit)
-      : nextHistory;
-    while (Array.isArray(trimmedNextHistory) && trimmedNextHistory.length > 0 && trimmedNextHistory[0]?.role !== "user") {
-      trimmedNextHistory = trimmedNextHistory.slice(1);
-    }
-    await logTraffic(
-      context?.storeId ? Number(context.storeId) : undefined,
-      context?.channel === "WHATSAPP" ? "WHATSAPP" : "WEB",
-      {
-        event: "AI_CHAT",
-        channel: context?.channel || (isPublic ? "PUBLIC" : "PRIVATE"),
-        isPublic: Boolean(isPublic),
-        storeSlug: context?.slug || null,
-        historyCount: validatedHistory.length,
-        messageChars: String(message || "").length,
-        responseChars: String(responseText || "").length,
-        functionCalls: Array.isArray(calls) ? calls.length : 0,
-        iterationsUsed: iterations,
-        durationMs: Date.now() - startedAt
-      }
-    );
-    if (isWebChannel) {
-      responseText = stripPhoneNumbersForWeb(responseText);
-    }
-    const quickReplies = extractQuickRepliesFromText(responseText);
-    const storePickOptions =
-      isWebChannel && !activeStoreSlug && Array.isArray(lastStores) && lastStores.length > 0
-        ? lastStores
-            .filter((s: any) => s && s.slug && s.name)
-            .slice(0, 6)
-            .map((s: any) => ({ slug: String(s.slug), name: String(s.name) }))
-        : [];
-    const uiAction =
-      isWebChannel && activeStoreSlug
-        ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: String(activeStoreSlug), storeId: activeStoreId }
-        : isWebChannel && storePickOptions.length > 0
-          ? { type: "CHOOSE_STORE", label: "Pilih Toko", options: storePickOptions }
-          : undefined;
-    const payload = { 
-      text: responseText.replace(/\[PRODUCT_IMAGE:\s*https?:\/\/[^\]]+\]/gi, "").trim(),
-      history: trimmedNextHistory,
-      breakdown: finalBreakdown,
-      paymentUrl: finalPaymentUrl,
-      productImage: finalProductImage,
-      quickReplies,
-      shippingOptions: isWebChannel ? [] : lastShippingOptions,
-      categories: isWebChannel ? [] : lastCategories,
-      products: isWebChannel ? [] : lastProducts,
-      orderRecap,
-      activeStoreId,
-      activeStoreSlug,
-      uiAction,
-      customerProfile: updatedCustomerProfile
-    };
-    return NextResponse.json(payload);
+    return NextResponse.json(internalChatResponse);
 
   } catch (error: any) {
     const raw = String(error?.message || "");
-    const status = Number(error?.status || error?.response?.status || error?.statusCode || 0);
-    if (status === 404) {
-      return NextResponse.json({
-        text: `Maaf, model "${chosenModelName || "unknown"}" tidak ditemukan (404). Tolong cek nilai GEMINI_MODEL dan pakai nama model yang valid untuk API v1beta.`,
-        error: raw || ""
-      });
-    }
-    if ([429, 503].includes(status) || shouldRetryGeminiError(error)) {
-      console.warn("[GEMINI_CHAT_BUSY]", { status, message: raw.slice(0, 200) });
-      return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
-    }
-    if (status === 403) {
-      console.warn("[GEMINI_CHAT_UNAUTHORIZED]", { status, message: raw.slice(0, 200) });
-      return NextResponse.json({ text: "Maaf, AI belum aktif karena konfigurasi API Key belum benar. Mohon set Gemini API Key di Platform Settings.", error: raw || "" });
-    }
-    console.error("[GEMINI_CHAT_ERROR]", error);
+    console.error("[INTERNAL_CHAT_ERROR]", error);
     if (error instanceof TypeError && error.message.includes("iterable")) {
-      console.error("[GEMINI_CHAT_ERROR_DETAIL] Likely invalid history or message parts format.");
+      console.error("[INTERNAL_CHAT_ERROR_DETAIL] Likely invalid history or message parts format.");
     }
     const shouldReset =
       raw.includes("First content should be with role 'user'") ||

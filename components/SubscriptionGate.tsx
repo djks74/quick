@@ -73,7 +73,7 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
       features: [
         "Everything in Enterprise",
         "Custom WA Number",
-        "Own Gemini API Key",
+        "Own WhatsApp Configuration",
         "Product Sync API",
         "Custom Midtrans Keys"
       ]

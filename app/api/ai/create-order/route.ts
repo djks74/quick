@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         paymentMethod: payment_method || null,
         shippingAddress: address || null,
         shippingCost,
-        notes: JSON.stringify({ source: "AI_GEMINI_USER_ORDER" }),
+        notes: JSON.stringify({ source: "AI_CHATBOT_USER_ORDER" }),
         items: {
           create: orderItemsData
         }
