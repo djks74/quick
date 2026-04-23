@@ -2213,6 +2213,40 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+
+      const pickByName = String(message || "").trim().match(/^pilih_toko\s*[:=]\s*(.+)\s*$/i);
+      if (pickByName?.[1]) {
+        const wantedName = String(pickByName[1]).trim();
+        if (wantedName) {
+          const exact = await prisma.store.findFirst({
+            where: buildAssistantStoreEligibilityWhere({ name: { equals: wantedName, mode: "insensitive" } as any } as any),
+            select: { id: true, slug: true, name: true }
+          });
+          const store = exact
+            ? exact
+            : await prisma.store.findFirst({
+                where: buildAssistantStoreEligibilityWhere({ name: { contains: wantedName, mode: "insensitive" } as any } as any),
+                select: { id: true, slug: true, name: true },
+                orderBy: { updatedAt: "desc" }
+              });
+          if (store?.slug) {
+            const text = `Siap Kak. Kakak pilih *${store.name}*. Klik tombol *Mulai Belanja* ya.`;
+            const nextHistory = [
+              ...validatedHistory,
+              { role: "user", parts: [{ text: String(message || "") }] },
+              { role: "model", parts: [{ text }] }
+            ];
+            const trimmed = historyLimit > 0 && nextHistory.length > historyLimit ? nextHistory.slice(-historyLimit) : nextHistory;
+            return NextResponse.json({
+              text,
+              history: trimmed,
+              activeStoreId: store.id,
+              activeStoreSlug: store.slug,
+              uiAction: { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: store.slug, storeId: store.id }
+            });
+          }
+        }
+      }
     }
 
     const isAffirmativeToMenu = isPublic && isAffirmativeReply(String(message || "")) && wasFullMenuOfferedInHistory(validatedHistory);

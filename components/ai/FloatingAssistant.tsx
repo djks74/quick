@@ -196,11 +196,11 @@ export default function FloatingAssistant({
     return `https://wa.me/${platformNumber}?text=${encodeURIComponent(msg)}`;
   };
 
-  const handleSend = async (forcedMessage?: string) => {
+  const handleSend = async (forcedMessage?: string, displayOverride?: string) => {
     const source = String(forcedMessage ?? input).trim();
     if (!source || isLoading) return;
 
-    const userMsg = source;
+    const userMsg = String(displayOverride ?? source).trim();
     setInput("");
     setMessages(prev => [...prev, { role: "user", text: userMsg }]);
     setIsLoading(true);
@@ -213,7 +213,7 @@ export default function FloatingAssistant({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          message: userMsg, 
+          message: source, 
           history: trimmedHistory,
           isPublic: true,
           context
@@ -371,12 +371,11 @@ export default function FloatingAssistant({
                             {m.uiAction.options.slice(0, 6).map((opt) => (
                               <button
                                 key={String(opt.slug)}
-                                onClick={() => handleSend(`PILIH_TOKO_SLUG:${String(opt.slug)}`)}
+                                onClick={() => handleSend(`pilih_toko:${String(opt.name)}`, String(opt.name))}
                                 disabled={isLoading}
                                 className="px-3 py-2 rounded-xl text-left text-[11px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
                               >
                                 <div className="font-semibold">{opt.name}</div>
-                                <div className="text-[10px] text-gray-500 dark:text-gray-400">{opt.slug}</div>
                               </button>
                             ))}
                           </div>
