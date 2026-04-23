@@ -321,6 +321,8 @@ export default function ProductsManager({
   const [activeTab, setActiveTab] = useState("products");
   const [products, setProducts] = useState(initialProducts);
   const [categories, setCategories] = useState(initialCategories);
+  const serverPageSize = 500;
+  const [hasMore, setHasMore] = useState(Boolean(Array.isArray(initialProducts) && initialProducts.length >= serverPageSize));
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -411,8 +413,10 @@ export default function ProductsManager({
 
     const created = await createProduct(storeId, newProduct);
     if (created) {
-        const freshProducts = await getProducts(storeId);
+        const target = Math.max(serverPageSize, products.length);
+        const freshProducts = await getProducts(storeId, undefined, target, 0);
         setProducts(freshProducts);
+        setHasMore(Boolean(Array.isArray(freshProducts) && freshProducts.length >= target));
     }
   };
 
@@ -544,16 +548,34 @@ export default function ProductsManager({
     setIsRefreshing(true);
     try {
       const [freshProducts, freshCategories] = await Promise.all([
-        getProducts(storeId, undefined, 5000, 0),
+        getProducts(storeId, undefined, serverPageSize, 0),
         getCategories(storeId)
       ]);
       setProducts(freshProducts);
       setCategories(freshCategories);
+      setHasMore(Boolean(Array.isArray(freshProducts) && freshProducts.length >= serverPageSize));
       setSelectedProductIds([]);
       setPage(1);
     } catch (err) {
       console.error("[REFRESH_ERROR]", err);
       alert("Failed to refresh data. Please reload the page.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const loadMoreProducts = async () => {
+    if (isRefreshing || !hasMore) return;
+    setIsRefreshing(true);
+    try {
+      const next = await getProducts(storeId, undefined, serverPageSize, products.length);
+      if (Array.isArray(next) && next.length > 0) {
+        setProducts((prev: any[]) => [...prev, ...next]);
+      }
+      setHasMore(Boolean(Array.isArray(next) && next.length >= serverPageSize));
+    } catch (err) {
+      console.error("[LOAD_MORE_ERROR]", err);
+      alert("Failed to load more products. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -1129,6 +1151,17 @@ export default function ProductsManager({
                   products
                 </span>
 
+                {hasMore && activeTab === "products" ? (
+                  <button
+                    type="button"
+                    onClick={loadMoreProducts}
+                    disabled={isRefreshing}
+                    className="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-gray-900 text-[11px] font-bold uppercase tracking-widest"
+                  >
+                    {isRefreshing ? "Loading..." : "Load More"}
+                  </button>
+                ) : null}
+
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Show:</span>
                   <select 
@@ -1233,8 +1266,10 @@ export default function ProductsManager({
                 } else {
                     savedProduct = await createProduct(storeId, updatedProduct);
                 }
-                const freshProducts = await getProducts(storeId);
+                const target = Math.max(serverPageSize, products.length);
+                const freshProducts = await getProducts(storeId, undefined, target, 0);
                 setProducts(freshProducts);
+                setHasMore(Boolean(Array.isArray(freshProducts) && freshProducts.length >= target));
                 setIsFormOpen(false);
             } catch (err) {
                 console.error(err);

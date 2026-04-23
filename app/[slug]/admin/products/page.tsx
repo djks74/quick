@@ -8,6 +8,7 @@ export default async function AdminProducts({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const session = (await getServerSession(authOptions)) as any;
   const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
+  const initialProductLimit = 500;
   
   const store = await getStoreBySlug(slug);
   if (!store) return null;
@@ -17,7 +18,7 @@ export default async function AdminProducts({ params }: { params: Promise<{ slug
   }
   
   const [products, categories, inventoryItems] = await Promise.all([
-    getProducts(store.id, undefined, 5000, 0),
+    getProducts(store.id, undefined, initialProductLimit, 0),
     getCategories(store.id),
     getInventoryItems(store.id)
   ]);

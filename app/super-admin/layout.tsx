@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import SuperAdminNav from "./SuperAdminNav";
 import { getStoreCount } from "@/lib/super-admin";
+import { Suspense } from "react";
+import SuperAdminLoading from "./loading";
 
 export default async function SuperAdminLayout({
   children,
@@ -33,7 +35,7 @@ export default async function SuperAdminLayout({
         </header>
         
         {/* Page Content */}
-        {children}
+        <Suspense fallback={<SuperAdminLoading />}>{children}</Suspense>
       </div>
     </div>
   );
