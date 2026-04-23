@@ -1762,6 +1762,17 @@ async function handleInternalCommerceChat({
         const found = (storeTypes || []).find((st: any) => String(st?.code || "").trim().toLowerCase() === want.toLowerCase());
         return String(found?.label || want).trim();
       })();
+      const rawLoose = normalizeLooseText(String(rawMessage || ""));
+      const typeBaseLabel = storeTypeLabel ? String(storeTypeLabel).split("(")[0].trim() : "";
+      const typeBaseLoose = normalizeLooseText(typeBaseLabel);
+      const typeFirstToken = (typeBaseLoose.split(" ").filter(Boolean)[0] || "").trim();
+      const typeCodeLoose = normalizeLooseText(String(storeTypeCode || ""));
+      const isTypeOnly =
+        Boolean(storeTypeCode) &&
+        rawLoose.length > 0 &&
+        rawLoose.length <= 24 &&
+        (rawLoose === typeCodeLoose || (typeBaseLoose && rawLoose === typeBaseLoose) || (typeFirstToken && rawLoose === typeFirstToken));
+      const queryForSearch = isTypeOnly ? "" : rawMessage;
 
       const { effectiveLocation } = normalizeStoreSearchInput(String(rawMessage || ""), context?.location_context);
       const loc = normalizeLooseText(String(effectiveLocation || ""));
@@ -1804,7 +1815,7 @@ async function handleInternalCommerceChat({
       }
 
       const result = await tools.search_stores({
-        query: rawMessage,
+        query: queryForSearch,
         location_context: context?.location_context,
         latitude: hasCoords ? lat : undefined,
         longitude: hasCoords ? lng : undefined,
@@ -1813,6 +1824,40 @@ async function handleInternalCommerceChat({
       });
       const stores = Array.isArray(result?.stores) ? result.stores : [];
       if (stores.length === 0) {
+        if (storeTypeCode) {
+          const fallback = await tools.search_stores({
+            query: "",
+            location_context: context?.location_context,
+            latitude: hasCoords ? lat : undefined,
+            longitude: hasCoords ? lng : undefined,
+            scopedSlug: forcedScopedSlug || undefined
+          });
+          const fallbackStores = Array.isArray(fallback?.stores) ? fallback.stores : [];
+          if (fallbackStores.length > 0) {
+            const intro = hasCoords ? "Ini beberapa toko terdekat dari lokasi Kakak:" : "Ini beberapa toko yang tersedia:";
+            const lines = fallbackStores
+              .slice(0, 6)
+              .map((s: any, idx: number) => {
+                const distanceText = Number.isFinite(Number(s.distance))
+                  ? ` (~${Math.round(Number(s.distance) / 100) / 10} km)`
+                  : "";
+                return `${idx + 1}. ${s.name}${distanceText}`;
+              })
+              .join("\n");
+            const text =
+              `Aku belum nemu toko untuk tipe "${storeTypeLabel || String(storeTypeCode)}" di sekitar.\n\n${intro}\n\n${lines}\n\nPilih salah satu toko ya.`;
+            return {
+              text,
+              history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+              customerProfile,
+              uiAction: {
+                type: "CHOOSE_STORE",
+                label: "Pilih Toko",
+                options: fallbackStores.slice(0, 6).map((s: any) => ({ slug: String(s.slug), name: String(s.name) }))
+              }
+            };
+          }
+        }
         const text =
           "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
         return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit), customerProfile };

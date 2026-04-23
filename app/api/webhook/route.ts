@@ -566,6 +566,10 @@ export async function POST(req: NextRequest) {
     const isStoreListTap = listReplyId.startsWith("STORE_");
     const isProductPageTap = listReplyId.startsWith("PROD_PAGE_");
 
+    if (listReplyId.toLowerCase().startsWith("pilih_toko:")) {
+      textBody = listReplyId;
+    }
+
     // Get language early for localization
     // We use a dummy storeId 0 if we don't know the store yet, or try to guess from metadata
     let lang: WaLang = "id";
@@ -1635,6 +1639,7 @@ export async function POST(req: NextRequest) {
               id: String(s?.id || `SHIP_${idx + 1}`).slice(0, 200),
               title: String(s?.title || s?.provider || `Opsi ${idx + 1}`).slice(0, 20)
             }));
+            const uiAction = data.uiAction && typeof data.uiAction === "object" ? data.uiAction : null;
             
             let activeStoreIdForReply = Number(data.activeStoreId || 0);
             if (!activeStoreIdForReply && data.activeStoreSlug) {
@@ -1651,6 +1656,22 @@ export async function POST(req: NextRequest) {
               options = {
                 buttonText: "Pay Now",
                 buttonUrl: data.paymentUrl,
+                imageUrl: data.productImage
+              };
+            } else if (uiAction?.type === "CHOOSE_STORE" && Array.isArray(uiAction.options) && uiAction.options.length > 0) {
+              const rows = uiAction.options.slice(0, 10).map((s: any) => {
+                const name = String(s?.name || "").trim();
+                return {
+                  id: `pilih_toko:${name}`.slice(0, 200),
+                  title: name.slice(0, 24),
+                  description: "".slice(0, 72)
+                };
+              });
+              options = {
+                list: {
+                  buttonText: l("Pilih Toko", "Choose Store"),
+                  sections: [{ title: l("Toko", "Stores"), rows }]
+                },
                 imageUrl: data.productImage
               };
             } else if (products.length > 0) {
