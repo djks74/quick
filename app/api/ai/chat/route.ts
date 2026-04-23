@@ -17,7 +17,9 @@ import { evaluateAiAbuseGuard, extractClientIp, isSpamLikeMessage } from "@/lib/
 export const runtime = "nodejs";
 
 let AI_ACTIVE_REQUESTS = 0;
-const AI_MAX_CONCURRENCY = Math.max(1, Number(process.env.AI_MAX_CONCURRENCY || "4") || 4);
+const AI_MAX_CONCURRENCY = Math.max(1, Number(process.env.AI_MAX_CONCURRENCY || "9999") || 9999);
+let STORE_TYPES_CACHE: { at: number; storeTypes: any[] } | null = null;
+const STORE_TYPES_TTL_MS = 5 * 60 * 1000;
 
 function pickSimpleGreetingReply(raw: string) {
   const t = String(raw || "").toLowerCase().trim();
@@ -39,15 +41,51 @@ function pickSimpleGreetingReply(raw: string) {
     "permisi"
   ]);
   if (greetings.has(compact) || greetings.has(first)) {
-    return "Halo Kak! Biar cepat, Kakak mau cari toko apa / beli apa, dan area-nya di mana?";
+    return "Halo Kak! Biar cepat, boleh share lokasi (titik) atau sebut area kamu, dan kamu lagi cari toko jenis apa / mau beli apa?";
   }
   if (compact === "tes" || compact === "test" || compact === "testing") {
     return "Siap Kak, aku aktif. Mau cari toko atau mau buka menu toko tertentu?";
   }
   if (compact.includes("masih kendala") || compact.includes("kendala")) {
-    return "Iya Kak, AI provider kadang high demand. Biar cepat, sebutkan *nama toko* atau *barang yang dicari* + *area* ya.";
+    return "Kalau responsnya terasa lambat, biar cepat kirim *barang yang dicari* + *area* atau share lokasi ya. Aku langsung carikan yang paling dekat dan relevan.";
   }
   return null;
+}
+
+async function getCachedStoreTypes() {
+  const now = Date.now();
+  if (STORE_TYPES_CACHE && now - STORE_TYPES_CACHE.at < STORE_TYPES_TTL_MS) return STORE_TYPES_CACHE.storeTypes;
+  await ensurePlatformSettingsSchema().catch(() => null);
+  const platform = (await prisma.platformSettings
+    .findUnique({ where: { key: "default" }, select: { storeTypes: true } })
+    .catch(() => null)) as any;
+  const storeTypes = ensureDefaultStoreTypes(platform?.storeTypes);
+  STORE_TYPES_CACHE = { at: now, storeTypes };
+  return storeTypes;
+}
+
+function resolveStoreTypeCodeFromText(input: string, storeTypes: any[]) {
+  const t = normalizeLooseText(String(input || ""));
+  if (!t) return null;
+  for (const st of storeTypes || []) {
+    const code = String(st?.code || "").trim();
+    const label = String(st?.label || "").trim();
+    const labelLoose = normalizeLooseText(label);
+    if (code && t.includes(code.toLowerCase())) return code;
+    if (labelLoose && (t.includes(labelLoose) || labelLoose.includes(t))) return code || label;
+    const firstToken = labelLoose.split(" ").filter(Boolean)[0] || "";
+    if (firstToken && firstToken.length >= 4 && t.includes(firstToken)) return code || label;
+  }
+  return null;
+}
+
+function buildStoreTypeHint(storeTypes: any[]) {
+  const labels = (storeTypes || [])
+    .map((st: any) => String(st?.label || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  if (labels.length === 0) return 'Contoh: "minimarket", "sayur", "kopi", "ayam".';
+  return `Contoh: ${labels.map((s) => `"${s}"`).join(", ")}.`;
 }
 
 function normalizePhoneNumber(phone: string) {
@@ -89,16 +127,42 @@ function isGercepOutOfScopeMessage(input: string) {
   if (text.length < 10) return false;
 
   const hasStrictlyOutOfScope = strictlyOutOfScope.some((kw) => text.includes(kw));
-  return hasStrictlyOutOfScope;
+  if (hasStrictlyOutOfScope) return true;
+
+  const generalOutOfScope = [
+    "joke", "meme", "pantun", "tebak", "tebak-tebakan",
+    "translate", "terjemahkan", "translation",
+    "summarize", "ringkas", "resume", "rangkum",
+    "define", "definition", "arti", "makna",
+    "who is", "siapa", "what is", "apa itu",
+    "homework", "tugas sekolah"
+  ];
+  if (text.length >= 18 && generalOutOfScope.some((kw) => text.includes(kw))) return true;
+
+  return false;
 }
 
 function getGercepScopeRefusal(input: string) {
   const text = String(input || "").toLowerCase();
   const isEnglish = /\b(what|why|how|where|coding|programming|learn|teach)\b/.test(text);
   if (isEnglish) {
-    return "I can only help with Gercep topics (store/resto search, menu, ordering, delivery, payment, and merchant operations). Please ask within Gercep context.";
+    return (
+      "I can only help with Gercep shopping: store/product search, menu browsing, shipping, payments, and order status.\n\n" +
+      "Try:\n" +
+      '- "vegetables near Ciputat"\n' +
+      '- "stores near me" (then share location)\n' +
+      '- "check shipping" / "payment"\n\n' +
+      'Type "HELP" to see what I can do.'
+    );
   }
-  return "Maaf, saya hanya bisa bantu topik dalam sistem Gercep (cari toko/resto, menu, pemesanan, pengiriman, pembayaran, dan operasional merchant). Silakan tanya dalam konteks Gercep ya.";
+  return (
+    "Maaf, aku hanya bisa bantu untuk belanja di Gercep: cari toko/produk, lihat menu, ongkir/pengiriman, pembayaran, dan status pesanan.\n\n" +
+    "Contoh:\n" +
+    '- "sayur dekat Ciputat"\n' +
+    '- "toko terdekat" (lalu share lokasi)\n' +
+    '- "cek ongkir" / "pembayaran"\n\n' +
+    'Ketik "Help" untuk panduan.'
+  );
 }
 
 async function inferStoreForWebPublic(message: string) {
@@ -613,7 +677,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     return { 
       products: normalizedProducts,
-      // If we found specific category matches, let the AI know it succeeded
+      // If we found specific category matches, treat it as a successful match
       categoryMatches: categoryMatches.map(slug => ({
         slug,
         name: categoryNameBySlug.get(slug) || slug
@@ -656,14 +720,14 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         variations[idx].price = Number(newPrice);
         await prisma.product.update({ where: { id: product.id }, data: { variations } });
         // Trigger Reverse Sync
-        triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] AI trigger failed:", err));
+        triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] trigger failed:", err));
         return { success: true, message: `Updated ${product.name} (${variations[idx].name}) to ${newPrice}` };
       }
     }
     
     await prisma.product.update({ where: { id: product.id }, data: { price: Number(newPrice) } });
     // Trigger Reverse Sync
-    triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] AI trigger failed:", err));
+    triggerReverseSync(product.id).catch(err => console.error("[SYNC_ERROR] trigger failed:", err));
     return { success: true, message: `Updated ${product.name} price to ${newPrice}` };
   },
 
@@ -688,7 +752,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
         price: Number(price),
         category: categorySlug,
         stock: 100,
-        description: "Added via AI Assistant"
+        description: "Added via Assistant"
       }
     });
     return { success: true, productId: product.id, message: `Added new product ${name}` };
@@ -762,7 +826,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
 
     await ensurePlatformSettingsSchema().catch(() => null);
     const platform = await prisma.platformSettings.findUnique({ where: { key: "default" } }).catch(() => null);
-    const topupRef = `AI-TOPUP-${store.id}-${Date.now()}`;
+    const topupRef = `TOPUP-${store.id}-${Date.now()}`;
 
     const midtransServerKey = store.paymentGatewaySecret || platform?.midtransServerKey || process.env.PAYMENT_GATEWAY_SECRET || process.env.MIDTRANS_SERVER_KEY;
     const midtransClientKey = store.paymentGatewayClientKey || platform?.midtransClientKey || process.env.PAYMENT_GATEWAY_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY;
@@ -788,10 +852,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           first_name: store.owner.name || store.name
         },
         item_details: [{
-          id: "WA_TOPUP_AI",
+          id: "WA_TOPUP",
           price: amount,
           quantity: 1,
-          name: "WhatsApp Credit Top-up (via AI)"
+          name: "WhatsApp Credit Top-up"
         }],
         enabled_payments: ["gopay", "qris", "shopeepay", "other_qris"]
       } as any);
@@ -1602,8 +1666,8 @@ async function handleInternalCommerceChat({
 
   if (isHelpFaqIntent(rawMessage)) {
     const text = activeStore?.slug
-      ? `Aku bisa bantu di *${activeStore.name}*: lihat kategori, cari produk, cek ongkir, metode pembayaran, dan cek pesanan terakhir. Coba ketik nama produk atau balas "menu lengkap".`
-      : "Aku bisa bantu cari toko terdekat, cari produk per toko, cek ongkir, metode pembayaran, dan cek pesanan terakhir. Supaya cepat, kirim *barang yang dicari + area* atau share lokasi ya.";
+      ? `I can help you shop at *${activeStore.name}*: browse categories, search products, check shipping, see payment options, and check your last order.\n\nTry:\n- "categories"\n- "full menu"\n- "find chicken"\n- "check shipping" (share location/address)`
+      : "I can only help with Gercep shopping: store/product search, menu browsing, shipping, payments, and order status.\n\nTry:\n- \"stores near me\" (then share location)\n- \"vegetables in Ciputat\"\n- \"check shipping\" / \"payment\"";
     return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
   }
 
@@ -1687,18 +1751,71 @@ async function handleInternalCommerceChat({
   if (isPublic) {
     const shouldSearchStores = isStoreSearchIntent(rawMessage) || !activeStore?.slug;
     if (shouldSearchStores) {
+      const storeTypes = await getCachedStoreTypes().catch(() => []);
+      const storeTypeFromText = resolveStoreTypeCodeFromText(rawMessage, storeTypes);
+      const storedStoreType = String((customerProfile as any)?.preferredStoreType || (customerProfile as any)?.storeType || "").trim();
+      const storeTypeCode = storeTypeFromText || (storedStoreType ? storedStoreType : null);
+      if (storeTypeFromText) (customerProfile as any).preferredStoreType = storeTypeFromText;
+      const storeTypeLabel = (() => {
+        const want = String(storeTypeCode || "").trim();
+        if (!want) return "";
+        const found = (storeTypes || []).find((st: any) => String(st?.code || "").trim().toLowerCase() === want.toLowerCase());
+        return String(found?.label || want).trim();
+      })();
+
+      const { effectiveLocation } = normalizeStoreSearchInput(String(rawMessage || ""), context?.location_context);
+      const loc = normalizeLooseText(String(effectiveLocation || ""));
+      const invalidLoc =
+        !loc ||
+        ["saya", "aku", "gue", "gw", "me", "here", "sini", "disini", "di sini", "dekat sini", "sekitar sini"].includes(
+          loc
+        );
+      const hasLocation = Boolean(hasCoords) || (!invalidLoc && loc.length >= 3);
+
+      if (!hasLocation && !storeTypeCode) {
+        const hint = buildStoreTypeHint(storeTypes);
+        const text =
+          `Boleh share lokasi (titik) atau sebut area kamu di mana? (contoh: Ciputat, Grogol, BSD)\n` +
+          `Terus kamu lagi cari toko jenis apa?\n${hint}`;
+        return {
+          text,
+          history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_LOCATION_AND_TYPE" }
+        };
+      }
+      if (!hasLocation && storeTypeCode) {
+        const text =
+          `Siap. Boleh share lokasi (titik) atau sebut area kamu di mana? (contoh: Ciputat, Grogol, BSD)\n` +
+          `Nanti aku carikan toko ${storeTypeLabel || String(storeTypeCode)} yang terdekat.`;
+        return {
+          text,
+          history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_LOCATION" }
+        };
+      }
+      if (hasLocation && !storeTypeCode) {
+        const hint = buildStoreTypeHint(storeTypes);
+        const text = `Oke. Kamu lagi cari toko jenis apa? ${hint}`;
+        return {
+          text,
+          history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_TYPE" }
+        };
+      }
+
       const result = await tools.search_stores({
         query: rawMessage,
         location_context: context?.location_context,
         latitude: hasCoords ? lat : undefined,
         longitude: hasCoords ? lng : undefined,
+        store_type: storeTypeCode || undefined,
         scopedSlug: forcedScopedSlug || undefined
       });
       const stores = Array.isArray(result?.stores) ? result.stores : [];
       if (stores.length === 0) {
         const text =
           "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
-        return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+        return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit), customerProfile };
       }
 
       if (stores.length === 1) {
@@ -1712,6 +1829,7 @@ async function handleInternalCommerceChat({
           history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
           activeStoreId: store?.id,
           activeStoreSlug: store?.slug || String(stores[0].slug || ""),
+          customerProfile,
           uiAction: store?.slug
             ? { type: "START_SHOPPING", label: "Mulai Belanja", storeSlug: store.slug, storeId: store.id }
             : undefined
@@ -1732,6 +1850,7 @@ async function handleInternalCommerceChat({
       return {
         text,
         history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+        customerProfile,
         uiAction: {
           type: "CHOOSE_STORE",
           label: "Pilih Toko",
@@ -1754,13 +1873,6 @@ async function handleInternalCommerceChat({
 
 export async function POST(req: NextRequest) {
   try {
-    if (AI_ACTIVE_REQUESTS >= AI_MAX_CONCURRENCY) {
-      return NextResponse.json({
-        text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.",
-        history: [],
-        blocked: true
-      });
-    }
     AI_ACTIVE_REQUESTS++;
     const internalContextHeader = req.headers.get("x-internal-context-key");
     const isTrustedInternalContext = Boolean(
@@ -2285,7 +2397,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json({ text: "Maaf, AI sedang sibuk. Coba lagi sebentar ya.", error: raw || "" });
+    return NextResponse.json({ text: "Sorry — something went wrong. Type HELP to see what I can do.", error: raw || "" });
   }
   finally {
     AI_ACTIVE_REQUESTS = Math.max(0, AI_ACTIVE_REQUESTS - 1);

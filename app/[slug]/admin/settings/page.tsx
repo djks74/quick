@@ -1062,7 +1062,7 @@ export default function AdminSettings() {
           <div className="space-y-6">
             <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 items-start border-b dark:border-gray-800 pb-8", !canOverridePlatformConfig && "opacity-50 pointer-events-none")}>
               <div>
-                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">WhatsApp & AI Setup</h3>
+                <h3 className="text-sm font-bold text-[#1d2327] dark:text-white">WhatsApp Setup</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Configure your own Meta credentials.</p>
               </div>
               <div className="md:col-span-2 space-y-4">

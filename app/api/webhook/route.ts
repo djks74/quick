@@ -546,13 +546,13 @@ export async function POST(req: NextRequest) {
         ""
     ).trim();
 
-    // If it's a category selection from a list, make it clear for the AI
+    // If it's a category selection from a list, make it clear for the assistant
     if (message.interactive?.list_reply?.id?.startsWith("CAT_")) {
       const catName = message.interactive.list_reply.title;
       textBody = `Saya memilih kategori: ${catName}`;
     }
 
-    // If it's a product selection from a list, make it clear for the AI
+    // If it's a product selection from a list, make it clear for the assistant
     if (message.interactive?.list_reply?.id?.startsWith("PROD_")) {
       const prodName = message.interactive.list_reply.title;
       textBody = `Saya ingin memesan: ${prodName}`;
@@ -634,7 +634,7 @@ export async function POST(req: NextRequest) {
         if (!s?.id) {
           await sendWhatsAppMessage(
             from,
-            `🤖 *Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            `*Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
             0
           );
           return NextResponse.json({ success: true });
@@ -679,7 +679,7 @@ export async function POST(req: NextRequest) {
 
         await sendWhatsAppMessage(
           from,
-          `🤖 *Gercep Assistant*:\n\n${l(
+          `*Gercep Assistant*:\n\n${l(
             `Siap Kak, saya akan melanjutkan belanja kamu di *${String(s.name)}*.`,
             `Sure — I'll continue your shopping at *${String(s.name)}*.`
           )}\n\n_(Balas 'Exit' untuk berhenti)_`,
@@ -689,7 +689,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // --- AI AGENT HANDLER ---
+      // --- ASSISTANT HANDLER ---
       const isAICommand = 
         isCategoryListTap ||
         isProductListTap ||
@@ -759,7 +759,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (isAICommand || aiSession) {
-        // Switch to AI Mode if command used
+        // Switch to assistant mode if command used
         if (isAICommand && !aiSession) {
           const existing = await prisma.whatsAppSession.findUnique({
             where: { phoneNumber_storeId: { phoneNumber: from, storeId: 0 } }
@@ -779,7 +779,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Handle "exit" to leave AI mode
+        // Handle "exit" to leave assistant mode
         if (lowerText === "exit" || lowerText === "stop" || lowerText === "keluar" || lowerText === "menu") {
           const prevStep = (aiSession?.metadata as any)?.prevStep || "START";
           await prisma.whatsAppSession.update({
@@ -787,9 +787,9 @@ export async function POST(req: NextRequest) {
             data: { step: prevStep }
           });
           
-          let exitMsg = "✅ Keluar dari mode AI. Balas 'Menu' untuk kembali ke menu utama.";
-          if (prevStep === 'MERCHANT_MODE') exitMsg = "✅ Keluar dari mode AI. Kamu kembali ke **Mode Admin**. Balas 'Menu' untuk menu admin.";
-          if (prevStep === 'USER_MODE') exitMsg = "✅ Keluar dari mode AI. Kamu kembali ke **Mode User**. Balas 'Menu' untuk menu belanja.";
+          let exitMsg = "✅ Exited assistant mode. Reply 'Menu' to go back to the main menu.";
+          if (prevStep === 'MERCHANT_MODE') exitMsg = "✅ Exited assistant mode. You are back in **Admin Mode**. Reply 'Menu' for admin menu.";
+          if (prevStep === 'USER_MODE') exitMsg = "✅ Exited assistant mode. You are back in **User Mode**. Reply 'Menu' for shopping menu.";
 
           await sendWhatsAppMessage(from, exitMsg, 0);
           return NextResponse.json({ success: true });
@@ -856,7 +856,7 @@ export async function POST(req: NextRequest) {
               : undefined;
           await sendWhatsAppMessage(
             from,
-            `🤖 *Gercep Assistant*\n\nSiap Kak, aku kosongkan keranjang. Silakan pesan dari awal ya.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            `*Gercep Assistant*\n\nSiap Kak, aku kosongkan keranjang. Silakan pesan dari awal ya.\n\n_(Balas 'Exit' untuk berhenti)_`,
             0,
             options as any
           );
@@ -916,7 +916,7 @@ export async function POST(req: NextRequest) {
 
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*\n\nSiap Kak, aku reset keranjang belanja ya. Silakan pilih produk yang baru.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*\n\nSiap Kak, aku reset keranjang belanja ya. Silakan pilih produk yang baru.\n\n_(Balas 'Exit' untuk berhenti)_`,
               0,
               options as any
             );
@@ -946,13 +946,13 @@ export async function POST(req: NextRequest) {
           }
           await sendWhatsAppMessage(
             from,
-            `🤖 *Gercep Assistant*\n\nBoleh share lokasi (titik) Kakak dulu ya, biar aku carikan toko Gercep terdekat.\n\n_(Balas 'Exit' untuk berhenti)_`,
+            `*Gercep Assistant*\n\nBoleh share lokasi (titik) atau sebut area Kakak di mana? (contoh: Ciputat, Grogol, BSD)\nTerus Kakak lagi cari toko jenis apa? (contoh: minimarket, sayur & buah, kopi)\n\n_(Balas 'Exit' untuk berhenti)_`,
             0
           );
           return NextResponse.json({ success: true });
         }
 
-        // If it's a location message, provide a richer prompt for the AI
+        // If it's a location message, provide a richer prompt for the assistant
         if (!finalPrompt && (message as any).location) {
           const loc = (message as any).location;
           const lastUserText = (() => {
@@ -1010,7 +1010,7 @@ export async function POST(req: NextRequest) {
               }
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*\n\nMaaf Kak, aku belum menemukan toko terdekat dari lokasi ini.\nCoba ketik nama area (contoh: "Grogol" / "BSD") atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `*Gercep Assistant*\n\nMaaf Kak, aku belum menemukan toko terdekat dari lokasi ini.\nCoba ketik nama area (contoh: "Grogol" / "BSD") atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
                 0
               );
               return NextResponse.json({ success: true });
@@ -1041,7 +1041,7 @@ export async function POST(req: NextRequest) {
             }
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*\n\nIni toko Gercep terdekat dari lokasi Kakak. Pilih salah satu untuk buka menunya.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*\n\nIni toko Gercep terdekat dari lokasi Kakak. Pilih salah satu untuk buka menunya.\n\n_(Balas 'Exit' untuk berhenti)_`,
               0,
               {
                 list: {
@@ -1061,7 +1061,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (!finalPrompt) {
-          console.warn("[AI_WEBHOOK] No prompt found in message, skipping AI chat.");
+          console.warn("[WEBHOOK] No prompt found in message, skipping chat.");
           return NextResponse.json({ success: true });
         }
 
@@ -1108,7 +1108,7 @@ export async function POST(req: NextRequest) {
 
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l(
+                `*Gercep Assistant*:\n\n${l(
                   `Siap Kak, saya akan melanjutkan belanja kamu di sini untuk *${String(s.name)}*.`,
                   `Sure — I'll continue your shopping here for *${String(s.name)}*.`
                 )}\n\n_(Balas 'Exit' untuk berhenti)_`,
@@ -1120,7 +1120,7 @@ export async function POST(req: NextRequest) {
 
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*\n\nMaaf Kak, toko itu belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
               0
             );
             return NextResponse.json({ success: true });
@@ -1159,7 +1159,7 @@ export async function POST(req: NextRequest) {
 
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l(
+                `*Gercep Assistant*:\n\n${l(
                   `Siap Kak, saya akan melanjutkan belanja kamu di sini untuk *${String(s.name)}*.`,
                   `Sure — I'll continue your shopping here for *${String(s.name)}*.`
                 )}\n\n_(Balas 'Exit' untuk berhenti)_`,
@@ -1175,7 +1175,7 @@ export async function POST(req: NextRequest) {
             });
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*\n\nMaaf Kak, toko ${maybeStore?.name ? `*${maybeStore.name}*` : `ID ${requestedStoreId}`} belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*\n\nMaaf Kak, toko ${maybeStore?.name ? `*${maybeStore.name}*` : `ID ${requestedStoreId}`} belum tersedia untuk dibuka.\nCoba ketik *Cari <nama toko>* atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
               0
             );
             return NextResponse.json({ success: true });
@@ -1245,7 +1245,7 @@ export async function POST(req: NextRequest) {
 
                 await sendWhatsAppMessage(
                   from,
-                  `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String(selectedStore.name)}* ya.`, `Sure. I'll open *${String(selectedStore.name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                  `*Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String(selectedStore.name)}* ya.`, `Sure. I'll open *${String(selectedStore.name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                   aiStoreId,
                   options as any
                 );
@@ -1323,7 +1323,7 @@ export async function POST(req: NextRequest) {
 
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
               aiStoreId,
               options as any
             );
@@ -1389,7 +1389,7 @@ export async function POST(req: NextRequest) {
 
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String((aiStore as any).name)}* ya.`, `Sure. I'll open *${String((aiStore as any).name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `*Gercep Assistant*:\n\n${l(`Siap Kak. Aku bukain menu *${String((aiStore as any).name)}* ya.`, `Sure. I'll open *${String((aiStore as any).name)}* menu for you.`)}\n\n_(Balas 'Exit' untuk berhenti)_`,
                 aiStoreId,
                 options as any
               );
@@ -1408,7 +1408,7 @@ export async function POST(req: NextRequest) {
               }
               await sendWhatsAppMessage(
                 from,
-                `🤖 *Gercep Assistant*:\n\n${l("Aku nemu beberapa toko yang mirip. Pilih toko dulu ya:", "I found multiple matching stores. Please choose one:")}\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `*Gercep Assistant*:\n\n${l("Aku nemu beberapa toko yang mirip. Pilih toko dulu ya:", "I found multiple matching stores. Please choose one:")}\n\n_(Balas 'Exit' untuk berhenti)_`,
                 0,
                 {
                   list: {
@@ -1507,7 +1507,7 @@ export async function POST(req: NextRequest) {
 
             await sendWhatsAppMessage(
               from,
-              `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
+              `*Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`,
               aiStoreId,
               options as any
             );
@@ -1544,7 +1544,7 @@ export async function POST(req: NextRequest) {
                   userName: dbUser?.name || undefined,
                   userRole: dbUser?.role || undefined,
                   subscriptionPlan: (dbUser as any)?.stores?.[0]?.subscriptionPlan || undefined,
-                  customerProfile // Pass the customer profile to AI
+                  customerProfile // Pass the customer profile to chat handler
                 }
               })
             });
@@ -1552,11 +1552,11 @@ export async function POST(req: NextRequest) {
             clearTimeout(aiTimeout);
           }
           if (!res.ok) {
-            throw new Error(`AI route failed with status ${res.status}`);
+            throw new Error(`Chat route failed with status ${res.status}`);
           }
           const data = await res.json();
           if (data.text) {
-            // Update customer profile from AI response if it suggests changes
+            // Update customer profile from chat response if it suggests changes
             if (data.customerProfile) {
               Object.assign(customerProfile, data.customerProfile);
             }
@@ -1720,15 +1720,15 @@ export async function POST(req: NextRequest) {
             await Promise.all([
               persistHistoryPromise,
               shouldSendAiReply
-                ? sendWhatsAppMessage(from, `🤖 *Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any)
+                ? sendWhatsAppMessage(from, `*Gercep Assistant*:\n\n${responseText}\n\n_(Balas 'Exit' untuk berhenti)_`, aiStoreId, options as any)
                 : Promise.resolve(null)
             ]);
           } else {
-            await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi nanti.", aiStoreId);
+            await sendWhatsAppMessage(from, "❌ Sorry, something went wrong. Reply HELP for shopping/shipping/payment guidance.", aiStoreId);
           }
         } catch (e) {
           console.error("[WA_AI_ERROR]", e);
-          await sendWhatsAppMessage(from, "❌ Maaf, AI sedang sibuk. Coba lagi sebentar ya.", 0);
+          await sendWhatsAppMessage(from, "❌ Sorry, something went wrong. Reply HELP for shopping/shipping/payment guidance.", 0);
         }
         return NextResponse.json({ success: true });
       }
@@ -2517,8 +2517,8 @@ export async function POST(req: NextRequest) {
               `3. Pilih makanan/produk & checkout langsung via WhatsApp.\n\n` +
               `🔍 *Cari Toko Lain?*\n` +
               `Balas dengan *"Cari <nama toko>"* (contoh: "Cari Pasar Segar") untuk belanja di toko terdekat.\n\n` +
-              `🤖 *Asisten AI*\n` +
-              `Kamu juga bisa tanya langsung ke AI kami, contoh: "Ada promo apa hari ini?" atau "Rekomendasi nasi goreng enak".`,
+              `*Gercep Assistant*\n` +
+              `Kamu juga bisa tanya langsung di chat ini. Supaya cepat, kirim *barang yang dicari + area* atau share lokasi (titik), lalu sebut *jenis toko* yang kamu mau.`,
               
               `👋 *Welcome to Gercep!* ⚡\n\n` +
               `How to order from your favorite store:\n` +
@@ -2527,8 +2527,8 @@ export async function POST(req: NextRequest) {
               `3. Choose items & checkout directly via WhatsApp.\n\n` +
               `🔍 *Find a Store?*\n` +
               `Reply with *"Find <store name>"* (e.g., "Find Coffee" or "Find Grocery") to shop at nearby stores.\n\n` +
-              `🤖 *AI Assistant*\n` +
-              `You can also ask our AI, e.g.: "Any promos today?" or "Recommend me some good fried rice."`
+              `*Gercep Assistant*\n` +
+              `You can ask directly in this chat. For faster results, send *what you need + area* or share your location, and tell me the *store type* you want.`
             );
             
             await sendWhatsAppMessage(from, platformHelp, targetStore.id);

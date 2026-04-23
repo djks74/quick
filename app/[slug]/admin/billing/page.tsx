@@ -147,7 +147,7 @@ export default function BillingPage() {
             <h3 className="font-bold text-[#1d2327]">Plan Features</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
-                "AI Chat Assistant Enabled",
+                "Commerce Assistant Enabled",
                 "WhatsApp Order Integration",
                 "Real-time Inventory Sync",
                 "Dynamic QRIS Payments",

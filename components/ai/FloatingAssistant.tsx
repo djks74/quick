@@ -35,7 +35,7 @@ export default function FloatingAssistant({
   forceOpen, 
   onOpenChange,
   title = "Gercep Assistant",
-  greeting = "Halo! Saya Asisten AI Gercep. Mau cari makan atau pesan sesuatu hari ini?",
+  greeting = "Halo! Aku Gercep Assistant. Boleh share lokasi atau sebut area kamu, dan kamu lagi cari toko jenis apa / mau beli apa?",
   storeSlug,
   themeColor,
   isEmbed = false
@@ -67,6 +67,7 @@ export default function FloatingAssistant({
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [sharedLocation, setSharedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<any>({});
   const [activeProductListIdx, setActiveProductListIdx] = useState<number | null>(null);
   const [productQtyById, setProductQtyById] = useState<Record<number, number>>({});
   const [lastActiveStore, setLastActiveStore] = useState<{ id: number; slug?: string } | null>(null);
@@ -131,7 +132,8 @@ export default function FloatingAssistant({
               context: {
                 channel: "WEB",
                 location: { latitude, longitude },
-                slug: lastActiveStore?.slug || storeSlug
+                slug: lastActiveStore?.slug || storeSlug,
+                customerProfile
               }
             })
           });
@@ -158,6 +160,7 @@ export default function FloatingAssistant({
           if (typeof data.activeStoreId === "number" && data.activeStoreId > 0) {
             setLastActiveStore({ id: data.activeStoreId, slug: typeof data.activeStoreSlug === "string" ? data.activeStoreSlug : undefined });
           }
+          if (data.customerProfile && typeof data.customerProfile === "object") setCustomerProfile(data.customerProfile);
           if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
         } catch (e) {
           setMessages(prev => [...prev, { role: "assistant", text: "❌ Maaf, terjadi kesalahan koneksi." }]);
@@ -204,7 +207,7 @@ export default function FloatingAssistant({
 
     try {
       const trimmedHistory = Array.isArray(history) ? history.slice(-12) : [];
-      const context: any = { channel: "WEB", slug: lastActiveStore?.slug || storeSlug };
+      const context: any = { channel: "WEB", slug: lastActiveStore?.slug || storeSlug, customerProfile };
       if (sharedLocation) context.location = sharedLocation;
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -240,6 +243,7 @@ export default function FloatingAssistant({
         } else if (typeof data.activeStoreSlug === "string" && data.activeStoreSlug.trim()) {
           setLastActiveStore({ id: 0, slug: data.activeStoreSlug.trim() });
         }
+        if (data.customerProfile && typeof data.customerProfile === "object") setCustomerProfile(data.customerProfile);
         if (data.history) setHistory(Array.isArray(data.history) ? data.history.slice(-12) : data.history);
       }
     } catch (e) {

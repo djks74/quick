@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
           name: "Tagihan Manual",
           category: "System",
           price: 0,
-          description: "Produk otomatis untuk tagihan manual AI",
+          description: "Produk otomatis untuk tagihan manual",
           stock: 999999
         }
       });
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         status: "PENDING",
         orderType: "TAKEAWAY",
         paymentMethod: payment_method || null,
-        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", source: "AI_CHATBOT" }),
+        notes: JSON.stringify({ kind: "MERCHANT_INVOICE", source: "CHATBOT" }),
         items: {
           create: {
             productId: product.id,
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof GuardError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error("[AI_INVOICE_ERROR]", error);
+    console.error("[INVOICE_ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -5,7 +5,7 @@ import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
 
 export default function AssistantPage() {
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([
-    { role: "assistant", text: "Halo! Saya Asisten AI Gercep. Ada yang bisa saya bantu hari ini? Anda bisa tanya stok, penjualan, atau cari toko." }
+    { role: "assistant", text: "Hi! I’m the Gercep Assistant for admin operations. You can ask about stores, orders, sales stats, or product/catalog updates." }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

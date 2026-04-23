@@ -657,7 +657,6 @@ export default function AdminShell({
         </main>
       </div>
 
-      {/* Admin AI Assistant */}
       <AdminChat 
         user={session?.user} 
         context={{ slug, storeId: store.id }} 

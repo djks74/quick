@@ -126,9 +126,9 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 gap-3">
               {[
                 { id: "FREE", name: "Free", desc: "Payments & Shipping only" },
-                { id: "PRO", name: "Pro", desc: "POS + AI Chat (No Analytics/Ingredients)" },
+                { id: "PRO", name: "Pro", desc: "POS + Commerce Assistant (No Analytics/Ingredients)" },
                 { id: "ENTERPRISE", name: "Enterprise", desc: "Full features + Analytics" },
-                { id: "SOVEREIGN", name: "Sovereign", desc: "Full whitelabel & AI control" }
+                { id: "SOVEREIGN", name: "Sovereign", desc: "Full whitelabel & advanced controls" }
               ].map((p) => (
                 <button
                   key={p.id}

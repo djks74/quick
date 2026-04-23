@@ -475,7 +475,6 @@ export default function DashboardClient({ stores, user }: { stores: any[], user:
         </div>
       )}
 
-      {/* Admin AI Assistant */}
       <AdminChat user={user} context={{ isCorporate: true }} />
     </div>
   );

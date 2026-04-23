@@ -1,6 +1,6 @@
 # Gercep WCFM Sync Plugin
 
-This plugin allows WCFM (WooCommerce Multivendor Marketplace) vendors to sync their products automatically with the Gercep platform. Once synced, the Gercep AI Assistant will be able to handle customer orders for these products via WhatsApp.
+This plugin allows WCFM (WooCommerce Multivendor Marketplace) vendors to sync their products automatically with the Gercep platform. Once synced, Gercep Assistant can handle customer ordering for these products via WhatsApp.
 
 ## Installation
 
@@ -20,5 +20,5 @@ This plugin allows WCFM (WooCommerce Multivendor Marketplace) vendors to sync th
 
 - **Real-time Sync**: Whenever you add or update a product in WCFM, it is instantly pushed to Gercep.
 - **Deletions**: Deleting a product in WCFM will also remove it from your Gercep store.
-- **AI Ready**: Gercep's AI assistant uses the name, price, category, and description synced from WCFM to help customers on WhatsApp.
-- **Category Flattening**: The plugin automatically takes the most specific category from WooCommerce to keep the AI search efficient.
+- **Assistant Ready**: Gercep Assistant uses the name, price, category, and description synced from WCFM to help customers on WhatsApp.
+- **Category Flattening**: The plugin automatically takes the most specific category from WooCommerce to keep search efficient.

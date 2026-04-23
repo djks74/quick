@@ -42,7 +42,7 @@ export default function SubscriptionGate({ store, onClose }: { store: any, onClo
       icon: Zap,
       color: 'bg-green-500',
       features: [
-        "AI Chat Assistant",
+        "Commerce Assistant",
         "WhatsApp Checkout",
         "POS System",
         "Custom Domain",

@@ -5,12 +5,12 @@ const apiEndpoints = [
   {
     method: "GET",
     path: "/api/partner/sync-products",
-    title: "Ambil Daftar Produk",
-    description: "Mengambil semua daftar produk yang saat ini terdaftar di Gercep untuk toko Anda. Berguna untuk memverifikasi hasil sinkronisasi.",
+    title: "Fetch Product List",
+    description: "Returns all products currently registered in Gercep for your store. Useful to verify sync results.",
     request: null,
     response: {
       success: true,
-      store: "Nama Toko Anda",
+      store: "Your Store Name",
       products: [
         {
           id: 123,
@@ -25,8 +25,8 @@ const apiEndpoints = [
   {
     method: "POST",
     path: "/api/partner/sync-products",
-    title: "Tambah / Edit Produk (Upsert)",
-    description: "Endpoint tunggal untuk menambah produk baru ATAU memperbarui yang sudah ada. Jika 'externalId' sudah ada, sistem akan memperbarui data. Jika belum, sistem akan membuat produk baru.",
+    title: "Upsert Products",
+    description: "A single endpoint to create new products or update existing ones. If 'externalId' exists, the product is updated; otherwise, a new product is created.",
     request: {
       action: "upsert",
       products: [
@@ -34,7 +34,7 @@ const apiEndpoints = [
           externalId: "POS-123",
           name: "Nasi Goreng Spesial",
           price: 25000,
-          category: "Makanan Utama",
+          category: "Main Dishes",
           description: "Nasi goreng dengan telur dan ayam",
           image: "https://example.com/image.jpg",
           stock: 100
@@ -56,28 +56,28 @@ const apiEndpoints = [
     {
       method: "POST",
       path: "/api/partner/sync-products",
-      title: "Hapus Produk",
-      description: "Menghapus produk dari sistem Gercep. Anda dapat menghapus berdasarkan 'externalId' (ID sistem Anda) atau 'name'.",
+      title: "Delete Products",
+      description: "Deletes products from Gercep. You can delete by 'externalId' (your system ID) or by 'name'.",
       request: {
         action: "delete",
         products: [
           { externalId: "POS-123" },
-          { name: "Menu Lama" }
+          { name: "Old Item" }
         ]
       },
       response: {
         success: true,
         results: [
           { externalId: "POS-123", status: "deleted" },
-          { name: "Menu Lama", status: "deleted" }
+          { name: "Old Item", status: "deleted" }
         ]
       }
     },
     {
       method: "WEBHOOK",
-      path: "URL Anda (Konfigurasi di Dashboard)",
-      title: "Notifikasi Order (Paid)",
-      description: "Gercep akan mengirimkan data pesanan ke URL Webhook Anda setiap kali ada pesanan yang berhasil dibayar (Lunas).",
+      path: "Your URL (configured in Dashboard)",
+      title: "Order Paid Webhook",
+      description: "Gercep sends order data to your webhook URL whenever an order is successfully paid.",
       request: {
         event: "order.paid",
         data: {
@@ -129,9 +129,9 @@ const plugins = [
 ];
 
 const authGuide = [
-  "Semua request API harus menyertakan header 'X-API-KEY'.",
-  "API Key dapat ditemukan di dashboard Merchant pada bagian Settings > API.",
-  "Gunakan API Key ini untuk mengautentikasi aplikasi eksternal Anda dengan platform Gercep.",
+  "Every API request must include the 'X-API-KEY' header.",
+  "You can find your API Key in the Merchant dashboard under Settings > API.",
+  "Use this API Key to authenticate your external integration with Gercep.",
 ];
 
 export default function ApiDocumentationPage() {
@@ -145,7 +145,7 @@ export default function ApiDocumentationPage() {
           </div>
           <h1 className="text-4xl md:text-6xl font-black tracking-tighter">DOKUMENTASI API</h1>
           <p className="text-gray-600 dark:text-gray-400 text-xl max-w-2xl leading-relaxed">
-            Integrasikan sistem restoran Anda dengan ekosistem Gercep AI menggunakan API RESTful kami yang tangguh.
+            Integrate your store system with Gercep using our REST API and webhooks.
           </p>
         </div>
 
@@ -258,7 +258,7 @@ export default function ApiDocumentationPage() {
         <div className="pt-12 flex flex-col md:flex-row items-center justify-between gap-6 border-t dark:border-white/10">
           <Link href="/documentation" className="group flex items-center gap-3 text-gray-500 hover:text-blue-500 transition-colors font-bold uppercase tracking-widest text-sm">
             <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M7 16l-4-4m0 0l4-4m-4 4h18"></path></svg>
-            Kembali ke Dokumentasi AI
+            Back to Documentation
           </Link>
           
           <div className="flex items-center gap-8">

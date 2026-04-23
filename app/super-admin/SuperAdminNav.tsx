@@ -35,7 +35,7 @@ export default function SuperAdminNav({ totalStores }: { totalStores?: number })
           )}
         >
           <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
-          AI
+          Assistant
         </Link>
         <Link 
           href="/super-admin/analytics" 

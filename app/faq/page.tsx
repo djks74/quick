@@ -2,52 +2,52 @@ import Link from "next/link";
 
 const customerFaq = [
   {
-    question: "Apa itu Gercep AI Assistant?",
+    question: "What is Gercep Assistant?",
     answer:
-      "Gercep AI Assistant adalah asisten pintar berbasis kecerdasan buatan (AI) yang membantu Anda mencari toko, melihat menu, dan melakukan pemesanan secara natural melalui WhatsApp atau Chat di website kami.",
+      "Gercep Assistant helps you shop via WhatsApp or Web Chat: find stores, browse products, calculate shipping, and complete payment when available.",
   },
   {
-    question: "Bagaimana cara memesan menggunakan AI?",
+    question: "How do I place an order?",
     answer:
-      "Cukup ketik apa yang Anda cari (contoh: 'Cari nasi uduk') di WhatsApp atau Chat Assistant kami. AI akan mencarikan toko yang sesuai, menunjukkan menu, dan membantu Anda membuat pesanan hingga mendapatkan link pembayaran.",
+      "Tell us what you want and your area (or share your location). Gercep Assistant will show store options and help you pick items until checkout.",
   },
   {
-    question: "Apakah saya bisa menanyakan riwayat pesanan saya?",
+    question: "Can I check my last order?",
     answer:
-      "Ya! Anda bisa menanyakan 'Cek pesanan terakhir saya' dan AI akan memberikan detail pesanan terbaru Anda beserta link pembayarannya jika belum dibayar.",
+      "Yes. Ask for your last order status, and Gercep Assistant will show the latest order details (and payment link if applicable).",
   },
   {
-    question: "Bagaimana cara kerja pengiriman dengan AI?",
+    question: "How does delivery work?",
     answer:
-      "Untuk pesanan takeaway, cukup bagikan lokasi Anda atau ketik alamat Anda. AI akan menghitung ongkir secara otomatis menggunakan GoSend atau JNE dan menunjukkannya kepada Anda sebelum Anda membayar.",
+      "For delivery, share your location or provide a full address. Gercep Assistant will calculate shipping options based on available couriers and store settings.",
   },
   {
-    question: "Apakah saya bisa membayar langsung dari chat?",
+    question: "Can I pay from chat?",
     answer:
-      "Ya. Setelah pesanan dibuat, AI akan memberikan tombol 'Pay Now' (Bayar Sekarang) yang akan mengarahkan Anda langsung ke halaman pembayaran Midtrans yang aman.",
+      "Yes. After checkout, you may receive a secure payment link (for example via Midtrans) depending on the store configuration.",
   },
 ];
 
 const merchantFaq = [
   {
-    question: "Bagaimana AI membantu mengelola toko saya?",
+    question: "How does Gercep help my store?",
     answer:
-      "AI kami secara otomatis memahami katalog produk Anda. AI bisa menjawab pertanyaan pelanggan tentang menu, stok, dan harga 24/7 tanpa Anda perlu membalas manual.",
+      "Customers can browse and order from your store via WhatsApp/Web Chat, while your dashboard remains the source of truth for catalog and orders.",
   },
   {
-    question: "Dapatkah saya mengupdate harga atau produk via chat?",
+    question: "Can I update prices or products via chat?",
     answer:
-      "Ya! Sebagai merchant, Anda bisa mengupdate harga atau menambah produk cukup dengan mengirim pesan ke AI di WhatsApp, misalnya: 'Ubah harga Nasi Goreng jadi 25000'.",
+      "In some flows, merchants can do quick updates via chat (for example updating a price). For full control, use the dashboard.",
   },
   {
-    question: "Apakah ada biaya tambahan untuk menggunakan AI?",
+    question: "Are there extra fees to use the assistant?",
     answer:
-      "Fitur AI Assistant tersedia untuk membantu meningkatkan konversi penjualan Anda. Biaya transaksi tetap mengikuti standar (QRIS 1% atau Bank Transfer Rp 5.000).",
+      "Transaction fees follow the configured payment method (for example QRIS or bank transfer). Store pricing depends on your subscription plan and setup.",
   },
   {
-    question: "Bagaimana AI menangani stok yang habis?",
+    question: "How is out-of-stock handled?",
     answer:
-      "AI hanya akan menawarkan produk yang memiliki stok tersedia di sistem Anda. Jika stok habis, AI akan memberitahu pelanggan dan menyarankan produk alternatif.",
+      "Gercep Assistant only shows items that are available according to your catalog and stock rules. If an item is unavailable, it will suggest alternatives.",
   },
 ];
 
@@ -56,9 +56,9 @@ export default function FaqPage() {
     <main className="min-h-screen bg-gray-50 dark:bg-[#0F1113] text-gray-900 dark:text-white">
       <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
         <div className="space-y-2 text-center md:text-left">
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight">FAQ & BANTUAN AI</h1>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight">FAQ & HELP</h1>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Segala hal yang perlu Anda ketahui tentang berbelanja pintar dengan Gercep AI Assistant.
+            Everything you need to know about shopping, shipping, and payments with Gercep Assistant.
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export default function FaqPage() {
 
         <div className="pt-8 text-center border-t dark:border-white/10">
           <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-black hover:gap-3 transition-all">
-            <span>Kembali ke Beranda</span>
+            <span>Back to Home</span>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
           </Link>
         </div>

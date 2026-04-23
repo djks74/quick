@@ -34,7 +34,7 @@ export default function AdminChat({ user, context }: AdminChatProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
-    { role: "model", parts: [{ text: "Halo Admin! Saya Asisten AI Gercep khusus manajemen. Ada yang bisa saya bantu dengan outlet atau laporan Anda hari ini?" }] }
+    { role: "model", parts: [{ text: "Halo Admin! Saya Gercep Admin Assistant untuk manajemen. Ada yang bisa saya bantu terkait outlet atau laporan hari ini?" }] }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -103,9 +103,6 @@ export default function AdminChat({ user, context }: AdminChatProps) {
         className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 z-50 group"
       >
         <MessageSquare className="w-6 h-6 group-hover:animate-pulse" />
-        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-gray-900">
-          AI
-        </div>
       </button>
     );
   }
@@ -124,7 +121,7 @@ export default function AdminChat({ user, context }: AdminChatProps) {
             <Bot className="w-5 h-5 text-blue-400" />
           </div>
           <div>
-            <h3 className="text-[11px] font-black uppercase tracking-[0.1em]">Gercep Admin AI</h3>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.1em]">Gercep Admin Assistant</h3>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
               <p className="text-[9px] opacity-60 font-black uppercase tracking-widest">Management Mode</p>

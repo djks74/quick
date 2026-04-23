@@ -137,7 +137,7 @@ This document summarizes the end-to-end features available in **Gercep** (custom
 - Start shopping from WhatsApp using store context (store ID / slug resolution).
 - Interactive browsing via WhatsApp message buttons (categories/products).
 
-### AI assistant (Gercep Assistant)
+### Assistant (Gercep Assistant)
 - Helps customer discover stores and products.
 - Supports merchant-only utilities (e.g., shipping-only / invoice-only workflows).
 - Channel-aware guidance (web vs WhatsApp).
@@ -177,6 +177,5 @@ This document summarizes the end-to-end features available in **Gercep** (custom
 4. POS + Barcode (hardware + camera)
 5. Inventory + Ingredient Barcode + Recipe linkage
 6. Shipping + Payments (gateway + invoice/tagihan)
-7. WhatsApp + AI Assistant
+7. WhatsApp + Assistant
 8. Operational tooling (notifications + super admin)
-
