@@ -174,7 +174,7 @@ function LoginForm() {
         <div>
           <div className="flex justify-between items-center mb-1.5">
             <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Password</label>
-            <a href="#" className="text-[10px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-widest">Forgot?</a>
+            <Link href="/forgot-password" className="text-[10px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-widest">Forgot?</Link>
           </div>
           <div className="relative">
             <input

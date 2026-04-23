@@ -19,6 +19,7 @@ model User {
   workedAtId  Int?
   stores      Store[]  @relation("StoreOwner")
   workedAt    Store?   @relation("StoreCashier", fields: [workedAtId], references: [id])
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Store {
@@ -279,6 +280,20 @@ model InventoryItem {
 model ProcessedMessage {
   id        String   @id
   createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model WaUsageLog {
