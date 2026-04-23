@@ -331,7 +331,7 @@ export default function StoreTable({ stores, users, storeTypes }: { stores: any[
                     >
                       <option value="">Select Corporate Owner...</option>
                       {users?.filter(u => u.role === 'MERCHANT' && u.id !== editingStore.ownerId).map(user => (
-                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                        <option key={user.id} value={user.id}>{String(user.name || "").replace(/[<>]/g, "")} ({String(user.email || "").replace(/[<>]/g, "")})</option>
                       ))}
                     </select>
                     

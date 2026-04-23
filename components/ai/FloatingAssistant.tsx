@@ -93,10 +93,20 @@ export default function FloatingAssistant({
   }, [messages, activeProductListIdx]);
 
   const formatMessage = (text: string) => {
+    const escapeHtml = (s: string) =>
+      String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     // 1. Handle Bold (**text**)
-    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    let formatted = escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     // 2. Handle Markdown Links ([text](url))
-    formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80 transition-opacity font-medium">$1</a>');
+    formatted = formatted.replace(
+      /\[(.*?)\]\((.*?)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80 transition-opacity font-medium">$1</a>'
+    );
     // 3. Handle line breaks
     return formatted.split('\n').map((line, i) => (
       <span key={i} dangerouslySetInnerHTML={{ __html: line + '<br/>' }} />
