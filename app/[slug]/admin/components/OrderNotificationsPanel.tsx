@@ -24,10 +24,12 @@ export default function OrderNotificationsPanel({
   storeId,
   slug,
   initialNotifications = [],
+  disablePolling = false,
 }: {
   storeId: number;
   slug: string;
   initialNotifications?: Row[];
+  disablePolling?: boolean;
 }) {
   const [items, setItems] = useState<Row[]>(initialNotifications);
   const unreadCount = useMemo(() => items.filter((i) => !i.isRead).length, [items]);
@@ -49,10 +51,11 @@ export default function OrderNotificationsPanel({
   }, [slug, storeId]);
 
   useEffect(() => {
+    if (disablePolling) return;
     refresh();
     const t = setInterval(refresh, 10000);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [disablePolling, refresh]);
 
   const markRead = async (id: number) => {
     const res = await fetch("/api/admin/order-notifications", {

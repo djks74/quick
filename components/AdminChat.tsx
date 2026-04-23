@@ -27,10 +27,12 @@ interface Message {
 interface AdminChatProps {
   user: any;
   context?: any;
+  defaultOpen?: boolean;
+  onRequestClose?: () => void;
 }
 
-export default function AdminChat({ user, context }: AdminChatProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function AdminChat({ user, context, defaultOpen = false, onRequestClose }: AdminChatProps) {
+  const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -136,7 +138,10 @@ export default function AdminChat({ user, context }: AdminChatProps) {
             {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
           </button>
           <button 
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false);
+              onRequestClose?.();
+            }}
             className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
           >
             <X size={16} />

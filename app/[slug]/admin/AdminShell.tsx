@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { 
   LayoutDashboard, 
   Package, 
@@ -35,7 +36,8 @@ import { useAdmin } from "@/lib/admin-context";
 import { signOut, useSession } from "next-auth/react";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import ThemeToggle from "@/components/ThemeToggle";
-import AdminChat from "@/components/AdminChat";
+
+const AdminChat = dynamic(() => import("@/components/AdminChat"), { ssr: false });
 
 interface SidebarItem {
   name: string;
@@ -45,6 +47,10 @@ interface SidebarItem {
   isNotifications?: boolean;
   onClick?: () => void;
 }
+
+const MemoChildren = memo(function MemoChildren({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+});
 
 export default function AdminShell({
   children,
@@ -71,6 +77,7 @@ export default function AdminShell({
   const [toastItems, setToastItems] = useState<any[]>([]);
   const notificationsReadyRef = useRef(false);
   const knownNotificationIdsRef = useRef<Set<number>>(new Set());
+  const notificationsSignatureRef = useRef<string>("");
   
   const slug = store.slug;
   const baseUrl = `/${slug}/admin`;
@@ -114,11 +121,11 @@ export default function AdminShell({
     };
   }, []);
 
-  const sidebarItems: SidebarItem[] = [
+  const sidebarItems = useMemo<SidebarItem[]>(() => [
     { name: "Dashboard", href: baseUrl, icon: LayoutDashboard },
-    ...(store.subscriptionPlan !== 'FREE' ? [
-      { 
-        name: "Products", 
+    ...(store.subscriptionPlan !== "FREE" ? [
+      {
+        name: "Products",
         icon: Package,
         children: [
           { name: "All Products", href: `${baseUrl}/products` },
@@ -126,7 +133,7 @@ export default function AdminShell({
         ]
       }
     ] : []),
-    ...(store.subscriptionPlan !== 'FREE' && store.subscriptionPlan !== 'PRO' ? [
+    ...(store.subscriptionPlan !== "FREE" && store.subscriptionPlan !== "PRO" ? [
       {
         name: "Ingredients",
         icon: Layers,
@@ -136,8 +143,8 @@ export default function AdminShell({
         ]
       }
     ] : []),
-    { 
-      name: "Orders", 
+    {
+      name: "Orders",
       href: `${baseUrl}/orders`,
       icon: ShoppingCart,
     },
@@ -151,16 +158,16 @@ export default function AdminShell({
       icon: Wallet,
       children: [
         { name: "Report", href: `${baseUrl}/finance/ledger` },
-        ...(store.subscriptionPlan !== 'FREE' && store.subscriptionPlan !== 'PRO' ? [
+        ...(store.subscriptionPlan !== "FREE" && store.subscriptionPlan !== "PRO" ? [
           { name: "Analytics", href: `${baseUrl}/finance/profit` }
         ] : []),
         { name: "Withdrawals", href: `${baseUrl}/finance/withdrawals` },
       ]
     },
-    { 
-      name: "Settings", 
-      href: `${baseUrl}/settings`, 
-      icon: Settings 
+    {
+      name: "Settings",
+      href: `${baseUrl}/settings`,
+      icon: Settings
     },
     ...(isOwner || isSuperAdmin ? [
       {
@@ -169,11 +176,11 @@ export default function AdminShell({
         icon: Zap
       }
     ] : []),
-    ...(store.subscriptionPlan !== 'FREE' ? [
-      { 
-        name: "Tables", 
-        href: `${baseUrl}/tables`, 
-        icon: Layers 
+    ...(store.subscriptionPlan !== "FREE" ? [
+      {
+        name: "Tables",
+        href: `${baseUrl}/tables`,
+        icon: Layers
       }
     ] : []),
     ...(isOwner || isSuperAdmin ? [
@@ -183,7 +190,7 @@ export default function AdminShell({
         icon: Users
       }
     ] : [])
-  ];
+  ], [baseUrl, isOwner, isSuperAdmin, store.subscriptionPlan]);
 
   const toggleMenu = (name: string) => {
     setOpenMenus(prev => 
@@ -218,14 +225,18 @@ export default function AdminShell({
         const rows = payload.notifications as any[];
         if (!mounted) return;
         const nextRows = rows as any[];
+        const nextSignature = nextRows.map((n) => `${n.id}:${n.isRead ? 1 : 0}`).join("|");
+        if (notificationsReadyRef.current && nextSignature === notificationsSignatureRef.current) return;
         if (!notificationsReadyRef.current) {
           notificationsReadyRef.current = true;
           knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+          notificationsSignatureRef.current = nextSignature;
           setNotifications(nextRows);
           return;
         }
         const newItems = nextRows.filter((n) => !knownNotificationIdsRef.current.has(n.id));
         knownNotificationIdsRef.current = new Set(nextRows.map((n) => n.id));
+        notificationsSignatureRef.current = nextSignature;
         newItems.slice(0, 3).forEach(pushToast);
         setNotifications(rows as any[]);
       } catch (error: any) {
@@ -243,7 +254,7 @@ export default function AdminShell({
       mounted = false;
       clearInterval(timer);
     };
-  }, [store.id]);
+  }, [store.slug]);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
@@ -257,12 +268,21 @@ export default function AdminShell({
     }).catch(() => null);
     const payload = res ? await res.json().catch(() => null) : null;
     const ok = Boolean(payload?.success);
-    if (ok) setNotifications(prev => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+    if (ok) {
+      setNotifications((prev) => {
+        const next = prev.map((n) => n.id === id ? { ...n, isRead: true } : n);
+        notificationsSignatureRef.current = next.map((n) => `${n.id}:${n.isRead ? 1 : 0}`).join("|");
+        return next;
+      });
+    }
   };
 
   const markAllRead = async () => {
-    // Optimistic UI update
-    setNotifications(prev => prev.map((n) => ({ ...n, isRead: true })));
+    setNotifications((prev) => {
+      const next = prev.map((n) => ({ ...n, isRead: true }));
+      notificationsSignatureRef.current = next.map((n) => `${n.id}:${n.isRead ? 1 : 0}`).join("|");
+      return next;
+    });
     
     const res = await fetch("/api/admin/order-notifications", {
       method: "POST",
@@ -651,7 +671,7 @@ export default function AdminShell({
               isMinimal ? "bg-white/70 dark:bg-[#1A1D21]/70 backdrop-blur-sm rounded-2xl border border-gray-100 dark:border-gray-800 shadow-none" : 
               "bg-white dark:bg-[#1A1D21] border border-[#ccd0d4] dark:border-gray-800"
             )}>
-              {children}
+              <MemoChildren>{children}</MemoChildren>
             </div>
           </div>
         </main>
