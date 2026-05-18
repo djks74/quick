@@ -1620,8 +1620,13 @@ function isCategoryIntent(input: string) {
 
 function isStoreSearchIntent(input: string) {
   const t = normalizeLooseText(input);
-  return /\b(toko|store|resto|restaurant|warung|merchant|outlet|cabang|pasar segar|terdekat|dekat|sekitar|nearby|near me|area)\b/.test(
-    t
+  // Detect explicit location mention like "di Manado", "sekitar BSD", etc.
+  const hasExplicitLocation = /\b(di|sekitar|dekat|area)\s+([a-z0-9\p{L}]{3,})/iu.test(t);
+  return (
+    hasExplicitLocation ||
+    /\b(toko|store|resto|restaurant|warung|merchant|outlet|cabang|pasar segar|terdekat|dekat|sekitar|nearby|near me|area)\b/.test(
+      t
+    )
   );
 }
 
@@ -1757,7 +1762,7 @@ async function handleInternalCommerceChat({
     };
   }
 
-  if (activeStore?.slug && isProductSearchIntent(rawMessage)) {
+  if (activeStore?.slug && isProductSearchIntent(rawMessage) && !isStoreSearchIntent(rawMessage)) {
     const keyword = cleanProductKeyword(rawMessage);
     if (!keyword && !isFullMenuRequest(rawMessage)) {
       const text = `Aku bisa bantu cari produk di *${activeStore.name}*. Coba ketik nama barangnya, atau balas "menu lengkap".`;
