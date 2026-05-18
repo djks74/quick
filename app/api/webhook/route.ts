@@ -1635,7 +1635,13 @@ export async function POST(req: NextRequest) {
                 /\b(?:toko|store)\s+lain\b/i.test(textBody || "") ||
                 /\b(?:switch|change)\s+store\b/i.test(textBody || "");
               const hasExistingLock = !!(metadata as any)?.lockedStoreId;
-              if ((data.activeStoreId || data.activeStoreSlug) && (!hasExistingLock || allowStoreSwitch)) {
+              
+              // Handle explicit unlock (null) or new store selection
+              if (data.activeStoreId === null || data.activeStoreSlug === null) {
+                updatedMetadata.lockedStoreId = null;
+                updatedMetadata.lockedStoreSlug = null;
+                updatedMetadata.lockedStoreAt = null;
+              } else if ((data.activeStoreId || data.activeStoreSlug) && (!hasExistingLock || allowStoreSwitch)) {
                 updatedMetadata.lockedStoreId = data.activeStoreId || (metadata as any)?.lockedStoreId;
                 updatedMetadata.lockedStoreSlug = data.activeStoreSlug || (metadata as any)?.lockedStoreSlug;
                 updatedMetadata.lockedStoreAt = new Date().toISOString();

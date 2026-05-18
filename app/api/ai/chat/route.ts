@@ -1976,7 +1976,17 @@ async function handleInternalCommerceChat({
           hasCoords || (!invalidLoc && loc.length >= 3)
             ? `Maaf, saat ini belum ada toko yang tersedia di area ${String(effectiveLocation || storedLocationText || "ini")} untuk pencarian itu. Coba ganti tipe toko atau area lain ya.`
             : "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
-        return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit), customerProfile };
+        
+        // If we explicitly searched for a location and found nothing, 
+        // we should unlock the active store so the user isn't stuck.
+        const shouldUnlock = !!effectiveLocation;
+        return { 
+          text, 
+          history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit), 
+          customerProfile,
+          activeStoreId: shouldUnlock ? null : undefined,
+          activeStoreSlug: shouldUnlock ? null : undefined
+        };
       }
 
       if (stores.length === 1) {
