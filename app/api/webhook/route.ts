@@ -1218,6 +1218,7 @@ export async function POST(req: NextRequest) {
           const isPlatformNumberForAi = platformPhoneNumberId && String(phoneNumberId) === String(platformPhoneNumberId);
           
           // Look for a "locked" store in the session metadata if on platform number
+          const hasExplicitUnlock = metadata?.lockedStoreId === null;
           let lockedStoreId = metadata?.lockedStoreId;
 
           let aiStore = phoneNumberId
@@ -1225,14 +1226,17 @@ export async function POST(req: NextRequest) {
                 ? (
                     lockedStoreId
                       ? await prisma.store.findUnique({ where: { id: Number(lockedStoreId) }, select: { id: true, slug: true, name: true } })
-                      : await prisma.whatsAppSession.findFirst({
-                          where: { phoneNumber: from, storeId: { gt: 0 } },
-                          orderBy: { updatedAt: "desc" },
-                          select: { storeId: true }
-                        }).then(async (s) => {
-                          if (!s?.storeId) return null;
-                          return prisma.store.findUnique({ where: { id: Number(s.storeId) }, select: { id: true, slug: true, name: true } });
-                        })
+                      : (hasExplicitUnlock 
+                          ? null 
+                          : await prisma.whatsAppSession.findFirst({
+                              where: { phoneNumber: from, storeId: { gt: 0 } },
+                              orderBy: { updatedAt: "desc" },
+                              select: { storeId: true }
+                            }).then(async (s) => {
+                              if (!s?.storeId) return null;
+                              return prisma.store.findUnique({ where: { id: Number(s.storeId) }, select: { id: true, slug: true, name: true } });
+                            })
+                        )
                   )
                 : await prisma.store.findFirst({
                     where: { whatsappPhoneId: String(phoneNumberId) },
