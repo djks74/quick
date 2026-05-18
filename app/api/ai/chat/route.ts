@@ -1750,9 +1750,26 @@ async function handleInternalCommerceChat({
 
   if (isHelpFaqIntent(rawMessage)) {
     const text = activeStore?.slug
-      ? `I can help you shop at *${activeStore.name}*: browse categories, search products, check shipping, see payment options, and check your last order.\n\nTry:\n- "categories"\n- "full menu"\n- "find chicken"\n- "check shipping" (share location/address)`
-      : "I can only help with Gercep shopping: store/product search, menu browsing, shipping, payments, and order status.\n\nTry:\n- \"stores near me\" (then share location)\n- \"vegetables in Ciputat\"\n- \"check shipping\" / \"payment\"";
-    return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit) };
+      ? `Aku bisa bantu Kakak belanja di *${activeStore.name}*:\n\n` +
+        `🛍️ *Belanja*: Ketik nama produk (misal: "cari ayam") atau "menu lengkap" untuk lihat semua.\n` +
+        `🚚 *Pengiriman*: Ketik "cek ongkir" lalu share lokasi/alamat untuk tarif akurat.\n` +
+        `💳 *Pembayaran*: Pakai QRIS atau Transfer Bank. Link bayar muncul setelah checkout.\n` +
+        `📦 *Status*: Ketik "cek pesanan" untuk lihat order terakhir Kakak.\n\n` +
+        `📍 *Ganti Toko*: Kalau mau cari toko di area lain, ketik saja "cari toko di <nama area>" (misal: "cari toko di Manado").\n\n` +
+        `Ada lagi yang bisa aku bantu di *${activeStore.name}*?`
+      : `Halo! Aku asisten Gercep. Aku bisa bantu Kakak cari toko, produk, cek ongkir, dan pembayaran.\n\n` +
+        `🔍 *Cari Toko*: Ketik "toko <jenis> di <area>" (misal: "toko sayur di Ciputat" atau "kopi di Manado").\n` +
+        `🚚 *Ongkir*: Pilih toko dulu, lalu ketik "ongkir" dan share lokasi Kakak.\n` +
+        `💳 *Bayar*: Pembayaran digital otomatis via QRIS/Transfer setelah Kakak pesan.\n\n` +
+        `Coba ketik: *"sayur di Manado"* atau *"toko terdekat"* (lalu share lokasi).`;
+    
+    return { 
+      text, 
+      history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
+      // Crucial: only return store context if we are NOT in a global search mode
+      activeStoreId: activeStore?.id || undefined,
+      activeStoreSlug: activeStore?.slug || undefined
+    };
   }
 
   if (isPaymentFaqIntent(rawMessage) && !isOrderStatusIntent(rawMessage)) {
