@@ -357,30 +357,34 @@ function buildAssistantScopedStoreWhere(extra: Record<string, any> = {}) {
 
 function normalizeStoreSearchInput(query: string, locationContext?: string) {
   const raw = String(query || "").trim();
-  const providedLocation = String(locationContext || "").trim();
   const normalized = raw
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  let effectiveLocation = providedLocation;
+  let effectiveLocation = "";
+  
+  // 1. Always prioritize location from the current query
+  const locationMatch = normalized.match(/(?:sekitar|dekat|di area|area|nearby|near|di)\s+([a-z0-9\p{L}\s-]{3,})/iu);
+  if (locationMatch?.[1]) {
+    effectiveLocation = locationMatch[1].trim();
+  }
+
+  // 2. Fallback to provided context if no location found in query
+  if (!effectiveLocation && locationContext) {
+    effectiveLocation = String(locationContext).trim();
+  }
+
   if (!effectiveLocation) {
-    // Improved regex to capture location even without "sekitar/dekat"
-    const locationMatch = normalized.match(/(?:sekitar|dekat|di area|area|nearby|near|di)\s+([a-z0-9\p{L}\s-]+)/iu);
-    if (locationMatch?.[1]) {
-      effectiveLocation = locationMatch[1].trim();
-    } else {
-      // If no explicit location keyword, check if the last word might be a location
-      const words = normalized.split(" ");
-      if (words.length > 1) {
-        const lastWord = words[words.length - 1];
-        // Simple heuristic: if last word is not a common food/action word, it might be a location
-        const commonNonLocationWords = ["toko", "resto", "makanan", "minuman", "menu", "pesan", "order", "ada", "cari", "bisa", "tolong"];
-        if (!commonNonLocationWords.includes(lastWord) && lastWord.length > 3) {
-          // We don't set it as effectiveLocation automatically to avoid false positives, 
-          // but we keep it in the query.
-        }
+    // 3. Simple heuristic: if last word is not a common food/action word, it might be a location
+    const words = normalized.split(" ");
+    if (words.length > 1) {
+      const lastWord = words[words.length - 1];
+      const commonNonLocationWords = ["toko", "resto", "makanan", "minuman", "menu", "pesan", "order", "ada", "cari", "bisa", "tolong", "beli", "mau", "sayur", "buah"];
+      if (!commonNonLocationWords.includes(lastWord) && lastWord.length > 3) {
+        // We don't set it as effectiveLocation automatically to avoid false positives, 
+        // but it's often a location. For now we keep the stricter logic above.
       }
     }
   }
@@ -566,14 +570,30 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     };
 
     if (keywordOr.length > 0 || locationOr.length > 0) {
-      finalWhere.OR = [
-        // Priority 1: Keyword AND Location
-        ...( (keywordOr.length > 0 && locationOr.length > 0) ? [{ AND: [{ OR: keywordOr }, { OR: locationOr }] }] : [] ),
-        // Priority 2: Keyword only
-        ...( keywordOr.length > 0 ? keywordOr : [] ),
-        // Priority 3: Location only
-        ...( locationOr.length > 0 ? locationOr : [] )
-      ];
+      if (effectiveLocation && keyword) {
+        // If both location and keyword are provided, we MUST match location
+        // and SHOULD match keyword (prioritized)
+        finalWhere.AND = [
+          { OR: locationOr },
+          {
+            OR: [
+              { OR: keywordOr },
+              { isActive: true } // Always true fallback within the AND(location)
+            ]
+          }
+        ];
+        // To keep the ranking, we still use OR for the findMany but with the location as a strict filter
+        finalWhere.OR = [
+          { AND: [{ OR: keywordOr }, { OR: locationOr }] },
+          { OR: locationOr }
+        ];
+      } else if (effectiveLocation) {
+        // Only location provided
+        finalWhere.OR = locationOr;
+      } else if (keyword) {
+        // Only keyword provided
+        finalWhere.OR = keywordOr;
+      }
     }
     
     // Combine into a single query with weighted logic via Prisma's OR
