@@ -44,6 +44,7 @@ export default function FloatingAssistant({
   const [isOpen, setIsOpen] = useState(isEmbed);
   
   // Hide on Admin, Dashboard, and POS pages (only if not embedded)
+  const isHomePage = !isEmbed && pathname === "/";
   const isAdminPage = !isEmbed && (pathname?.includes("/admin") || pathname?.includes("/dashboard") || pathname?.includes("/super-admin"));
   const isPosPage = !isEmbed && pathname?.includes("/pos");
 
@@ -263,7 +264,7 @@ export default function FloatingAssistant({
     }
   };
 
-  if (isAdminPage || isPosPage) return null;
+  if (isHomePage || isAdminPage || isPosPage) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">

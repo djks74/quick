@@ -88,6 +88,24 @@ function buildStoreTypeHint(storeTypes: any[]) {
   return `Contoh: ${labels.map((s) => `"${s}"`).join(", ")}.`;
 }
 
+function buildStoreTypeUiOptions(storeTypes: any[]) {
+  return (storeTypes || [])
+    .filter((st: any) => st?.active !== false)
+    .slice(0, 8)
+    .map((st: any) => ({
+      id: `STORE_TYPE:${String(st?.code || "").trim()}`,
+      title: String(st?.label || st?.code || "").split("(")[0].trim().slice(0, 24),
+      description: String(st?.label || st?.code || "").trim().slice(0, 72)
+    }))
+    .filter((st: any) => st.id !== "STORE_TYPE:" && st.title);
+}
+
+function isNearbyStoreIntent(input: string) {
+  return /\b(terdekat|dekat\s+(saya|sini)|sekitar(\s+saya)?|nearby|near\s+me|di\s+sekitar|area\s+saya|lokasi\s+saya)\b/i.test(
+    normalizeLooseText(String(input || ""))
+  );
+}
+
 function normalizePhoneNumber(phone: string) {
   let clean = phone.replace(/\D/g, "");
   if (clean.startsWith("0")) {
@@ -293,6 +311,15 @@ function buildAssistantStoreEligibilityWhere(extra: Record<string, any> = {}) {
   };
 }
 
+function buildPublicAssistantStoreEligibilityWhere(channel?: string, extra: Record<string, any> = {}) {
+  const upperChannel = String(channel || "").toUpperCase();
+  return buildAssistantStoreEligibilityWhere({
+    enableCommerceAssistant: true,
+    ...(upperChannel === "WHATSAPP" ? { enableWhatsApp: true } : {}),
+    ...extra
+  });
+}
+
 function buildAssistantScopedStoreWhere(extra: Record<string, any> = {}) {
   return {
     isActive: true,
@@ -444,7 +471,8 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     latitude,
     longitude,
     store_type,
-    scopedSlug
+    scopedSlug,
+    channel
   }: {
     query: string;
     location_context?: string;
@@ -452,6 +480,7 @@ const tools: Record<string, (args: any) => Promise<any>> = {
     longitude?: number;
     store_type?: string;
     scopedSlug?: string;
+    channel?: string;
   }) {
     await ensureStoreSettingsSchema();
     const { keyword, effectiveLocation } = normalizeStoreSearchInput(String(query || ""), location_context);
@@ -500,7 +529,10 @@ const tools: Record<string, (args: any) => Promise<any>> = {
           { slug: { contains: effectiveLocation, mode: "insensitive" } }
         ]
       : [];
-    const baseWhere: any = buildAssistantStoreEligibilityWhere(scopedSlug ? { slug: String(scopedSlug) } : {});
+    const baseWhere: any = buildPublicAssistantStoreEligibilityWhere(
+      channel,
+      scopedSlug ? { slug: String(scopedSlug) } : {}
+    );
     
     const finalWhere: any = {
       ...baseWhere
@@ -1752,10 +1784,18 @@ async function handleInternalCommerceChat({
     const shouldSearchStores = isStoreSearchIntent(rawMessage) || !activeStore?.slug;
     if (shouldSearchStores) {
       const storeTypes = await getCachedStoreTypes().catch(() => []);
+      const typeOptions = buildStoreTypeUiOptions(storeTypes);
       const storeTypeFromText = resolveStoreTypeCodeFromText(rawMessage, storeTypes);
       const storedStoreType = String((customerProfile as any)?.preferredStoreType || (customerProfile as any)?.storeType || "").trim();
       const storeTypeCode = storeTypeFromText || (storedStoreType ? storedStoreType : null);
       if (storeTypeFromText) (customerProfile as any).preferredStoreType = storeTypeFromText;
+      const storedLocationText = String((customerProfile as any)?.preferredLocation || (customerProfile as any)?.locationText || "").trim();
+      const needsNearbyLocation = isNearbyStoreIntent(rawMessage) || String((customerProfile as any)?.preferredSearchMode || "").toUpperCase() === "NEARBY";
+      if (isNearbyStoreIntent(rawMessage)) {
+        (customerProfile as any).preferredSearchMode = "NEARBY";
+      } else if (!(customerProfile as any)?.preferredSearchMode) {
+        (customerProfile as any).preferredSearchMode = "CITY";
+      }
       const storeTypeLabel = (() => {
         const want = String(storeTypeCode || "").trim();
         if (!want) return "";
@@ -1774,7 +1814,10 @@ async function handleInternalCommerceChat({
         (rawLoose === typeCodeLoose || (typeBaseLoose && rawLoose === typeBaseLoose) || (typeFirstToken && rawLoose === typeFirstToken));
       const queryForSearch = isTypeOnly ? "" : rawMessage;
 
-      const { effectiveLocation } = normalizeStoreSearchInput(String(rawMessage || ""), context?.location_context);
+      const { effectiveLocation } = normalizeStoreSearchInput(
+        String(rawMessage || ""),
+        context?.location_context || storedLocationText
+      );
       const loc = normalizeLooseText(String(effectiveLocation || ""));
       const invalidLoc =
         !loc ||
@@ -1782,55 +1825,74 @@ async function handleInternalCommerceChat({
           loc
         );
       const hasLocation = Boolean(hasCoords) || (!invalidLoc && loc.length >= 3);
+      if (!invalidLoc && loc.length >= 3) {
+        (customerProfile as any).preferredLocation = String(effectiveLocation || "").trim();
+      }
 
       if (!hasLocation && !storeTypeCode) {
-        const hint = buildStoreTypeHint(storeTypes);
         const text =
-          `Boleh share lokasi (titik) atau sebut area kamu di mana? (contoh: Ciputat, Grogol, BSD)\n` +
-          `Terus kamu lagi cari toko jenis apa?\n${hint}`;
+          needsNearbyLocation
+            ? "Boleh share live location dulu ya biar aku carikan yang paling dekat. Setelah itu pilih jenis toko yang kamu cari."
+            : "Kamu ada di kota / area mana? Contoh: Ciputat, Grogol, BSD.\nSetelah itu pilih jenis toko yang kamu cari ya.";
         return {
           text,
           history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
-          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_LOCATION_AND_TYPE" }
+          customerProfile: {
+            ...(customerProfile as any),
+            pendingIntent: "STORE_SEARCH_NEEDS_LOCATION_AND_TYPE",
+            preferredSearchMode: needsNearbyLocation ? "NEARBY" : "CITY"
+          },
+          uiAction: typeOptions.length > 0
+            ? { type: "CHOOSE_STORE_TYPE", label: "Pilih Tipe", options: typeOptions }
+            : undefined
         };
       }
       if (!hasLocation && storeTypeCode) {
         const text =
-          `Siap. Boleh share lokasi (titik) atau sebut area kamu di mana? (contoh: Ciputat, Grogol, BSD)\n` +
-          `Nanti aku carikan toko ${storeTypeLabel || String(storeTypeCode)} yang terdekat.`;
+          needsNearbyLocation
+            ? `Siap. Tolong share live location ya. Nanti aku carikan toko ${storeTypeLabel || String(storeTypeCode)} yang paling dekat.`
+            : `Siap. Kamu ada di kota / area mana? (contoh: Ciputat, Grogol, BSD)\nNanti aku carikan toko ${storeTypeLabel || String(storeTypeCode)} yang tersedia di area itu.`;
         return {
           text,
           history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
-          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_LOCATION" }
+          customerProfile: {
+            ...(customerProfile as any),
+            pendingIntent: "STORE_SEARCH_NEEDS_LOCATION",
+            preferredSearchMode: needsNearbyLocation ? "NEARBY" : "CITY"
+          }
         };
       }
       if (hasLocation && !storeTypeCode) {
-        const hint = buildStoreTypeHint(storeTypes);
-        const text = `Oke. Kamu lagi cari toko jenis apa? ${hint}`;
+        const text = `Oke. Kamu lagi cari toko jenis apa? Pilih salah satu tipe di bawah ya.`;
         return {
           text,
           history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit),
-          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_TYPE" }
+          customerProfile: { ...(customerProfile as any), pendingIntent: "STORE_SEARCH_NEEDS_TYPE" },
+          uiAction: typeOptions.length > 0
+            ? { type: "CHOOSE_STORE_TYPE", label: "Pilih Tipe", options: typeOptions }
+            : undefined
         };
       }
 
       const result = await tools.search_stores({
         query: queryForSearch,
-        location_context: context?.location_context,
+        location_context: String(effectiveLocation || storedLocationText || context?.location_context || ""),
         latitude: hasCoords ? lat : undefined,
         longitude: hasCoords ? lng : undefined,
         store_type: storeTypeCode || undefined,
-        scopedSlug: forcedScopedSlug || undefined
+        scopedSlug: forcedScopedSlug || undefined,
+        channel: channelUpper
       });
       const stores = Array.isArray(result?.stores) ? result.stores : [];
       if (stores.length === 0) {
         if (storeTypeCode) {
           const fallback = await tools.search_stores({
             query: "",
-            location_context: context?.location_context,
+            location_context: String(effectiveLocation || storedLocationText || context?.location_context || ""),
             latitude: hasCoords ? lat : undefined,
             longitude: hasCoords ? lng : undefined,
-            scopedSlug: forcedScopedSlug || undefined
+            scopedSlug: forcedScopedSlug || undefined,
+            channel: channelUpper
           });
           const fallbackStores = Array.isArray(fallback?.stores) ? fallback.stores : [];
           if (fallbackStores.length > 0) {
@@ -1859,13 +1921,15 @@ async function handleInternalCommerceChat({
           }
         }
         const text =
-          "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
+          hasCoords || (!invalidLoc && loc.length >= 3)
+            ? `Maaf, saat ini belum ada toko yang tersedia di area ${String(effectiveLocation || storedLocationText || "ini")} untuk pencarian itu. Coba ganti tipe toko atau area lain ya.`
+            : "Aku belum ketemu toko yang cocok. Coba sebut nama toko, barang yang dicari, atau area seperti Ciputat, Grogol, atau BSD ya.";
         return { text, history: buildRuleReplyHistory(validatedHistory, rawMessage, text, historyLimit), customerProfile };
       }
 
       if (stores.length === 1) {
         const store = await prisma.store.findFirst({
-          where: buildAssistantStoreEligibilityWhere({ slug: String(stores[0].slug || "") }),
+          where: buildPublicAssistantStoreEligibilityWhere(channelUpper, { slug: String(stores[0].slug || "") }),
           select: { id: true, slug: true, name: true }
         });
         const text = `Aku ketemu toko *${stores[0].name}*. Klik *Mulai Belanja* ya.`;

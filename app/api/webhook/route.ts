@@ -49,6 +49,17 @@ const assistantStoreEligibilityWhere = {
   products: { some: { category: { not: "System" } } }
 };
 
+const whatsappAssistantStoreEligibilityWhere = {
+  ...assistantStoreEligibilityWhere,
+  enableWhatsApp: true,
+  enableCommerceAssistant: true
+};
+
+const WA_NEARBY_STORE_RADIUS_METERS = Math.max(
+  1000,
+  Number(process.env.WA_NEARBY_STORE_RADIUS_METERS || "35000") || 35000
+);
+
 // Session Helpers
 async function getSession(phoneNumber: string, storeId: number) {
   let session = await prisma.whatsAppSession.findUnique({
@@ -564,10 +575,14 @@ export async function POST(req: NextRequest) {
     const isCategoryListTap = listReplyId.startsWith("CAT_");
     const isProductListTap = listReplyId.startsWith("PROD_");
     const isStoreListTap = listReplyId.startsWith("STORE_");
+    const isStoreTypeListTap = listReplyId.startsWith("STORE_TYPE:");
     const isProductPageTap = listReplyId.startsWith("PROD_PAGE_");
 
     if (listReplyId.toLowerCase().startsWith("pilih_toko:")) {
       textBody = listReplyId;
+    }
+    if (isStoreTypeListTap) {
+      textBody = `Saya cari toko tipe ${listReplyTitle || listReplyId.replace(/^STORE_TYPE:/, "")}`;
     }
 
     // Get language early for localization
@@ -630,8 +645,8 @@ export async function POST(req: NextRequest) {
 
         const s = await prisma.store.findFirst({
           where: requestedSlug
-            ? ({ ...assistantStoreEligibilityWhere, slug: requestedSlug } as any)
-            : ({ ...assistantStoreEligibilityWhere, id: requestedId } as any),
+            ? ({ ...whatsappAssistantStoreEligibilityWhere, slug: requestedSlug } as any)
+            : ({ ...whatsappAssistantStoreEligibilityWhere, id: requestedId } as any),
           select: { id: true, slug: true, name: true }
         });
 
@@ -803,6 +818,17 @@ export async function POST(req: NextRequest) {
         const metadata = (aiSession?.metadata as any) || {};
         const historyRaw = metadata?.chatHistory || [];
         const customerProfile = metadata?.customerProfile || {};
+        if (isStoreTypeListTap) {
+          const selectedStoreTypeCode = String(listReplyId.replace(/^STORE_TYPE:/, "") || "").trim().toUpperCase();
+          if (selectedStoreTypeCode) {
+            customerProfile.preferredStoreType = selectedStoreTypeCode;
+            if (customerProfile.pendingIntent === "STORE_SEARCH_NEEDS_TYPE") {
+              customerProfile.pendingIntent = null;
+            } else if (customerProfile.pendingIntent === "STORE_SEARCH_NEEDS_LOCATION_AND_TYPE") {
+              customerProfile.pendingIntent = "STORE_SEARCH_NEEDS_LOCATION";
+            }
+          }
+        }
         
         const history = (WA_AI_HISTORY_LIMIT > 0 && Array.isArray(historyRaw) && historyRaw.length > WA_AI_HISTORY_LIMIT)
           ? historyRaw.slice(-WA_AI_HISTORY_LIMIT)
@@ -974,11 +1000,13 @@ export async function POST(req: NextRequest) {
           if (pendingIntent === "NEARBY_STORES" || customerPendingIntent === "NEARBY_STORES" || wantsNearbyStores) {
             const lat = Number(loc.latitude);
             const lng = Number(loc.longitude);
+            const latDelta = (WA_NEARBY_STORE_RADIUS_METERS / 1000) / 111;
+            const lngDelta = (WA_NEARBY_STORE_RADIUS_METERS / 1000) / (111 * Math.cos((lat * Math.PI) / 180) || 1);
             const stores = await prisma.store.findMany({
               where: {
-                ...assistantStoreEligibilityWhere,
-                biteshipOriginLat: { not: null },
-                biteshipOriginLng: { not: null }
+                ...whatsappAssistantStoreEligibilityWhere,
+                biteshipOriginLat: { not: null, gte: lat - latDelta, lte: lat + latDelta },
+                biteshipOriginLng: { not: null, gte: lng - lngDelta, lte: lng + lngDelta }
               } as any,
               select: {
                 id: true,
@@ -993,7 +1021,7 @@ export async function POST(req: NextRequest) {
                 const d = getDistanceMeters(lat, lng, Number(s.biteshipOriginLat), Number(s.biteshipOriginLng));
                 return { ...s, distanceMeters: d };
               })
-              .filter((s: any) => Number.isFinite(s.distanceMeters))
+              .filter((s: any) => Number.isFinite(s.distanceMeters) && Number(s.distanceMeters) <= WA_NEARBY_STORE_RADIUS_METERS)
               .sort((a: any, b: any) => Number(a.distanceMeters) - Number(b.distanceMeters))
               .slice(0, 8);
 
@@ -1014,7 +1042,7 @@ export async function POST(req: NextRequest) {
               }
               await sendWhatsAppMessage(
                 from,
-                `*Gercep Assistant*\n\nMaaf Kak, aku belum menemukan toko terdekat dari lokasi ini.\nCoba ketik nama area (contoh: "Grogol" / "BSD") atau ketik *stores* untuk daftar toko.\n\n_(Balas 'Exit' untuk berhenti)_`,
+                `*Gercep Assistant*\n\nMaaf Kak, saat ini belum ada toko Gercep yang tersedia di area / kota ini.\nKalau mau, share lokasi lain yang terdekat atau ketik nama area lain untuk aku cek lagi.\n\n_(Balas 'Exit' untuk berhenti)_`,
                 0
               );
               return NextResponse.json({ success: true });
@@ -1085,7 +1113,7 @@ export async function POST(req: NextRequest) {
           const requestedSlug = String(startShoppingSlugMatch[1]).trim().toLowerCase();
           if (requestedSlug) {
             const s = await prisma.store.findFirst({
-              where: { ...assistantStoreEligibilityWhere, slug: requestedSlug },
+              where: { ...whatsappAssistantStoreEligibilityWhere, slug: requestedSlug },
               select: { id: true, slug: true, name: true }
             });
             if (s?.id) {
@@ -1136,7 +1164,7 @@ export async function POST(req: NextRequest) {
           const requestedStoreId = Number(startShoppingMatch[1]) || 0;
           if (requestedStoreId > 0) {
             const s = await prisma.store.findFirst({
-              where: { ...assistantStoreEligibilityWhere, id: requestedStoreId },
+              where: { ...whatsappAssistantStoreEligibilityWhere, id: requestedStoreId },
               select: { id: true, slug: true, name: true }
             });
             if (s?.id) {
@@ -1347,8 +1375,7 @@ export async function POST(req: NextRequest) {
           if (wantsListProduk && storeHint.length >= 3) {
             const candidates = await prisma.store.findMany({
               where: {
-                isActive: true,
-                enableWhatsApp: true,
+                ...whatsappAssistantStoreEligibilityWhere,
                 name: { contains: storeHint, mode: "insensitive" }
               },
               select: { id: true, slug: true, name: true },
@@ -1674,6 +1701,27 @@ export async function POST(req: NextRequest) {
                 },
                 imageUrl: data.productImage
               };
+            } else if (uiAction?.type === "CHOOSE_STORE_TYPE" && Array.isArray(uiAction.options) && uiAction.options.length > 0) {
+              const rows = uiAction.options.slice(0, 10).map((opt: any, idx: number) => ({
+                id: String(opt?.id || `STORE_TYPE_${idx + 1}`).slice(0, 200),
+                title: String(opt?.title || opt?.label || "").slice(0, 24),
+                description: String(opt?.description || "").slice(0, 72)
+              })).filter((row: any) => row.title);
+              options = rows.length > 3
+                ? {
+                    list: {
+                      buttonText: l("Pilih Tipe", "Choose Type"),
+                      sections: [{ title: l("Jenis Toko", "Store Types"), rows }]
+                    },
+                    imageUrl: data.productImage
+                  }
+                : {
+                    quickReplies: rows.map((row: any) => ({
+                      id: row.id,
+                      title: row.title
+                    })),
+                    imageUrl: data.productImage
+                  };
             } else if (products.length > 0) {
               options =
                 webviewStoreId > 0

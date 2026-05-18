@@ -23,16 +23,22 @@ import {
   Building2,
   Phone
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
-import FloatingAssistant from "@/components/ai/FloatingAssistant";
 
 const colorVariants: Record<string, string> = {
   blue: "bg-blue-50 text-blue-600 border-blue-100",
   orange: "bg-orange-50 text-orange-600 border-orange-100",
   green: "bg-green-50 text-green-600 border-green-100",
   purple: "bg-purple-50 text-purple-600 border-purple-100",
+};
+
+const glowVariants: Record<string, string> = {
+  blue: "bg-blue-500",
+  orange: "bg-orange-500",
+  green: "bg-green-500",
+  purple: "bg-purple-500",
 };
 
 const iconVariants: Record<string, string> = {
@@ -51,7 +57,7 @@ const translations = {
     title_start: "The First",
     title_highlight: "WhatsApp",
     title_end: "WhatsApp Commerce",
-    description: "Meet Gercep Assistant: your 24/7 shopping assistant. Search stores, browse menus, and place orders naturally via WhatsApp or Web Chat.",
+    description: "Meet Gercep Assistant: your 24/7 shopping assistant. Search stores, browse menus, and place orders naturally via WhatsApp.",
     view_demo: "Start Order",
     create_store: "Store Signup",
     easy_setup: "Fast Setup",
@@ -120,7 +126,7 @@ const translations = {
     title_start: "Platform",
     title_highlight: "Commerce",
     title_end: "Pertama di WhatsApp",
-    description: "Kenalan dengan Gercep Assistant: asisten belanja 24/7. Cari toko, lihat menu, dan pesan secara natural via WhatsApp atau Web Chat.",
+    description: "Kenalan dengan Gercep Assistant: asisten belanja 24/7. Cari toko, lihat menu, dan pesan secara natural via WhatsApp.",
     view_demo: "Mulai Pesan",
     create_store: "Daftar Toko",
     easy_setup: "Setup Cepat",
@@ -187,7 +193,6 @@ const translations = {
 
 export default function Home() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const t = translations[lang];
   const gercepWhatsAppUrl = "https://wa.me/62882003961609?text=Halo%20Gercep,%20bisa%20pandu%20saya%20langkah%20cari%20resto,%20pilih%20menu,%20sampai%20proses%20bayar%20dan%20pengiriman%3F";
 
@@ -290,13 +295,14 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-            <button 
-              onClick={() => setAssistantOpen(true)}
+            <Link
+              href={gercepWhatsAppUrl}
+              target="_blank"
               className="group px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/30 flex items-center justify-center gap-2"
             >
               {t.view_demo}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            </Link>
             <Link 
               href="/register" 
               className="px-8 py-4 bg-white dark:bg-white/10 text-gray-800 dark:text-white border-2 border-gray-100 dark:border-white/10 rounded-2xl font-bold hover:bg-gray-50 dark:hover:bg-white/20 hover:border-gray-200 dark:hover:border-white/20 transition-all shadow-sm hover:shadow-md flex items-center justify-center"
@@ -448,7 +454,7 @@ export default function Home() {
               <div className="flex-1 w-full relative">
                 <div className={cn(
                   "absolute -inset-4 rounded-[40px] blur-2xl opacity-20",
-                  `bg-${step.color}-500`
+                  glowVariants[step.color]
                 )} />
                 <div className="relative aspect-[4/3] rounded-[32px] overflow-hidden border-8 border-white dark:border-gray-800 shadow-2xl shadow-black/10">
                   <Image 
@@ -721,8 +727,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-
-      <FloatingAssistant forceOpen={assistantOpen} onOpenChange={setAssistantOpen} />
     </div>
   );
 }
