@@ -67,12 +67,39 @@ async function getCachedStoreTypes() {
 function resolveStoreTypeCodeFromText(input: string, storeTypes: any[]) {
   const t = normalizeLooseText(String(input || ""));
   if (!t) return null;
+
+  // Specific common Indonesian synonyms mapping
+  const synonyms: Record<string, string[]> = {
+    GROCERY: ["sayur", "sembako", "belanja", "pasar", "minimarket", "kebutuhan", "dapur"],
+    RESTAURANT: ["makan", "lapar", "resto", "kuliner", "nasi", "ayam", "mie", "bakso"],
+    COFFEE: ["minum", "kopi", "haus", "boba", "teh", "jus", "juice"],
+    PHARMACY: ["obat", "apotek", "sakit", "vitamin", "masker"],
+    FASHION: ["baju", "celana", "pakaian", "hijab", "kaos", "sepatu"],
+    BEAUTY: ["makeup", "skincare", "kosmetik", "salon"],
+    PET_SHOP: ["kucing", "anjing", "pakan", "hewan"],
+    BAKERY: ["roti", "kue", "donat", "snack", "camilan"],
+    ELECTRONICS: ["hp", "handphone", "laptop", "kabel", "charger", "elektronik"],
+    HOUSEHOLD: ["panci", "piring", "sapu", "perabotan", "rumah"],
+    BABY: ["popok", "susu", "bayi"]
+  };
+
   for (const st of storeTypes || []) {
-    const code = String(st?.code || "").trim();
+    const code = String(st?.code || "").trim().toUpperCase();
     const label = String(st?.label || "").trim();
     const labelLoose = normalizeLooseText(label);
+
+    // 1. Check direct code/label match
     if (code && t.includes(code.toLowerCase())) return code;
     if (labelLoose && (t.includes(labelLoose) || labelLoose.includes(t))) return code || label;
+
+    // 2. Check synonyms
+    if (synonyms[code]) {
+      for (const syn of synonyms[code]) {
+        if (t.split(" ").includes(syn)) return code;
+      }
+    }
+
+    // 3. Check first token of label
     const firstToken = labelLoose.split(" ").filter(Boolean)[0] || "";
     if (firstToken && firstToken.length >= 4 && t.includes(firstToken)) return code || label;
   }
@@ -359,7 +386,7 @@ function normalizeStoreSearchInput(query: string, locationContext?: string) {
   }
 
   let cleanedQuery = normalized
-    .replace(/(?:\bapa ada\b|\badakah\b|\bada gak\b|\bada tak\b|\btolong\b|\bbisa\b|\bcari\b|\bfind\b|\bsearch\b|\bresto\b|\btoko\b|\bstore\b|\brestaurant\b|\bmakanan\b|\bkuliner\b|\bdi sekitar\b|\bsekitar\b|\bdekat\b|\bdi area\b|\barea\b|\bnearby\b|\bnear\b|\bdi\b)/giu, " ")
+    .replace(/(?:\bapa ada\b|\badakah\b|\bada gak\b|\bada tak\b|\btolong\b|\bbisa\b|\bcari\b|\bfind\b|\bsearch\b|\bresto\b|\btoko\b|\bstore\b|\brestaurant\b|\bmakanan\b|\bkuliner\b|\bdi sekitar\b|\bsekitar\b|\bdekat\b|\bdi area\b|\barea\b|\bnearby\b|\bnear\b|\bdi\b|\bmau\b|\bbeli\b|\bbelanja\b|\bdong\b|\bnih\b|\byang\b|\buntuk\b|\bsaya\b|\baku\b)/giu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
